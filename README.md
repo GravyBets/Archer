@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 0.4.1 (local prototype)  
+**Version:** 0.5.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -8,6 +8,7 @@ This is a **real starting codebase**, not a screenshot or a mockup. It includes:
 
 - Animated **Archer** landing page as the default interface, with text conversation and optional browser voice
 - Mission Control dashboard with mission creation and tracking
+- **Developer Workspace** with allowlisted GitHub source inventory, selected-file previews, and review-mission drafts
 - Local **Attention** view showing failed tasks; approvals are clearly marked as not yet integrated
 - AI-generated bounded mission plans (3–5 research/analysis tasks)
 - Local main-dashboard AI usage analytics (token counts, observed web searches, estimated costs)
@@ -369,3 +370,38 @@ GitHub CI validates .NET compilation, JavaScript syntax, static UI references an
 6. Check that mission history, usage/cost metrics, and voice controls are unaffected.
 
 CI checks .NET compilation, all three JavaScript files, DOM references and local API health. Visual quality and smoothness still need a Windows browser check; there is no need to create a mission or spend API credits just to see the new orb.
+
+## v0.5.0 — Developer Workspace: inspect the actual GeoShift code
+
+This release adds a **read-only Developer** page that gives you direct, explicit control over which repository files Archer examines.
+
+### What it does
+
+- Use the existing fine-grained read-only GitHub access (default allowlist: `GravyBets/GeoShift`).
+- Load the default branch and list up to 300 eligible C#, Razor, project, and Markdown files directly from the GitHub API.
+- Filter by filename, select **one to six files**, and preview their actual contents with source links and line numbers. Individual previews are bounded to 9,000 characters, and the combined preview is limited to 34,000 characters.
+- Click **Prepare review mission** to prefill the normal new-mission dialog. You can edit or cancel it. No AI request occurs until you subsequently choose to generate and run its plan.
+- When a mission contains a `SOURCE FILES: path1, path2` line, Archer's research execution fetches those **exact selected files** (bounded excerpts) instead of using its generic nine-file sample. Missing or ineligible files cause an explicit error rather than a fabricated review.
+- Snapshot caching is keyed by the specific source selection, so the new selected-file review cannot accidentally reuse the earlier generic code sample.
+
+### What it does not do
+
+- **No code writing, commits, branches, pull requests, builds, deployments, or production access.** Those require a separately authorized coding-agent workflow.
+- The file preview is **not AI analysis** and doesn't consume OpenAI API credits. Creating a mission without executing it also doesn't use API credits.
+- If a mission runs, Archer sends the selected bounded source excerpts to OpenAI. Do not review employer-confidential, personal, or credential-bearing files.
+- A code preview is limited; the full repository was not automatically audited. Mark unsupported defect claims as hypotheses.
+- API cost tracking and limits are unchanged. This release does not implement any hard spending cap.
+
+### Test when you're back at the PC
+
+1. Stop Archer, **Git → Pull**, rebuild and run. Verify `/api/config` says `0.5.0`.
+2. Open **Developer** in the left navigation.
+3. Leave the URL as `https://github.com/GravyBets/GeoShift`; click **Load files**.
+4. Filter for `KmlCsvConverter.cs`, `Analyze.razor`, or `KmzAnalyzer.cs`. Select up to six files and click **Preview selected**.
+5. Confirm the preview matches GitHub and note any truncation warning.
+6. Click **Prepare review mission**. Check the prefilled objective and the `SOURCE FILES:` line. You can cancel without making a mission or incurring charges.
+7. Optionally create the review mission and run it to test exact-file source grounding. AI planning and task execution incur API charges.
+
+Use `GET /api/development/repository?url=https%3A%2F%2Fgithub.com%2FGravyBets%2FGeoShift` for a raw source file inventory, and `POST /api/development/preview` with JSON `{"repository":"https://github.com/GravyBets/GeoShift","paths":["GeoShift.Core/Services/KmlCsvConverter.cs"]}` for a source preview.
+
+The automated checks cover the .NET build, JavaScript syntax and DOM references, application startup, and rejection of non-allowlisted repositories. They don't prove private GitHub access or source correctness, which require a live test.
