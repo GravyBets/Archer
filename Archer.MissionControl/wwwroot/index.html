@@ -15,12 +15,13 @@
       <nav class="nav" aria-label="Main navigation">
         <button class="nav-link active" data-view="archer"><span class="nav-icon">◉</span> Archer</button>
         <button class="nav-link" data-view="missions"><span class="nav-icon">▦</span> Mission Control</button>
+        <button class="nav-link" data-view="developer"><span class="nav-icon">⌘</span> Developer</button>
         <button class="nav-link" data-view="attention"><span class="nav-icon">◇</span> Attention <span id="attentionNavCount" class="attention-nav-count hidden">0</span></button>
         <button class="nav-link" data-view="activity"><span class="nav-icon">◷</span> Activity</button>
       </nav>
       <div class="sidebar-bottom">
         <div class="sidebar-status"><span class="pulse-dot"></span><span id="connectionLabel">Checking local server...</span></div>
-        <div class="version">V0.4.1 · LOCAL DEVELOPMENT</div>
+        <div class="version">V0.5.0 · LOCAL DEVELOPMENT</div>
       </div>
     </aside>
     <main class="content">
@@ -116,6 +117,68 @@
             <section class="panel details-panel"><div class="panel-header"><div><h2 id="detailHeading">Mission overview</h2><p id="detailSubheading">Select a mission to view its progress</p></div><span id="missionBadge" class="status-badge hidden"></span></div><div id="missionDetail" class="detail-body"><div class="empty-detail"><div class="big-icon">◎</div><h3>Mission awaiting command</h3><p>Create your first mission to begin.</p></div></div></section>
           </div>
         </section>
+        <section id="developerView" class="view hidden" aria-labelledby="developerHeading">
+          <div class="hero">
+            <div class="eyebrow">DEVELOPMENT OPERATIONS <span class="eyebrow-line"></span></div>
+            <h1 id="developerHeading">Developer Workspace<span class="accent">.</span></h1>
+            <p>Inspect actual GitHub source files. Prepare focused AI code reviews with specific evidence.</p>
+          </div>
+          <section class="panel developer-repository">
+            <div class="developer-repo-header">
+              <div><h2>Repository connection</h2><p>Read-only access to explicitly approved GitHub repositories</p></div>
+              <span class="developer-readonly">READ ONLY</span>
+            </div>
+            <div class="developer-repo-controls">
+              <label for="developerRepository">GitHub repository URL</label>
+              <div class="developer-repo-row">
+                <input id="developerRepository" type="url" maxlength="250" spellcheck="false"
+                  value="https://github.com/GravyBets/GeoShift" placeholder="https://github.com/owner/repo" />
+                <button id="developerLoad" type="button" class="button primary">Load files</button>
+              </div>
+            </div>
+            <div class="developer-repo-status" role="status" aria-live="polite" id="developerStatus">
+              Select Load files to inspect the approved repository.
+            </div>
+            <div class="developer-repo-metadata">
+              <span>Branch: <strong id="developerBranch">—</strong></span>
+              <span>Tree: <code id="developerTree">—</code></span>
+            </div>
+          </section>
+          <div class="developer-workspace">
+            <section class="panel developer-files-panel">
+              <div class="panel-header">
+                <div><h2>Source files</h2><p>Choose up to six relevant files</p></div>
+                <span id="developerSelectedCount" class="count">0 / 6</span>
+              </div>
+              <div class="developer-filter">
+                <label for="developerFilter">Filter files</label>
+                <input id="developerFilter" type="search" placeholder="Search paths: Converter, Analyze, Tests…" />
+              </div>
+              <div id="developerFiles" class="developer-file-list" aria-label="Reviewable files">
+                <div class="developer-empty">Load a repository to browse its source files.</div>
+              </div>
+              <div class="developer-file-actions">
+                <button type="button" id="developerPreviewButton" class="button secondary" disabled>Preview selected</button>
+                <button type="button" id="developerReviewButton" class="button primary" disabled>Prepare review mission</button>
+              </div>
+            </section>
+            <section class="panel developer-source-panel">
+              <div class="panel-header">
+                <div><h2>Code preview</h2><p id="developerPreviewMeta">Actual source from GitHub, not an AI-generated summary</p></div>
+              </div>
+              <div id="developerPreview" class="developer-source-list">
+                <div class="developer-empty">
+                  <div class="big-icon">⌘</div>
+                  <h3>Source awaits inspection</h3>
+                  <p>Choose a few files and click Preview selected.</p>
+                </div>
+              </div>
+            </section>
+          </div>
+          <p class="developer-footnote">Repository browsing and previews don't consume OpenAI API credits.
+            A review mission still requires you to generate its plan and run it explicitly.
+            Selected source excerpts are sent to OpenAI when you run that mission. Archer cannot yet edit GitHub, open a pull request, or run GeoShift builds from this page.</p>
+        </section>
         <section id="attentionView" class="view hidden" aria-labelledby="attentionTitle">
           <div class="hero"><div class="eyebrow">OPERATOR OVERSIGHT <span class="eyebrow-line"></span></div><h1 id="attentionTitle">Attention<span class="accent">.</span></h1><p>Local mission failures and the approval boundaries we're building toward.</p></div>
           <div class="attention-grid">
@@ -128,7 +191,7 @@
           </div>
         </section>
         <section id="activityView" class="view hidden"><div class="hero"><div class="eyebrow">EXECUTION HISTORY <span class="eyebrow-line"></span></div><h1>Activity<span class="accent">.</span></h1><p>What Archer has actually done, with completed work stored on disk.</p></div><div class="panel"><div id="activityList" class="activity-list"></div></div></section>
-        <footer class="footer">ARCHER / V0.4.1 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
+        <footer class="footer">ARCHER / V0.5 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
       </div>
     </main>
   </div>
@@ -136,5 +199,6 @@
   <script src="/js/app.js" defer></script>
   <script src="/js/archer-home.js" defer></script>
   <script src="/js/orb-field.js" defer></script>
+  <script src="/js/developer.js" defer></script>
 </body>
 </html>
