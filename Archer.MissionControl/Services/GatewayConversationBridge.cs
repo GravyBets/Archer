@@ -286,11 +286,14 @@ public sealed class GatewayConversationBridge(IHttpClientFactory clients, JsonFi
                 note = "Read-only encrypted gateway history; AI context is not automatically synchronized." };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-        catch (Exception)
+        catch (Exception error)
         {
+            // Only the exception TYPE is reported (never its message, URL,
+            // gateway response, credentials or private message contents).
             return new { enabled = true, connected = false,
                 messages = Array.Empty<SessionLine>(), nextAfter = after,
-                note = "Local conversation history unavailable. No state was changed." };
+                note = "Local conversation history unavailable (" +
+                    error.GetType().Name + "). No state was changed." };
         }
     }
 
