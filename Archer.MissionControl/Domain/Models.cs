@@ -16,6 +16,9 @@ public sealed class Mission
     public string Status { get; set; } = "New";
     public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+    // Explicitly authorized, limited to three attempts at a time; reset on restart.
+    public bool AutoRunEnabled { get; set; } = false;
+    public int AutoRunTasksRemaining { get; set; } = 0;
     public List<MissionTask> Tasks { get; set; } = [];
     public List<MissionArtifact> Artifacts { get; set; } = [];
 }
@@ -73,3 +76,5 @@ public sealed class PlanTaskDraft
     public string Description { get; set; } = "";
     public string Kind { get; set; } = "research";
 }
+
+public sealed record SetAutoRunRequest(bool Enabled);
