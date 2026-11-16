@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Net;
+using System.Text;
 
 namespace Archer.MissionControl.Services;
 
@@ -7,7 +9,7 @@ namespace Archer.MissionControl.Services;
 /// independent mobile gateway. No changes to desktop chat, no AI submission,
 /// phone calls, credentials or public network access. Disabled by default.
 /// </summary>
-public sealed class GatewayConversationBridge(IHttpClientFactory clients)
+public sealed class GatewayConversationBridge(IHttpClientFactory clients, JsonFileStore store)
 {
     private const string Endpoint = "http://127.0.0.1:5091/internal/conversation/bridge";
     private static readonly JsonSerializerOptions Json =
@@ -24,6 +26,81 @@ public sealed class GatewayConversationBridge(IHttpClientFactory clients)
     private sealed class GatewayPayload
     {
         public List<DraftItem> Messages { get; set; } = [];
+    }
+
+    public sealed record PublishReplyRequest(Guid GatewayMessageId, string? Question);
+    public sealed record PublishReplyStatus(int StatusCode, string Message)
+    {
+        public bool Shared => StatusCode == 200;
+    }
+
+    /// <summary>
+    /// This is a SECOND, explicit user action after a successful, owner-
+    /// initiated desktop chat. Match the exact last persisted user/assistant
+    /// pair and the gateway's encrypted draft before sharing the reply.
+    /// Never call OpenAI from this method. No automatic forwarding.
+    /// </summary>
+    public async Task<PublishReplyStatus> PublishLastReplyAsync(
+        PublishReplyRequest request, CancellationToken ct)
+    {
+        if (!IsEnabled)
+            return new(403, "Local mobile reply sharing is disabled.");
+        var question = request.Question?.Trim() ?? "";
+        if (request.GatewayMessageId == Guid.Empty ||
+            question.Length is < 1 or > 1600)
+            return new(400, "Select a valid mobile draft and send its exact text to Archer first.");
+
+        var pair = await store.ReadAsync(state =>
+        {
+            if (state.Conversation.Count < 2)
+                return (matched: false, answer: "");
+            var owner = state.Conversation[^2];
+            var assistant = state.Conversation[^1];
+            var matched = owner.Role == "user" &&
+                assistant.Role == "assistant" &&
+                string.Equals(owner.Content, question, StringComparison.Ordinal);
+            return (matched, answer: assistant.Content);
+        }, ct);
+
+        if (!pair.matched)
+            return new(409, "The most recent saved desktop conversation no longer matches this phone draft. No reply was shared.");
+        if (string.IsNullOrWhiteSpace(pair.answer) || pair.answer.Length > 4000)
+            return new(409, "The reply is empty or exceeds the gateway's 4,000-character limit. No text was shared.");
+
+        try
+        {
+            using var outbound = new HttpRequestMessage(
+                HttpMethod.Post, "http://127.0.0.1:5091/internal/conversation/reply");
+            outbound.Headers.Add("X-Archer-Bridge-Key",
+                Environment.GetEnvironmentVariable("ARCHER_GATEWAY_BRIDGE_KEY")!);
+            outbound.Content = new StringContent(JsonSerializer.Serialize(new
+            {
+                inReplyToId = request.GatewayMessageId,
+                expectedOwnerText = question,
+                content = pair.answer
+            }), Encoding.UTF8, "application/json");
+
+            using var response = await clients.CreateClient("gateway-loopback")
+                .SendAsync(outbound, HttpCompletionOption.ResponseHeadersRead, ct);
+            return response.StatusCode switch
+            {
+                HttpStatusCode.OK => new(200,
+                    "Archer's reply was saved to the encrypted local mobile journal. No push, text or call was sent."),
+                HttpStatusCode.Conflict or HttpStatusCode.NotFound => new(409,
+                    "Gateway draft missing, already answered differently, or original text did not match. Nothing was overwritten."),
+                HttpStatusCode.Forbidden => new(503,
+                    "The local gateway did not accept the separate reply-sharing credential."),
+                _ => new(502,
+                    "The mobile gateway did not confirm that the reply was saved. Check the local gateway before retrying; no new AI call is needed.")
+            };
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception)
+        {
+            // Keep original desktop chat intact and never echo credentials,
+            // reply text or raw HTTP failures to the browser.
+            return new(502, "Could not confirm local mobile reply sharing. Desktop reply remains saved; retrying this button does not call AI.");
+        }
     }
 
     public bool IsEnabled =>
