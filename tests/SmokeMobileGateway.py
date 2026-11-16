@@ -152,6 +152,51 @@ def run(state_path):
     request("/v1/inbox/" + event_id + "/acknowledge", "POST", {},
             readonly_bearer, expected=401)
 
+    # Shared device-authorized conversation journal: no AI, no cross-service sync.
+    request("/v1/conversation/messages", expected=401)
+    request("/v1/conversation/messages", headers=bearer, expected=401)
+    request("/internal/conversation", "DELETE", expected=403)
+    talker = request("/internal/devices/enroll", "POST", {
+        "label": "Local chat writer", "lifetimeDays": 1,
+        "scopes": ["conversation:read", "conversation:write"]
+    }, admin)
+    talk_bearer = {"Authorization": "Bearer " + talker["deviceToken"]}
+    watcher = request("/internal/devices/enroll", "POST", {
+        "label": "Local chat reader", "lifetimeDays": 1,
+        "scopes": ["conversation:read"]
+    }, admin)
+    watcher_bearer = {"Authorization": "Bearer " + watcher["deviceToken"]}
+    assert request("/v1/conversation/messages", headers=talk_bearer)["messages"] == []
+    assert request("/v1/conversation/messages", headers=watcher_bearer)["savedOnly"] is True
+    assert request("/v1/conversation/messages", headers=watcher_bearer)["assistantConnected"] is False
+    request("/v1/inbox", headers=talk_bearer, expected=401)
+    message_id = str(uuid4())
+    message = {"clientMessageId": message_id, "content": "Hello, Archer. Any updates?"}
+    request("/v1/conversation/messages", "POST", message,
+            watcher_bearer, expected=401)
+    request("/v1/conversation/messages", "POST",
+            {"clientMessageId": str(uuid4()), "content": ""},
+            talk_bearer, expected=400)
+    created = request("/v1/conversation/messages", "POST", message, talk_bearer)
+    assert created["outcome"] == "saved"
+    assert "No AI reply" in created["note"]
+    again_message = request("/v1/conversation/messages", "POST", message, talk_bearer)
+    assert again_message["outcome"] == "duplicate"
+    assert again_message["id"] == created["id"]
+    changed = dict(message)
+    changed["content"] = "Different content on the same client message ID"
+    request("/v1/conversation/messages", "POST", changed,
+            talk_bearer, expected=409)
+    journal = request("/v1/conversation/messages", headers=watcher_bearer)
+    assert len(journal["messages"]) == 1
+    assert journal["messages"][0]["role"] == "owner"
+    assert journal["messages"][0]["content"] == message["content"]
+    assert journal["retentionDays"] == 7
+    request("/internal/conversation", "DELETE", expected=403)
+    deleted = request("/internal/conversation", "DELETE", headers=admin)
+    assert deleted["deleted"] == 1
+    assert request("/v1/conversation/messages", headers=talk_bearer)["messages"] == []
+
     # Rotate can only be done by admin, old bearer dies immediately.
     request("/internal/devices/" + device_id + "/rotate", "POST",
             {"lifetimeDays": 1}, expected=403)
@@ -186,12 +231,18 @@ def run(state_path):
             {"lifetimeDays": 1}, admin, expected=404)
     audit = request("/internal/audit", headers=admin)
     assert "device.revoked" in {x["action"] for x in audit["entries"]}
+    assert "conversation.message_saved" in {x["action"] for x in audit["entries"]}
+    assert "conversation.cleared" in {x["action"] for x in audit["entries"]}
+    assert message["content"] not in json.dumps(audit)
     assert len(audit["entries"]) < 300
     request("/v1/inbox", headers=bearer, expected=401)
     stored_text = state_path.read_text(encoding="utf-8")
     assert token not in stored_text
     assert new_token not in stored_text
     assert reader["deviceToken"] not in stored_text
+    assert talker["deviceToken"] not in stored_text
+    assert watcher["deviceToken"] not in stored_text
+    assert message["content"] not in stored_text
     assert "tokenHashHex" in stored_text
     assert "device.rotated" in stored_text
     assert "device.revoked" in stored_text
@@ -199,7 +250,7 @@ def run(state_path):
     assert "deliveryPreviews" in stored_text
     assert "sandbox-policy-1" in stored_text
     assert "Twilio" not in stored_text and "OPENAI_API_KEY" not in stored_text
-    print("PASS: gateway scope isolation, rotation, instant revoke, redacted audit and provider-free notification routing")
+    print("PASS: local gateway scoped journal, shared read, idempotent messages, private deletion, rotation, audit and zero AI sends")
 
 
 if __name__ == "__main__":

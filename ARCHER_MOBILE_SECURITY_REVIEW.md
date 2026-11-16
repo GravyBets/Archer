@@ -1,4 +1,4 @@
-# Archer mobile gateway — security and threat review (v1.4.0)
+# Archer mobile gateway — security and threat review (v1.5.0)
 
 **Review date:** 2026-11-16. This is an engineering threat model, NOT an independent penetration test or approval for internet exposure.
 
@@ -78,18 +78,28 @@ Generated bearer is only returned on enrollment and SHA-256 of high entropy toke
 | Persistence corruption | Serialized writes with temporary atomic replacement, 200-event bound | Encrypted backups, restore tests, database migration/versioning, crash consistency |
 | Changes while driving | Gateway contains no approval/deployment/business mutation endpoints | Native app driving-mode UX, spoken confirmation limits, safe deferral |
 
-## Notification policy sandbox — added in v1.4.0
+## Notification policy sandbox — added in v1.5.0
 
 The simulator creates noninterrupting push-preview/digest-preview suggestions from currently recorded source events, then persists their result under an event/device/policy idempotency key. Resolved and acknowledged sources are suppressed. Historical or stale source information becomes digest-only. An unverified website incident is never automatically escalated to a telephone call.
 
 No preview is delivered to an Apple device; no APNs device token, push server, message queue, Twilio account, OpenAI request or cost-bearing integration is invoked. The simulator does not have a real retry policy, provider receipt or actual notification delivery status. It cannot be mistaken for a completed production outbox.
 
-## v1.4.0 local device-credential and audit hardening
+## v1.5.0 local device-credential and audit hardening
 
 - Device enrollment now accepts an explicit, tightly restricted scopes list. Existing behavior defaults to read-and-ack; the operator can choose read-only for minimal access.
 - Local admin-only credential rotation generates a fresh 256-bit token; the old hash is overwritten atomically. A revoked/expired device cannot be rotated. Rotation, revocation and source/inbox actions appear in a bounded metadata-only audit log (up to 300 entries) with device/event IDs, action names and timestamps only.
 - All mobile-device endpoints have per-token rate limiting, in addition to the global limiter. The gateway rejects unexpected HTTP Host headers to reduce DNS rebinding exposure, and continues to deny Origin-bearing browser requests. No public ingress has been introduced.
 - CI checks read-only authorization, invalid scopes, old-token rejection immediately after rotation, revoked-device refusal, audit redaction and strict Host behavior. These tests are valuable local regressions, NOT a substitute for a penetration test or production-grade authentication.
+
+
+## v1.5.0 conversation journal security boundaries
+
+- GET /v1/conversation/messages requires the explicit conversation:read device scope. POST /v1/conversation/messages requires conversation:write (which also requires conversation:read). DELETE /internal/conversation needs the separate local admin key.
+- This stores only user-authored inert text, not assistant responses or desktop conversation history. It does not send anything to AI, Twilio, APNs or a public phone.
+- The journal caps messages at 1,600 characters, retains a maximum of 200 records, and displays only the last seven days. Client message IDs provide per-device idempotency; mismatched replay content is rejected. Administrative clearing does not touch desktop chat.
+- **Privacy blocker:** journal entries remain plaintext in Git-ignored local JSON. Git exclusion is NOT encryption. Do not store sensitive messages, expose the endpoint remotely, or assume this is a production-grade messaging system.
+- Each explicitly conversation-authorised local test device can read the single-owner journal. There is no multi-user account isolation, encrypted backups, message sync to the PC, production identity, or public TLS.
+- Tests verify read/write scopes, cross-device local visibility, duplicate replay and conflict, manual deletion, audit redaction and no assistant responses or provider dispatch.
 
 ## Local-only opt-in setup
 
@@ -124,4 +134,4 @@ Production deployment stays BLOCKED until all these gates pass.
 - Kestrel explicit endpoint binding: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/endpoints?view=aspnetcore-10.0
 - Kestrel proxy/forwarding security: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/security-considerations
 
-This document inventories the current source at v1.4.0; revisit it when endpoints or authorization logic change.
+This document inventories the current source at v1.5.0; revisit it when endpoints or authorization logic change.

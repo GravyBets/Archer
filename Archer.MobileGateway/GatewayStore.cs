@@ -71,6 +71,8 @@ public sealed class GatewayState
     public List<GatewayDeliveryPreview> DeliveryPreviews { get; set; } = [];
     // Audit metadata only: never credentials, full notification bodies or locations.
     public List<GatewayAuditEntry> Audit { get; set; } = [];
+    // Opt-in local messages only. No AI calls or automatic desktop chat synchronization.
+    public List<GatewayConversationMessage> ConversationMessages { get; set; } = [];
 }
 
 public sealed class GatewayDevice
@@ -108,6 +110,19 @@ public sealed record IncomingGatewayEvent(
     string? Summary, DateTimeOffset OccurredAtUtc, DateTimeOffset? ResolvedAtUtc);
 public sealed record SyncGatewayEventsRequest(List<IncomingGatewayEvent>? Events);
 
+public sealed class GatewayConversationMessage
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid DeviceId { get; set; }
+    public Guid ClientMessageId { get; set; }
+    public string Role { get; set; } = "owner";
+    public string Content { get; set; } = "";
+    public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public sealed record AppendConversationMessageRequest(
+    Guid ClientMessageId, string? Content);
+
 public sealed class GatewayAuditEntry
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -142,17 +157,21 @@ public sealed class DeviceTokenService(GatewayStore store)
     private static string Hash(string token) => Convert.ToHexString(
         SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
-    private static readonly string[] PermittedScopes = ["inbox:read", "inbox:ack"];
+    private static readonly string[] DefaultScopes = ["inbox:read", "inbox:ack"];
+    private static readonly string[] PermittedScopes =
+        ["inbox:read", "inbox:ack", "conversation:read", "conversation:write"];
 
     private static string[] NormalizeScopes(string[]? requested)
     {
-        var scopes = requested ?? PermittedScopes;
-        if (scopes.Length is < 1 or > 2 ||
+        var scopes = requested ?? DefaultScopes;
+        if (scopes.Length is < 1 or > 4 ||
             scopes.Any(x => !PermittedScopes.Contains(x, StringComparer.Ordinal)) ||
             scopes.Distinct(StringComparer.Ordinal).Count() != scopes.Length ||
-            scopes.Contains("inbox:ack", StringComparer.Ordinal) &&
-                !scopes.Contains("inbox:read", StringComparer.Ordinal))
-            throw new ArgumentException("Choose read-only inbox:read, or inbox:read plus inbox:ack. No other permissions are available.");
+            (scopes.Contains("inbox:ack", StringComparer.Ordinal) &&
+                !scopes.Contains("inbox:read", StringComparer.Ordinal)) ||
+            (scopes.Contains("conversation:write", StringComparer.Ordinal) &&
+                !scopes.Contains("conversation:read", StringComparer.Ordinal)))
+            throw new ArgumentException("Supported scopes: inbox:read, inbox:ack (requires inbox:read), conversation:read, conversation:write (requires conversation:read).");
         return scopes;
     }
 
