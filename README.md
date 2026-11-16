@@ -1,2 +1,105 @@
-# Archer
-Archer public repo
+# ARCHER — Personal Autonomous AI Operator
+
+**Version:** 0.1.2 (local prototype)  
+**Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
+**License:** Personal prototype; no production deployment or multi-user authentication.
+
+This is a **real starting codebase**, not a screenshot or a mockup. It includes:
+
+- Mission Control dashboard with mission creation and tracking
+- AI-generated bounded mission plans (3–5 research/analysis tasks)
+- Run **one** or **up to three** tasks sequentially, saving their reports
+- Built-in public web research through the OpenAI Responses API `web_search` tool
+- Conversational assistant with recent chat and mission context
+- Persistent missions, tasks, activity history, chats, and research reports (local JSON file)
+- Error tracking, task retries, and recovery from interrupted runs
+- Local-only HTTP server bound to `127.0.0.1` (not exposed to the internet)
+
+**Not included yet:** SMS, phone calls, scheduled background autonomy, tools that modify files or GitHub, financial operations, multi-user authentication, commercial reliability, or hard API spending enforcement. The UI makes no claims that these are implemented.
+
+## Run on your Windows development PC
+
+1. Install or upgrade to the **.NET 10 SDK** in Visual Studio. `.NET 9` reached end of support in November 2026.
+2. Extract the ZIP anywhere outside your work projects, such as `Documents\\Archer`.
+3. Open `Archer.MissionControl\\Archer.MissionControl.csproj` in Visual Studio 2026. This project has no additional NuGet dependencies.
+4. Run the project. Navigate to **http://127.0.0.1:5087**. Without an API key, the dashboard and mission creation work, but AI actions will display an informative error.
+5. When ready to use the AI features, create an OpenAI API key on the OpenAI Platform. Set it as an **environment variable** named `OPENAI_API_KEY`, **not in source code**. Restart Visual Studio so it picks up the new variable.
+6. Optional: set `ARCHER_MODEL` to a supported Responses API model. Default is `gpt-5-mini`. Enable appropriate API billing limits/alerts in your OpenAI project dashboard.
+7. In Mission Control: **Use starter mission → Generate Mission Plan → Run next step**, or create your own mission.
+
+### PowerShell: set your API key for your Windows user
+
+Run this in **your own PowerShell console** (the command will prompt privately, without echoing the key). It persists only in your Windows user environment:
+
+```powershell
+$secure = Read-Host 'OpenAI API key' -AsSecureString
+$ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+try {
+    $key = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
+    [Environment]::SetEnvironmentVariable('OPENAI_API_KEY', $key, 'User')
+} finally {
+    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
+    Remove-Variable key -ErrorAction SilentlyContinue
+}
+```
+
+Close and reopen Visual Studio before running Archer. To run without Visual Studio, use `dotnet run --project Archer.MissionControl/Archer.MissionControl.csproj`.
+
+> **Costs:** Responses API usage is billed separately from a ChatGPT subscription. Each plan, task, and chat request may cost money; a research task can also incur web-search tool charges. Archer limits task *count per click* but does **not** yet implement a hard cost cap. Start with a low billing alert/budget and monitor usage.
+
+## Data and privacy
+
+By default, data is stored in `Archer.MissionControl/Data/archer-state.json`. The `Data` directory is excluded by `.gitignore`. Back up this file if you want to keep your mission and conversation history. Setting `ARCHER_DATA_DIR` lets you move data to another local folder.
+
+Your mission descriptions, chat messages, and selected previous reports are sent to the OpenAI API when you request AI actions. Do **not** enter employer credentials, production secrets, banking logins, or confidential company data. Do not use this prototype as an always-on public service.
+
+The UI intentionally stores output **as text**, not rendered HTML, and does not let the AI execute arbitrary shell commands. The existing research tool can access the public web, not your accounts.
+
+## Project layout
+
+```
+Archer.MissionControl/
+  Program.cs                 HTTP endpoints, bounded task execution
+  Domain/Models.cs           Missions, tasks, artifacts, activity, chat
+  Services/JsonFileStore.cs  Persistent single-user local state
+  Services/ArcherAiService.cs  OpenAI Responses API integration
+  wwwroot/index.html         Mission Control dashboard
+  wwwroot/css/app.css        Dashboard theme
+  wwwroot/js/app.js          Browser UI / API calls
+```
+
+## First goals
+
+- [x] Create standalone Archer project
+- [x] Build Mission Control interface
+- [x] Implement local mission state, task history, and report artifacts
+- [x] Connect a configurable AI service over the Responses API
+- [x] Bound research/analysis actions to 1–3 tasks per run
+- [ ] Build + test on Windows with .NET 10 SDK
+- [ ] Real cost metering / per-mission spending ceiling
+- [ ] SQLite or PostgreSQL data persistence and migrations
+- [ ] Reliable background worker/scheduler and reconnecting clients
+- [ ] Twilio text messages with consent and number registration
+- [ ] Voice calls with opt-in timing and fail-safe controls
+- [ ] Sandbox coding agent with isolated branch, tests, and approvals
+- [ ] Authentication before remote access or cloud hosting
+
+## Test status
+
+The code was created in a development sandbox that **does not have the .NET SDK**. Therefore it has **not been compiled or run against the live OpenAI API** in this environment. Static JavaScript syntax and JSON configuration can be checked; the first Windows build is still required. Do not treat this as a production-ready agent.
+
+## Updating from v0.1.0 or v0.1.1 to v0.1.2 (mission-plan JSON fix)
+
+1. Stop Archer/Visual Studio debugging.
+2. **Back up** `Archer.MissionControl/Data/archer-state.json` if that file exists.
+3. Copy the updated source files over your existing project, **without deleting or replacing the `Data` folder**. To use the smallest patch, copy only `Archer.MissionControl/Services/ArcherAiService.cs` from the update zip over the same file in your project.
+4. Rebuild and run, and click **Generate Mission Plan** again on your existing mission. You do **not** need to create a new mission or API key.
+
+What changed: planning requests use low reasoning effort with an 8,000-token shared reasoning/output budget; plans are limited to three short steps; incomplete Responses API statuses and malformed JSON are handled safely; responses that refuse the request are reported clearly. Verify `/api/config` reports `version: 0.1.2` after rebuilding. This prevents saving partial plans but cannot guarantee every request succeeds. The API still charges for generation attempts.
+
+
+## GitHub workflow
+
+Clone `https://github.com/GravyBets/Archer.git` and open `Archer.MissionControl/Archer.MissionControl.csproj` in Visual Studio 2026. Pull from `main` before rebuilding. The repository includes source code only: do not commit your `Data` directory, API keys, `.env` files, credentials, or local configuration.
+
+If you already ran Archer from an extracted ZIP, the cloned repository is a **different local directory**. Back up `Archer.MissionControl/Data/archer-state.json` and copy it into the cloned project only while Archer is stopped, if you wish to preserve that mission. Do not push it to GitHub.
