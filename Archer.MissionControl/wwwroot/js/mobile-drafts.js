@@ -11,8 +11,15 @@
   const note = el('mobileDraftNote');
   const items = el('mobileDraftItems');
   const refreshButton = el('mobileDraftRefresh');
+  const shareButton = el('mobileDraftShareReply');
   const composer = el('chatText');
   let busy = false;
+  let selected = null;
+  let pendingShare = null;
+
+  const updateShare = () => {
+    shareButton.disabled = !pendingShare || busy || appState.busy;
+  };
 
   const element = (tag, content, className = '') => {
     const node = document.createElement(tag);
@@ -59,10 +66,13 @@
           return;
         }
         // Explicitly fill text only; NEVER dispatch submit or call /api/chat.
+        selected = { id: message.id, content: message.content };
+        pendingShare = null;
+        updateShare();
         composer.value = message.content;
         composer.dispatchEvent(new Event('input', { bubbles: true }));
         composer.focus();
-        note.textContent = 'Draft copied to the composer. Review or edit it, then press Send yourself.';
+        note.textContent = 'Draft copied. Keep its text unchanged to make the reply shareable; press Send yourself first.';
       });
       card.appendChild(button);
       items.appendChild(card);
@@ -86,8 +96,55 @@
     }
   }
 
+  function beginChat(text) {
+    // Every new chat invalidates a pending share for the previous response.
+    pendingShare = null;
+    updateShare();
+    return selected && selected.content === text
+      ? { id: selected.id, question: selected.content }
+      : null;
+  }
+
+  function chatCompleted(source) {
+    if (!source || !selected || selected.id !== source.id) return;
+    pendingShare = source;
+    updateShare();
+    note.textContent = 'Archer replied on the desktop. Choose “Share last reply with mobile” to copy it to the encrypted local gateway. No reply is shared automatically.';
+  }
+
+  shareButton.addEventListener('click', async () => {
+    if (!pendingShare || busy || appState.busy) return;
+    const source = pendingShare;
+    if (!window.confirm('Share Archer’s most recent reply with your enrolled local mobile devices? This does not send any notification or make an AI request.')) return;
+    busy = true;
+    updateShare();
+    try {
+      const result = await api('/api/mobile/reply-publish', {
+        method: 'POST',
+        body: JSON.stringify({
+          gatewayMessageId: source.id,
+          question: source.question
+        })
+      });
+      if (!result.shared) throw new Error(result.message || 'Reply was not shared.');
+      pendingShare = null;
+      selected = null;
+      note.textContent = result.message;
+      // Refresh after releasing the local action lock below.
+    } catch (error) {
+      // Keep the source so a timed-out local write can be safely retried:
+      // gateway idempotency forbids a second differing assistant reply.
+      note.textContent = 'Could not confirm sharing: ' + error.message +
+        ' Retrying this button does not make another AI request.';
+    } finally {
+      busy = false;
+      updateShare();
+      refresh();
+    }
+  });
+
   refreshButton.addEventListener('click', refresh);
-  window.ArcherMobileDrafts = { refresh };
+  window.ArcherMobileDrafts = { refresh, beginChat, chatCompleted };
   refresh();
 
   window.setInterval(() => {

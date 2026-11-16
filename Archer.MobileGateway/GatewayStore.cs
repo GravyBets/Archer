@@ -148,8 +148,13 @@ public sealed class GatewayConversationMessage
     public Guid ClientMessageId { get; set; }
     public string Role { get; set; } = "owner";
     public string Content { get; set; } = "";
+    // Only assistant records have an owner-draft reference.
+    public Guid? ReplyToMessageId { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
 }
+
+public sealed record PublishGatewayReplyRequest(
+    Guid InReplyToId, string? ExpectedOwnerText, string? Content);
 
 public sealed record AppendConversationMessageRequest(
     Guid ClientMessageId, string? Content);

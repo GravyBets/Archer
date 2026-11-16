@@ -119,7 +119,7 @@ app.MapGet("/health/live", () => Results.Ok(new
 {
     status = "ok",
     component = "Archer.MobileGateway",
-    version = "1.7.0",
+    version = "1.8.0",
     publicAccessEnabled = false,
     deliveryEnabled = false
 }));
@@ -436,6 +436,35 @@ app.MapGet("/internal/conversation/bridge", async Task<IResult> (
     return Results.Ok(await journal.BridgePreviewAsync(ct));
 });
 
+// Explicit local desktop reply publication. Never reachable with mobile
+// bearer credentials: only the separately configured service-to-service key.
+app.MapPost("/internal/conversation/reply", async Task<IResult> (
+    PublishGatewayReplyRequest request, HttpContext ctx,
+    GatewayConversationJournal journal, CancellationToken ct) =>
+{
+    var bridge = Environment.GetEnvironmentVariable("ARCHER_GATEWAY_BRIDGE_KEY");
+    var admin = Environment.GetEnvironmentVariable("ARCHER_GATEWAY_ADMIN_KEY");
+    var ingest = Environment.GetEnvironmentVariable("ARCHER_GATEWAY_INGEST_KEY");
+    if (string.IsNullOrWhiteSpace(bridge) || bridge == admin || bridge == ingest ||
+        !InternalKeyValid(ctx.Request, "X-Archer-Bridge-Key",
+            "ARCHER_GATEWAY_BRIDGE_KEY"))
+        return Results.StatusCode(403);
+    try
+    {
+        var result = await journal.PublishAssistantReplyAsync(request, ct);
+        return result.Outcome switch
+        {
+            "not_found" => Results.NotFound(result),
+            "conflict" => Results.Conflict(result),
+            _ => Results.Ok(result)
+        };
+    }
+    catch (ArgumentException error)
+    {
+        return Results.BadRequest(new { error = error.Message });
+    }
+});
+
 // Local, opt-in shared text JOURNAL only. No AI response, real chat sync,
 // streaming speech or phone notification is performed from these routes.
 app.MapGet("/v1/conversation/messages", async Task<IResult> (
@@ -488,5 +517,5 @@ app.MapDelete("/internal/conversation", async Task<IResult> (
     });
 });
 
-Console.WriteLine("Archer Mobile Gateway v1.7.0: LOCAL LOOPBACK ONLY on 127.0.0.1:5091");
+Console.WriteLine("Archer Mobile Gateway v1.8.0: LOCAL LOOPBACK ONLY on 127.0.0.1:5091");
 app.Run();

@@ -265,6 +265,9 @@ $('chatForm').addEventListener('submit', async event => {
   event.preventDefault();
   const message = $('chatText').value.trim();
   if (!message || appState.busy) return;
+  // A source is shareable only if the owner deliberately chose an
+  // unedited mobile draft. This does not change which AI request is sent.
+  const mobileSource = window.ArcherMobileDrafts?.beginChat(message);
   window.ArcherPresence?.stopListening();
   window.ArcherPresence?.stopSpeech();
   window.ArcherPresence?.setState('thinking', 'Archer is considering your message.');
@@ -274,6 +277,7 @@ $('chatForm').addEventListener('submit', async event => {
   if (result && typeof result.answer === 'string') {
     $('chatText').value = '';
     $('chatMessages').scrollTop = $('chatMessages').scrollHeight;
+    window.ArcherMobileDrafts?.chatCompleted(mobileSource);
     window.ArcherPresence?.reply(result.answer);
   } else {
     window.ArcherPresence?.failure('The response could not be completed. Check the error banner above.');

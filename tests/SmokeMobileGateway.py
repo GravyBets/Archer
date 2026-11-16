@@ -205,9 +205,41 @@ def run(state_path):
     assert bridged["actionExecuted"] is False
     assert len(bridged["messages"]) == 1
     assert bridged["messages"][0]["content"] == message["content"]
+
+    # A phone bearer may not impersonate the desktop assistant.
+    reply_path = "/internal/conversation/reply"
+    reply = {"inReplyToId": created["id"],
+             "expectedOwnerText": message["content"],
+             "content": "Archer here. This is a synthetic local test reply."}
+    request(reply_path, "POST", reply, expected=403)
+    request(reply_path, "POST", reply, talk_bearer, expected=403)
+    request(reply_path, "POST", reply,
+            {"X-Archer-Bridge-Key": INGEST}, expected=403)
+    mismatched = dict(reply)
+    mismatched["expectedOwnerText"] = "An entirely different owner request"
+    request(reply_path, "POST", mismatched,
+            {"X-Archer-Bridge-Key": BRIDGE}, expected=404)
+    published = request(reply_path, "POST", reply,
+                        {"X-Archer-Bridge-Key": BRIDGE})
+    assert published["outcome"] == "saved"
+    repeated = request(reply_path, "POST", reply,
+                       {"X-Archer-Bridge-Key": BRIDGE})
+    assert repeated["outcome"] == "duplicate"
+    assert repeated["id"] == published["id"]
+    different = dict(reply)
+    different["content"] = "Different assistant response to the same draft"
+    request(reply_path, "POST", different,
+            {"X-Archer-Bridge-Key": BRIDGE}, expected=409)
+    journal = request("/v1/conversation/messages", headers=watcher_bearer)
+    assert len(journal["messages"]) == 2
+    response_item = next(x for x in journal["messages"] if x["role"] == "assistant")
+    assert response_item["replyToMessageId"] == created["id"]
+    assert response_item["content"] == reply["content"]
+    assert request("/internal/conversation/bridge",
+        headers={"X-Archer-Bridge-Key": BRIDGE})["messages"] == []
     request("/internal/conversation", "DELETE", expected=403)
     deleted = request("/internal/conversation", "DELETE", headers=admin)
-    assert deleted["deleted"] == 1
+    assert deleted["deleted"] == 2  # Owner message + one linked assistant reply.
     assert request("/v1/conversation/messages", headers=talk_bearer)["messages"] == []
     assert request("/internal/conversation/bridge",
         headers={"X-Archer-Bridge-Key": BRIDGE})["messages"] == []
@@ -257,6 +289,7 @@ def run(state_path):
     assert "device.revoked" in {x["action"] for x in audit["entries"]}
     assert "conversation.message_saved" in {x["action"] for x in audit["entries"]}
     assert "conversation.cleared" in {x["action"] for x in audit["entries"]}
+    assert "conversation.assistant_reply_shared" in {x["action"] for x in audit["entries"]}
     assert message["content"] not in json.dumps(audit)
     assert len(audit["entries"]) < 300
     request("/v1/inbox", headers=bearer, expected=401)
@@ -268,7 +301,8 @@ def run(state_path):
     # No sensitive fields, messages, device hashes, tokens or audit trail appear on disk.
     for secret in (
         token, new_token, reader["deviceToken"], talker["deviceToken"],
-        watcher["deviceToken"], message["content"], desktop_sample["content"],
+        watcher["deviceToken"], message["content"], reply["content"],
+        desktop_sample["content"],
         "tokenHashHex",
         "device.rotated", "device.revoked", "Example site needs review",
         "deliveryPreviews", "sandbox-policy-1",

@@ -1,4 +1,4 @@
-# Archer mobile gateway — security and threat review (v1.7.0)
+# Archer mobile gateway — security and threat review (v1.8.0)
 
 **Review date:** 2026-11-16. This is an engineering threat model, NOT an independent penetration test or approval for internet exposure.
 
@@ -119,6 +119,16 @@ No preview is delivered to an Apple device; no APNs device token, push server, m
 - The gateway remains local HTTP and uses a static shared key for localhost development. There is **no mutual TLS, OIDC, hardware-backed client identity, remote app authentication or true multi-channel session sync**. A malicious process under the same OS account may read secrets or impersonate a service on the local port; further isolation and authenticated encrypted transport are production blockers.
 - Turning on this bridge intentionally presents recent gateway phone drafts inside the existing localhost desktop dashboard. Do not enable on a shared or employer computer.
 - CI tests unauthorised access, key separation, device token isolation, synthetic end-to-end gateway-to-desktop read, zero automatic AI operations and disabled-by-default mode. This is not a production mobile app.
+
+## v1.8.0 explicit local assistant-reply sync risks
+
+- A new gateway **POST /internal/conversation/reply** endpoint requires the distinct local service-to-service bridge key, not a mobile bearer, ingest key or admin key. It can only add an assistant reply to an existing owner message with exact original text, never a free-floating system instruction.
+- The service refuses mismatches, stale/deleted drafts and alternate answers to already-answered drafts. Identical repeats are idempotent. The encrypted gateway journal has a replyToMessageId linking an assistant reply to its owner message. Device-held conversation:write scopes can still only append owner messages, not forge assistant replies.
+- Desktop **POST /api/mobile/reply-publish** requires the owner-enabled local chat bridge and checks the **last persisted** local user/assistant pair against the selected draft before sending text to the fixed loopback gateway. No model is called by this publishing endpoint. The UI requires explicit selection, successful normal Send and a separate confirmation before sharing.
+- Existing MissionControl API is still **unauthenticated on localhost**. A malicious process or untrusted page able to issue local requests could attempt this action. Never use this on shared/employer computers or expose 5087 to any network. Real remote authenticated identity, same-user controls, CSRF/web-origin review and session-level server permissions remain blockers.
+- A successful gateway write does **not** prove a push or SMS was delivered. It only stores encrypted content for a future authorized device client; there is currently no real iPhone app.
+- Current desktop storage remains a separate **unencrypted local** conversation file, and the extra sharing action copies only the selected answer; it does not solve production encryption and retention for desktop history. Production audit, authenticated two-way sync, cross-channel ordering, idempotent AI-cost reservations, and secure deletion/backup remain undone.
+
 ## Local-only opt-in setup
 
 Prerequisites: .NET 10 SDK, separate optional process. Values must be cryptographically random and never committed to Git.
@@ -152,4 +162,4 @@ Production deployment stays BLOCKED until all these gates pass.
 - Kestrel explicit endpoint binding: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/endpoints?view=aspnetcore-10.0
 - Kestrel proxy/forwarding security: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/security-considerations
 
-This document inventories the current source at v1.7.0; revisit it when endpoints or authorization logic change.
+This document inventories the current source at v1.8.0; revisit it when endpoints or authorization logic change.

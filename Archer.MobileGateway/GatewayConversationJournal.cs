@@ -31,6 +31,7 @@ public sealed class GatewayConversationJournal(GatewayStore store)
                     clientMessageId = x.ClientMessageId,
                     deviceId = x.DeviceId,
                     role = x.Role,
+                    replyToMessageId = x.ReplyToMessageId,
                     content = x.Content,
                     createdAtUtc = x.CreatedAtUtc
                 }).ToArray(),
@@ -54,7 +55,9 @@ public sealed class GatewayConversationJournal(GatewayStore store)
             messages = state.ConversationMessages
                 .Where(x => x.Role == "owner" &&
                     x.CreatedAtUtc >= now.AddDays(-RetentionDays) &&
-                    x.CreatedAtUtc <= now)
+                    x.CreatedAtUtc <= now &&
+                    !state.ConversationMessages.Any(reply =>
+                        reply.Role == "assistant" && reply.ReplyToMessageId == x.Id))
                 .OrderBy(x => x.CreatedAtUtc).ThenBy(x => x.Id)
                 .TakeLast(30)
                 .Select(x => new
@@ -128,6 +131,69 @@ public sealed class GatewayConversationJournal(GatewayStore store)
             GatewayAudit.Add(state, "conversation.message_saved", device.Id);
             return new AppendResult("saved", message.Id, now,
                 "Text saved locally for future conversation integration. No AI reply or notification was generated.");
+        }, ct);
+    }
+
+    /// <summary>
+    /// A reply may be created ONLY through the distinct local bridge-key route,
+    /// not a mobile Bearer. Require an exact existing owner draft, an exact
+    /// original question, and at most one assistant reply per draft.
+    /// No AI or phone provider is contacted; this only persists text.
+    /// </summary>
+    public async Task<AppendResult> PublishAssistantReplyAsync(
+        PublishGatewayReplyRequest request, CancellationToken ct)
+    {
+        var question = request.ExpectedOwnerText?.Trim() ?? "";
+        var answer = request.Content?.Trim() ?? "";
+        if (request.InReplyToId == Guid.Empty ||
+            question.Length is < 1 or > MaxMessageLength ||
+            answer.Length is < 1 or > 4000 ||
+            answer.Any(c => char.IsControl(c) && c is not '\n' and not '\t') ||
+            question.Any(c => char.IsControl(c) && c is not '\n' and not '\t'))
+            throw new ArgumentException("A valid draft ID, exact owner question and 1–4000 character reply are required.");
+
+        var now = DateTimeOffset.UtcNow;
+        return await store.UpdateAsync(state =>
+        {
+            var original = state.ConversationMessages.FirstOrDefault(x =>
+                x.Id == request.InReplyToId && x.Role == "owner" &&
+                x.CreatedAtUtc >= now.AddDays(-RetentionDays) &&
+                x.CreatedAtUtc <= now &&
+                string.Equals(x.Content, question, StringComparison.Ordinal));
+            if (original is null)
+                return new AppendResult("not_found", null, null,
+                    "No exact matching current owner draft was found. No assistant text saved.");
+
+            var previous = state.ConversationMessages.FirstOrDefault(x =>
+                x.Role == "assistant" && x.ReplyToMessageId == original.Id);
+            if (previous is not null)
+            {
+                return string.Equals(previous.Content, answer, StringComparison.Ordinal)
+                    ? new AppendResult("duplicate", previous.Id, previous.CreatedAtUtc,
+                        "Reply was already shared; no duplicate message created.")
+                    : new AppendResult("conflict", previous.Id, previous.CreatedAtUtc,
+                        "This draft already has a different Archer reply. No overwrite allowed.");
+            }
+
+            var message = new GatewayConversationMessage
+            {
+                DeviceId = Guid.Empty, // trusted local desktop service, not a device
+                ClientMessageId = original.Id,
+                ReplyToMessageId = original.Id,
+                Role = "assistant",
+                Content = answer,
+                CreatedAtUtc = now
+            };
+            state.ConversationMessages.Add(message);
+            if (state.ConversationMessages.Count > HistoryLimit)
+                state.ConversationMessages = state.ConversationMessages
+                    .OrderByDescending(x => x.CreatedAtUtc)
+                    .ThenByDescending(x => x.Id)
+                    .Take(HistoryLimit).ToList();
+            GatewayAudit.Add(state, "conversation.assistant_reply_shared",
+                original.DeviceId, message.Id);
+            return new AppendResult("saved", message.Id, now,
+                "Explicitly approved local desktop reply saved to the encrypted mobile journal. No phone notification was delivered.");
         }, ct);
     }
 
