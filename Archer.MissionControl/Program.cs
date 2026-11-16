@@ -22,7 +22,7 @@ await app.Services.GetRequiredService<JsonFileStore>().RecoverInterruptedTasksAs
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "0.4.1" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "0.5.0" }));
 
 app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
 {
@@ -30,7 +30,7 @@ app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
     model = ai.Model,
     routing = ai.Routing,
     mode = "Local only · Research and analysis only",
-    version = "0.4.1"
+    version = "0.5.0"
 }));
 
 app.MapGet("/api/state", async (JsonFileStore store, CancellationToken ct) =>
@@ -58,6 +58,41 @@ app.MapGet("/api/github/check", async Task<IResult> (string repository, GitHubRe
     catch (Exception error) { return Results.Problem(title: "GitHub source could not be read", detail: error.Message, statusCode: 502); }
 });
 
+
+// Read-only Developer Workspace. No AI requests and no GitHub write permissions.
+// Each URL is checked against Archer's explicit repository allowlist.
+app.MapGet("/api/development/repository", async Task<IResult> (
+    string url, GitHubRepositoryReader reader, CancellationToken ct) =>
+{
+    try
+    {
+        return Results.Ok(await reader.ListReviewableFilesAsync(url, ct));
+    }
+    catch (ArgumentException error) { return Results.BadRequest(new { error = error.Message }); }
+    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+    catch (Exception error)
+    {
+        return Results.Problem(title: "Repository inspection unavailable",
+            detail: error.Message, statusCode: 502);
+    }
+});
+
+app.MapPost("/api/development/preview", async Task<IResult> (
+    ReadSourceFilesRequest request, GitHubRepositoryReader reader, CancellationToken ct) =>
+{
+    try
+    {
+        return Results.Ok(await reader.PreviewFilesAsync(
+            request.Repository ?? "", request.Paths ?? [], ct));
+    }
+    catch (ArgumentException error) { return Results.BadRequest(new { error = error.Message }); }
+    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+    catch (Exception error)
+    {
+        return Results.Problem(title: "Source preview unavailable",
+            detail: error.Message, statusCode: 502);
+    }
+});
 
 app.MapPost("/api/missions", async Task<IResult> (CreateMissionRequest request, JsonFileStore store, CancellationToken ct) =>
 {
@@ -285,7 +320,7 @@ app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore
 
 app.MapFallbackToFile("index.html");
 
-Console.WriteLine("ARCHER Mission Control V0.4.1 — http://127.0.0.1:5087");
+Console.WriteLine("ARCHER Mission Control V0.5.0 — http://127.0.0.1:5087");
 app.Run("http://127.0.0.1:5087");
 
 static IResult MissingApiKey() => Results.BadRequest(new
