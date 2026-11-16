@@ -17,14 +17,14 @@ await app.Services.GetRequiredService<JsonFileStore>().RecoverInterruptedTasksAs
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "0.1.3" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "0.1.4" }));
 
 app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
 {
     configured = ai.IsConfigured,
     model = ai.Model,
     mode = "Local only · Research and analysis only",
-    version = "0.1.3"
+    version = "0.1.4"
 }));
 
 app.MapGet("/api/state", async (JsonFileStore store, CancellationToken ct) =>
@@ -216,7 +216,7 @@ app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore
 
 app.MapFallbackToFile("index.html");
 
-Console.WriteLine("ARCHER Mission Control V0.1.3 — http://127.0.0.1:5087");
+Console.WriteLine("ARCHER Mission Control V0.1.4 — http://127.0.0.1:5087");
 app.Run("http://127.0.0.1:5087");
 
 static IResult MissingApiKey() => Results.BadRequest(new
