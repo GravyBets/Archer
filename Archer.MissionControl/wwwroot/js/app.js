@@ -197,12 +197,12 @@ async function action(run, success) {
   }
 }
 function showView(view) {
-  const allowed = ['archer', 'missions', 'attention', 'activity'];
+  const allowed = ['archer', 'missions', 'developer', 'attention', 'activity'];
   if (!allowed.includes(view)) view = 'archer';
   if (view !== 'archer') window.ArcherPresence?.stopListening();
   document.querySelectorAll('.view').forEach(section => section.classList.toggle('hidden', section.id !== `${view}View`));
   document.querySelectorAll('.nav-link').forEach(link => link.classList.toggle('active', link.dataset.view === view));
-  $('breadcrumb').textContent = ({ archer: 'ARCHER', missions: 'MISSION CONTROL', attention: 'ATTENTION', activity: 'ACTIVITY' })[view];
+  $('breadcrumb').textContent = ({ archer: 'ARCHER', missions: 'MISSION CONTROL', developer: 'DEVELOPER', attention: 'ATTENTION', activity: 'ACTIVITY' })[view];
 }
 document.addEventListener('click', async event => {
   const link = event.target.closest('[data-view]');
