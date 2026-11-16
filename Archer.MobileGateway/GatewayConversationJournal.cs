@@ -53,6 +53,18 @@ public sealed class GatewayConversationJournal(GatewayStore store)
         var now = DateTimeOffset.UtcNow;
         return await store.UpdateAsync(state =>
         {
+            // Repeat the access check inside the same atomic state update:
+            // a token rotated/revoked between HTTP auth and write cannot post.
+            var current = state.Devices.FirstOrDefault(x =>
+                x.Id == device.Id &&
+                x.RevokedAtUtc is null &&
+                x.ExpiresAtUtc > now &&
+                x.TokenHashHex == device.TokenHashHex &&
+                x.Scopes.Contains("conversation:write", StringComparer.Ordinal));
+            if (current is null)
+                return new AppendResult("unauthorized", null, null,
+                    "Device credential is no longer valid.");
+
             // Restrict storage to one week and cap total retained records.
             state.ConversationMessages.RemoveAll(x =>
                 x.CreatedAtUtc < now.AddDays(-RetentionDays));
