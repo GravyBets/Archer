@@ -20,6 +20,10 @@ jobs:
         run: dotnet restore Archer.MobileGateway/Archer.MobileGateway.csproj
       - name: Build standalone mobile gateway
         run: dotnet build Archer.MobileGateway/Archer.MobileGateway.csproj --configuration Release --no-restore
+      - name: Restore standalone encrypted backup utility
+        run: dotnet restore Archer.GatewayBackup/Archer.GatewayBackup.csproj
+      - name: Build standalone encrypted backup utility
+        run: dotnet build Archer.GatewayBackup/Archer.GatewayBackup.csproj --configuration Release --no-restore
       - name: Check dashboard and presence JavaScript
         run: |
           node --check Archer.MissionControl/wwwroot/js/app.js
@@ -135,7 +139,7 @@ jobs:
             -X POST http://127.0.0.1:5087/api/operations/monitors)
           test "$CODE" = "400"
           python3 -c 'import json; p=json.load(open("/tmp/archer-presence-set.json")); clear=json.load(open("/tmp/archer-presence-cleared.json")); ops=json.load(open("/tmp/archer-operations.json")); assert p["active"]; assert p["presence"]["approxLatitude"]==29.99; assert p["presence"]["approxLongitude"]==-95.12; assert not p["presence"]["shareWithAi"]; assert not clear["active"]; assert ops["channels"]["sms"]=="Not connected"; assert ops["monitors"]==[]; print("PASS: consented coarse presence, clear and safe monitoring defaults")'
-          python3 -c 'import json; c=json.load(open("/tmp/archer-config.json")); u=json.load(open("/tmp/archer-usage.json")); assert c["version"]=="1.10.0", c; assert c["routing"]["mode"]=="adaptive", c; assert u["month"]["requests"]==0, u; assert u["lifetime"]["estimatedCostUsd"]==0, u; print("PASS: Archer v1.10.0 health/config/usage endpoints")'
+          python3 -c 'import json; c=json.load(open("/tmp/archer-config.json")); u=json.load(open("/tmp/archer-usage.json")); assert c["version"]=="1.11.0", c; assert c["routing"]["mode"]=="adaptive", c; assert u["month"]["requests"]==0, u; assert u["lifetime"]["estimatedCostUsd"]==0, u; print("PASS: Archer v1.11.0 health/config/usage endpoints")'
           python3 tests/SmokeInbox.py /tmp/archer-inbox-ci-state/archer-state.json
 
       - name: Smoke-test isolated gateway security and inbox
@@ -220,3 +224,8 @@ jobs:
         shell: bash
         run: |
           python3 tests/SmokeGatewaySessions.py
+
+      - name: Test offline verified encryption backup and safe restore
+        shell: bash
+        run: |
+          python3 tests/SmokeGatewayBackups.py

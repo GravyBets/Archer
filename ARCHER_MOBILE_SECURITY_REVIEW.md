@@ -1,4 +1,4 @@
-# Archer mobile gateway — security and threat review (v1.10.0)
+# Archer mobile gateway — security and threat review (v1.11.0)
 
 **Review date:** 2026-11-16. This is an engineering threat model, NOT an independent penetration test or approval for internet exposure.
 
@@ -148,6 +148,16 @@ No preview is delivered to an Apple device; no APNs device token, push server, m
 - This UI **exposes opted-in mobile journal contents to the existing unauthenticated localhost desktop dashboard**. Do NOT use a shared, employer, remotely controlled or public-facing computer. Future security work must authenticate and authorize the desktop endpoint itself and add HTTPS/owner identity for remote devices.
 - Cursors and visible pages are not full message-delivery receipts: history is capped and has seven-day retention. Additional privacy, encrypted backups, account separation and long-term sync rules are required before production.
 
+
+## v1.11.0 local encrypted backups and restore risks
+
+- `Archer.GatewayBackup` is a **separate offline CLI**, not a gateway HTTP route. It cannot issue device tokens, call models, send messages, trigger GitHub writes or access the network except for a one-second localhost port check during restore.
+- It reuses the exact gateway AES-256-GCM authentication implementation, requires the owner's existing ARCHER_GATEWAY_DATA_KEY_HEX key, and rejects unencrypted legacy input, missing/wrong keys, invalid ciphertext/tags, malformed state arrays or files above 16MB.
+- A backup can be made from the gateway's atomically replaced canonical state while running. The CLI validates the captured encrypted bytes first, then writes to a unique temp file and moves that file to a **new** destination; it cannot overwrite an earlier backup. No plaintext state, key or message is printed or written.
+- `restore-new` refuses to run if any HTTP service responds on localhost:5091 and refuses to overwrite any existing state. The local gateway must be stopped and the operator must choose an empty destination. This makes accidental destructive restores substantially less likely, but does not verify that there are NO other gateway instances or remote copies of the same state.
+- The backup ciphertext and its decryption key must be held **separately**. Losing the original key makes backup recovery impossible. A copy in the same computer/home directory is not an offsite disaster-recovery plan, and an attacker who controls the OS account/key may still copy/decrypt data.
+- CI validates a synthetic encrypted backup, wrong/missing key refusal, tampering, no-overwrite behavior, live-restore refusal, and recovery with the same device bearer and message sequence after restarting a fresh local instance. A REAL Windows/off-host restore drill, hardened storage locations, OS permissions and documented rotation/recovery remain incomplete.
+
 ## Local-only opt-in setup
 
 Prerequisites: .NET 10 SDK, separate optional process. Values must be cryptographically random and never committed to Git.
@@ -181,4 +191,4 @@ Production deployment stays BLOCKED until all these gates pass.
 - Kestrel explicit endpoint binding: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/endpoints?view=aspnetcore-10.0
 - Kestrel proxy/forwarding security: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/security-considerations
 
-This document inventories the current source at v1.10.0; revisit it when endpoints or authorization logic change.
+This document inventories the current source at v1.11.0; revisit it when endpoints or authorization logic change.

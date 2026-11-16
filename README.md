@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 1.10.0 (local prototype)  
+**Version:** 1.11.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -873,3 +873,36 @@ The Archer home page now includes a **Shared local conversation history** panel.
 **Security limitation:** Mobile journal messages become readable in your local desktop dashboard **only after** enabling this bridge. The old MissionControl dashboard itself has no remote-user login, so do not run it on a shared/employer computer or publish/port-forward either process. The browser is NOT an iPhone app, true shared AI session memory, live message delivery or public HTTPS account service.
 
 CI verifies both .NET applications, JavaScript syntax and element wiring, an opt-in two-process session preview showing a source message then a manually shared answer, and denial of unauthenticated bridge calls. The entire upgrade adds no hosting or provider charges.
+
+## v1.11.0 — Verified encrypted backup and safe recovery
+
+This release introduces **Archer.GatewayBackup**, a standalone offline .NET 10 utility for creating, verifying and restoring **new** encrypted gateway state files. It does not use OpenAI, send notifications, upload data or set up cloud billing. It does NOT automatically configure backups.
+
+**Run only on your PERSONAL home PC.** The source is the encrypted state file under Archer.MobileGateway/Data/mobile-gateway-state.json by default (or ARCHER_GATEWAY_DATA_DIR if configured). The utility requires the **same private ARCHER_GATEWAY_DATA_KEY_HEX** used to encrypt the state in v1.6; store that key separately in a safe place.
+
+### Three commands
+
+Run these in a terminal in the Archer repository on your home PC. Replace the sample paths; make sure destination directories already exist:
+
+```powershell
+# Verify the existing encrypted gateway state without changing it.
+dotnet run --project Archer.GatewayBackup/Archer.GatewayBackup.csproj -- verify "C:\Archer\Archer.MobileGateway\Data\mobile-gateway-state.json"
+
+# Create a NEW authenticated encrypted snapshot on a secure drive.
+dotnet run --project Archer.GatewayBackup/Archer.GatewayBackup.csproj -- backup "C:\Archer\Archer.MobileGateway\Data\mobile-gateway-state.json" "D:\SecureArcherBackups\archer-2026-11-16.archerbackup"
+
+# In a real recovery, STOP MobileGateway first. Never overwrite your existing state.
+dotnet run --project Archer.GatewayBackup/Archer.GatewayBackup.csproj -- restore-new "D:\SecureArcherBackups\archer-2026-11-16.archerbackup" "C:\ArcherRecovery\mobile-gateway-state.json"
+```
+
+The utility verifies the AES-256-GCM authentication tag using the exact gateway encryption implementation. Missing/wrong keys, modified ciphertext, unsupported plaintext input, malformed authenticated data and oversized files are rejected. It never writes decrypted messages or keys to files or output.
+
+- **No overwriting:** backup and restore destinations must be NEW. It refuses any existing destination or missing parent folder.
+- **Live backup permitted:** normal gateway state writes use atomic replacement, so a backup captures one stable encrypted snapshot. Live restore is refused if anything is listening on 127.0.0.1:5091.
+- **Recovery:** after restore-new creates a separate encrypted state file, intentionally configure a stopped gateway instance with that file in its own data directory and the ORIGINAL key. Verify the recovered data on localhost before relying on it.
+- **Key custody matters:** lose the original 256-bit key and the backup cannot be read. Store the key separately in a trusted password manager and never share it via chat, GitHub, email or screenshots. No automatic key rotation or lost-key recovery exists.
+- **Off-host backups are still your responsibility:** select a secure offsite drive/location with suitable Windows permissions, configure an actual schedule and run a real Windows restore drill. The new utility does NOT send files externally, guarantee offsite backup, enforce retention, remove historical plaintext, or replace disaster-recovery planning.
+
+CI tests an encrypted synthetic conversation, backup while the local gateway runs, wrong/missing key refusal, ciphertext tampering, live restore and overwrite rejection, then restores to a fresh path and verifies the same conversation and device bearer survived. No real provider accounts or user data are used.
+
+See ARCHER_MOBILE_SECURITY_REVIEW.md and ARCHER_MOBILE_COMMUNICATION_ROADMAP.md for key rotation, cloud identity, iOS, push, and actual synchronized conversations still to do.
