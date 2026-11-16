@@ -7,6 +7,7 @@ with a representative, not genuinely AI-generated, conversation pair.
 """
 import json
 import os
+import time
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -15,13 +16,21 @@ def req(url, method="GET", data=None, headers=None, expected=200):
     payload = json.dumps(data).encode("utf-8") if data is not None else None
     request = Request(url, method=method, data=payload,
                       headers=dict({"Content-Type": "application/json"}, **(headers or {})))
-    try:
-        with urlopen(request, timeout=8) as response:
-            status, body = response.status, response.read()
-    except HTTPError as error:
-        status, body = error.code, error.read()
-    assert status == expected, (url, expected, status, body[:250])
-    return json.loads(body) if body else {}
+    # The prior gateway security smoke deliberately exercises many API calls,
+    # and the app correctly enforces 90 loopback requests/minute. Preserve the
+    # production limiter: let its window reset instead of disabling protection.
+    for attempt in range(2):
+        try:
+            with urlopen(request, timeout=8) as response:
+                status, body = response.status, response.read()
+        except HTTPError as error:
+            status, body = error.code, error.read()
+        if status == 429 and attempt == 0:
+            time.sleep(61)
+            continue
+        assert status == expected, (url, expected, status, body[:250])
+        return json.loads(body) if body else {}
+    raise AssertionError("Gateway rate limit did not recover")
 
 
 DESKTOP = "http://127.0.0.1:5087"
