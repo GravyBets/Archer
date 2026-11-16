@@ -263,3 +263,35 @@
 .voice-chooser select{min-width:165px;max-width:300px;width:clamp(165px,21vw,300px);border:1px solid #355062;border-radius:7px;background:#0d1c2d;color:#d2e6eb;padding:7px 9px;outline-offset:2px;font-size:11px}
 #voiceAccentStatus{width:100%;font-size:10px;color:#86aaa9;line-height:1.5}
 @media(max-width:650px){.voice-chooser{width:100%;justify-content:space-between}.voice-chooser select{max-width:100%;width:auto;flex:1;min-width:150px}}
+
+
+/* v0.6 — owner presence and business-site monitoring. */
+.owner-presence-card{max-width:980px;margin:22px auto 0}
+.owner-presence-content{padding:17px 23px 20px}
+#ownerPresenceStatus{color:#9dd3ca;font-size:12px;margin:0 0 15px}
+.owner-presence-fields{display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:13px}
+.owner-presence-fields label,.operations-add-form label{display:flex;flex-direction:column;gap:6px;color:#91a6b9;font-size:11px;font-weight:650}
+.owner-presence-fields select,.owner-presence-fields input,.operations-add-form input{width:100%;background:#0d1928;border:1px solid #35475d;border-radius:8px;color:#d6e8ee;padding:10px 11px;min-width:0;outline-offset:2px}
+.owner-presence-actions{display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin-top:17px}
+.owner-presence-actions .voice-toggle{flex:1 1 290px}
+.owner-presence-privacy{color:#7a93a7;font-size:11px;margin:12px 0 0;line-height:1.65}
+.operations-add-form{padding:18px 22px;display:grid;grid-template-columns:1fr 1.8fr auto;gap:12px;align-items:end}
+.operations-hint{padding:0 22px 18px;margin:0;color:#8a9eae;font-size:11px;line-height:1.75}
+.operations-hint code{color:#77d9ca}
+.operations-site-list{border-top:1px solid var(--border);min-height:100px}
+.operations-site,.operations-incident{display:flex;gap:20px;justify-content:space-between;align-items:center;padding:17px 22px;border-bottom:1px solid var(--border)}
+.operations-site:last-child,.operations-incident:last-child{border-bottom:0}
+.operations-site strong,.operations-incident strong{color:#dcebf1;display:block;font-size:13px;margin:0 0 4px}
+.operations-site small,.operations-incident small{color:#879aaf;display:block;overflow-wrap:anywhere;font-size:11px;margin-top:4px}
+.operations-warning{color:#edc185!important}
+.operations-site .button,.operations-incident .button{flex:0 0 auto}
+.operations-incidents-panel,.operations-communications{margin-top:20px}
+.operations-incident p{margin:7px 0 0;font-size:12px;color:#a6bace}
+.operations-ack{font-size:11px;color:#7fc7aa}
+.operations-channel-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+.operations-channel-grid>div{display:flex;flex-direction:column;gap:7px;padding:21px 23px;min-width:0}
+.operations-channel-grid>div+div{border-left:1px solid var(--border)}
+.operations-channel-grid strong{color:#d1e7ee;font-size:13px}
+.operations-channel-grid span{color:#8d9eb0;font-size:11px;line-height:1.65}
+@media(max-width:1050px){.owner-presence-fields,.operations-add-form{grid-template-columns:1fr 1fr}.operations-add-form .button{grid-column:1/-1;justify-self:end}}
+@media(max-width:650px){.owner-presence-content{padding:15px}.owner-presence-fields,.operations-add-form,.operations-channel-grid{grid-template-columns:1fr}.operations-add-form{padding:14px}.operations-add-form .button{grid-column:auto;width:100%}.operations-hint{padding:0 14px 14px}.operations-site,.operations-incident{align-items:flex-start;flex-direction:column;padding:15px;gap:12px}.operations-channel-grid>div+div{border-left:0;border-top:1px solid var(--border)}}
