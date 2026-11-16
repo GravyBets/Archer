@@ -108,6 +108,8 @@
 .presence-stage[data-state="thinking"] .orb-surface{animation-duration:2.7s}
 .presence-stage[data-state="thinking"] .orb-inner-ring{border-style:dashed;animation:orb-spin 3s linear infinite}
 .presence-stage[data-state="thinking"] .orb-light{opacity:.8}
+.presence-stage[data-state="responding"] .presence-orb{filter:brightness(1.18)}
+.presence-stage[data-state="responding"] .orb-light{animation-duration:1.5s;opacity:.85}
 .presence-stage[data-state="speaking"] .presence-pulse-ring{animation-duration:1.35s}
 .presence-stage[data-state="speaking"] .orb-light{animation-duration:1s;opacity:.9}
 .presence-stage[data-state="alert"] .presence-orb{border-color:rgba(237,187,115,.6);filter:hue-rotate(-24deg)}
