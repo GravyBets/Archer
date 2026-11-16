@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -16,6 +17,11 @@ public sealed class GitHubRepositoryReader(HttpClient http)
     private const int MaximumFiles = 9;
     private const int MaximumTotalCharacters = 23000;
     private const int MaximumCharactersPerFile = 4900;
+    // Process-local cache prevents repeating 10+ GitHub API calls for every step.
+    // A restart or expiration causes a fresh read; source is not written to disk.
+    private readonly ConcurrentDictionary<string, (DateTimeOffset ExpiresAt, string Snapshot)> _cache =
+        new(StringComparer.OrdinalIgnoreCase);
+
 
     private static readonly Regex RepoUrl = new(
         @"github\.com/(?<owner>[A-Za-z0-9-]{1,39})/(?<repo>[A-Za-z0-9_.-]{1,100})(?:/|$|\s)",
@@ -42,6 +48,10 @@ public sealed class GitHubRepositoryReader(HttpClient http)
             throw new InvalidOperationException(
                 $"GitHub repo {repository} is not approved for Archer code reading. " +
                 "Set ARCHER_GITHUB_ALLOWLIST to an explicit comma-separated list of owner/repo names.");
+
+        if (_cache.TryGetValue(repository, out var cached) &&
+            cached.ExpiresAt > DateTimeOffset.UtcNow)
+            return cached.Snapshot;
 
         var baseUrl = $"https://api.github.com/repos/{Uri.EscapeDataString(owner)}/{Uri.EscapeDataString(name)}";
         using var meta = await ReadJsonAsync(baseUrl, ct);
@@ -135,7 +145,9 @@ public sealed class GitHubRepositoryReader(HttpClient http)
             snapshot.AppendLine();
         }
 
-        return snapshot.ToString();
+        var result = snapshot.ToString();
+        _cache[repository] = (DateTimeOffset.UtcNow.AddMinutes(10), result);
+        return result;
     }
 
     private async Task<JsonDocument> ReadJsonAsync(string url, CancellationToken ct)
