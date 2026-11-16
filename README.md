@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 0.4.0 (local prototype)  
+**Version:** 0.4.1 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -348,3 +348,24 @@ The **Archer** home screen is now the default launch destination. Mission Contro
 8. Confirm `Data/archer-state.json` and `Data/archer-usage.json` remain intact and Git-ignored.
 
 GitHub CI validates .NET compilation, JavaScript syntax, static UI references and no-key local HTTP health. Browser speech, real microphone permissions and visual animation still require local/manual testing. This update does not incur new API charges merely by opening the home page.
+
+
+## v0.4.1 — Transparent plasma orb and particle energy field
+
+- Reworked the home sphere into a **translucent layered glass/plasma shell** with soft interior illumination rather than a solid turquoise fill.
+- Added a lightweight, transparent browser Canvas layer with **76 softly orbiting particles** and **short, curved energy filaments**. No sharp lightning bolts, flashing strobe effects, external libraries, images, or API calls.
+- Energy motion responds to the existing Archer state: calm orbit at idle, gentle inward pull while listening, faster cool-blue motion while thinking, bright shimmer for responses, and muted amber/red accents for alerts/errors.
+- Particle rendering is capped near **30 frames/sec** and pauses when the page/tab isn't visible. It respects `prefers-reduced-motion`, rendering a static particle field for users who disable motion.
+- The canvas is decorative (`aria-hidden`, `pointer-events: none`); the orb remains a real clickable/focusable microphone-or-chat control.
+- No changes to API integration, chat handling, missions, model routing, cost reporting, GitHub access, or user data storage.
+
+### Verify on your PC
+
+1. Stop Archer, **Git → Pull**, rebuild and run. Check `/api/config` reports `0.4.1`.
+2. The home sphere should be glassier and less opaque, surrounded by drifting teal motes and very faint curved filaments.
+3. Talk to Archer: thinking should make energy move faster and shift bluer; responding should brighten it. If available, microphone listening should pull particles slightly inward. Failed tasks should shift the field warmer.
+4. Resize the browser and switch between Archer and Mission Control; the canvas should resize and stop spending CPU on animations when hidden.
+5. If your system uses reduced motion, the particles should become static while the chat remains fully operational.
+6. Check that mission history, usage/cost metrics, and voice controls are unaffected.
+
+CI checks .NET compilation, all three JavaScript files, DOM references and local API health. Visual quality and smoothness still need a Windows browser check; there is no need to create a mission or spend API credits just to see the new orb.
