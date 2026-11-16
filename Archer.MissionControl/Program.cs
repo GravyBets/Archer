@@ -275,15 +275,15 @@ app.MapDelete("/api/presence", async (JsonFileStore store, CancellationToken ct)
 
 // Website availability monitoring is opt-in and restricted to public HTTPS
 // hosts explicitly listed in ARCHER_MONITOR_HOSTS. No AI, SMS or phone calls.
-app.MapGet("/api/operations", async (JsonFileStore store, CancellationToken ct) =>
+app.MapGet("/api/operations", async (JsonFileStore store, TwilioGateway gateway, CancellationToken ct) =>
 {
     return Results.Ok(await store.ReadAsync(state => new
     {
         monitors = state.WebsiteMonitors,
         incidents = state.WebsiteIncidents.Take(40).ToArray(),
-        channels = new { sms = "Not connected", phone = "Not connected" },
+        channels = new { sms = gateway.IsConfigured ? "Configured; opt-in required" : "Not connected", phone = gateway.IsConfigured ? "Configured; opt-in required" : "Not connected" },
         monitorIntervalMinutes = 5,
-        message = "This checks public HTTPS availability, not purchases, revenue, customer support, or payment processing. It only runs while Archer is open."
+        message = "This checks public HTTPS availability, not purchases, revenue, customer support, or payment processing. Phone notifications require separate explicit opt-in and only run while Archer is open."
     }, ct));
 });
 
