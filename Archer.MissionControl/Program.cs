@@ -17,6 +17,9 @@ builder.Services.AddHttpClient("site-health", client =>
     UseProxy = false
 });
 builder.Services.AddHostedService<WebsiteMonitorWorker>();
+// Local inbox materializes source-backed events; no push, SMS or AI side effects.
+builder.Services.AddSingleton<OperatorInboxService>();
+builder.Services.AddHostedService<OperatorInboxWorker>();
 builder.Services.AddHttpClient<TwilioGateway>(client =>
     client.Timeout = TimeSpan.FromSeconds(25));
 builder.Services.AddSingleton<CommunicationCoordinator>();
@@ -42,7 +45,7 @@ await app.Services.GetRequiredService<JsonFileStore>().RecoverInterruptedTasksAs
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "1.0.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "1.1.0" }));
 
 app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
 {
@@ -50,7 +53,7 @@ app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
     model = ai.Model,
     routing = ai.Routing,
     mode = "Local only · Guarded AI, approved code drafts, opt-in phone integrations",
-    version = "1.0.0"
+    version = "1.1.0"
 }));
 
 app.MapGet("/api/state", async (JsonFileStore store, CancellationToken ct) =>
@@ -221,6 +224,23 @@ app.MapPost("/api/mobile/presence", async Task<IResult> (
         detail = "Single activity snapshot saved without coordinates or history."
     });
 });
+
+// Local operator inbox for future mobile notification surfaces.
+// Do not expose the localhost admin/API to the Internet.
+app.MapGet("/api/inbox", async (OperatorInboxService inbox, CancellationToken ct) =>
+    Results.Ok(await inbox.GetAsync(ct)));
+
+app.MapPost("/api/inbox/{id:guid}/read", async Task<IResult> (
+    Guid id, OperatorInboxService inbox, CancellationToken ct) =>
+    await inbox.MarkAsync(id, false, ct)
+        ? Results.Ok(new { message = "Inbox item marked read. Nothing was sent." })
+        : Results.NotFound(new { error = "Inbox item not found." }));
+
+app.MapPost("/api/inbox/{id:guid}/acknowledge", async Task<IResult> (
+    Guid id, OperatorInboxService inbox, CancellationToken ct) =>
+    await inbox.MarkAsync(id, true, ct)
+        ? Results.Ok(new { message = "Inbox item acknowledged. This does not resolve or change its underlying mission or website issue." })
+        : Results.NotFound(new { error = "Inbox item not found." }));
 
 // Owner presence is opt-in, expiring and LOCAL ONLY. Never infer activity from coordinates.
 app.MapGet("/api/presence", async (JsonFileStore store, CancellationToken ct) =>
@@ -774,7 +794,7 @@ app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore
 
 app.MapFallbackToFile("index.html");
 
-Console.WriteLine("ARCHER Mission Control V1.0.0 — http://127.0.0.1:5087");
+Console.WriteLine("ARCHER Mission Control V1.1.0 — http://127.0.0.1:5087");
 app.Run("http://127.0.0.1:5087");
 
 static IResult MissingApiKey() => Results.BadRequest(new
