@@ -87,7 +87,6 @@ def main():
             assert not page2["hasMore"] and page2["nextAfter"] == 3
             assert all(x["sessionId"] == project for x in page1["messages"]+page2["messages"])
             assert request("/v1/conversation/messages", header=view)["messages"][0]["content"] == "Main stays separate"
-            assert request("/v1/conversation/messages?limit=101", header=view) if False else True
             request("/v1/conversation/messages?limit=101", header=view, expected=400)
             request("/v1/conversation/messages?after=-1", header=view, expected=400)
             request("/v1/conversation/messages?sessionId=" + str(uuid4()),
