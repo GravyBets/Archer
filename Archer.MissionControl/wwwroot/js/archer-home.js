@@ -14,6 +14,8 @@
   const stopButton = el('voiceStopButton');
   const replayButton = el('voiceReplayButton');
   const note = el('voiceSupportNote');
+  const voicePicker = el('voiceChoiceSelect');
+  const accentStatus = el('voiceAccentStatus');
   const input = el('chatText');
 
   const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -28,6 +30,12 @@
   let finalTranscript = '';
   let transientError = false;
   let lastReply = '';
+  let availableVoices = [];
+  let selectedVoiceUri = '';
+
+  const getPreference = key => { try { return window.localStorage.getItem(key); } catch { return null; } };
+  const setPreference = (key, value) => { try { window.localStorage.setItem(key, value); } catch { /* privacy mode */ } };
+  readToggle.checked = getPreference('archer.voice.readAloud') === 'yes';
 
   function statusText(value, hint = '') {
     el('presenceStatus').textContent = value;
@@ -70,6 +78,68 @@
     }, 3800);
   }
 
+  function voiceScore(voice) {
+    const label = voice.name || '';
+    const locale = (voice.lang || '').toLowerCase();
+    if (locale !== 'en-gb') return -9999;
+    let score = 100;
+    if (/natural|neural|premium|online/i.test(label)) score += 45;
+    if (/ryan|george|oliver|daniel|male/i.test(label)) score += 70;
+    if (/hazel|sonia|libby|susan|female/i.test(label)) score -= 60;
+    return score;
+  }
+
+  function chooseVoices() {
+    if (!hasSpeechOut) return;
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices.length) {
+      accentStatus.textContent = 'Searching for installed British voices…';
+      return;
+    }
+    availableVoices = voices;
+    const best = voices.filter(v => (v.lang || '').toLowerCase() === 'en-gb')
+      .sort((a, b) => voiceScore(b) - voiceScore(a));
+    const saved = getPreference('archer.voice.uri');
+    let chosen = voices.find(v => v.voiceURI === saved) || best[0];
+    if (!chosen) chosen = voices.find(v => (v.lang || '').toLowerCase().startsWith('en')) || voices[0];
+    selectedVoiceUri = chosen?.voiceURI || '';
+
+    voicePicker.replaceChildren();
+    for (const voice of [
+      ...best, ...voices.filter(v => !best.includes(v) && (v.lang || '').toLowerCase().startsWith('en'))
+    ]) {
+      const option = document.createElement('option');
+      option.value = voice.voiceURI;
+      option.textContent = voice.name + ' (' + voice.lang + ')';
+      voicePicker.appendChild(option);
+    }
+    if (!voicePicker.options.length) {
+      const option = document.createElement('option');
+      option.value = selectedVoiceUri;
+      option.textContent = chosen.name + ' (' + chosen.lang + ')';
+      voicePicker.appendChild(option);
+    }
+    voicePicker.value = selectedVoiceUri;
+    const british = (chosen.lang || '').toLowerCase() === 'en-gb';
+    const maleLikely = /ryan|george|oliver|daniel|male/i.test(chosen.name || '');
+    accentStatus.textContent = british
+      ? (maleLikely
+        ? 'Selected a British voice that may sound masculine. Preview with Read last reply.'
+        : 'British voice selected. Its gender and naturalness depend on your browser.')
+      : 'No British English voice is installed. The selected fallback may sound different.';
+  }
+
+  voicePicker.addEventListener('change', () => {
+    selectedVoiceUri = voicePicker.value;
+    setPreference('archer.voice.uri', selectedVoiceUri);
+    const selected = availableVoices.find(v => v.voiceURI === selectedVoiceUri);
+    accentStatus.textContent = selected
+      ? ((selected.lang || '').toLowerCase() === 'en-gb'
+        ? 'Using British English: ' + selected.name
+        : 'Not a British English voice: ' + selected.name)
+      : 'Selected voice unavailable; system default will be used.';
+  });
+
   function stopSpeech() {
     if (hasSpeechOut) window.speechSynthesis.cancel();
     speaking = false;
@@ -91,8 +161,15 @@
     // Browser TTS engines can truncate very long utterances.
     const clipped = clean.length > 1800;
     const utterance = new SpeechSynthesisUtterance(clipped ? clean.slice(0, 1800) : clean);
-    utterance.rate = 1.02;
-    utterance.pitch = 0.94;
+    const chosen = availableVoices.find(v => v.voiceURI === selectedVoiceUri);
+    if (chosen) {
+      utterance.voice = chosen;
+      utterance.lang = chosen.lang;
+    } else {
+      utterance.lang = 'en-GB';
+    }
+    utterance.rate = 0.99;
+    utterance.pitch = 0.96;
     utterance.volume = 1;
     utterance.onstart = () => { speaking = true; stopButton.disabled = false; setState('speaking', 'Archer is reading the reply aloud.'); };
     utterance.onend = () => {
@@ -181,10 +258,16 @@
 
   if (!hasSpeechOut) {
     readToggle.disabled = true;
+    voicePicker.disabled = true;
+    accentStatus.textContent = 'Spoken playback is unavailable in this browser.';
     readToggle.checked = false;
     if (recognition) note.textContent = 'Speech-to-text available. Speech playback is unavailable in this browser.';
   }
 
+  if (hasSpeechOut) {
+    chooseVoices();
+    window.speechSynthesis.addEventListener?.('voiceschanged', chooseVoices);
+  }
   mic.addEventListener('click', startListening);
   orb.addEventListener('click', () => {
     if (recognition) startListening();
@@ -193,6 +276,7 @@
   stopButton.addEventListener('click', stopSpeech);
   replayButton.addEventListener('click', () => { if (lastReply) say(lastReply, true); });
   readToggle.addEventListener('change', () => {
+    setPreference('archer.voice.readAloud', readToggle.checked ? 'yes' : 'no');
     if (!readToggle.checked) stopSpeech();
   });
 
