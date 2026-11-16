@@ -6,7 +6,7 @@
 2. **Least privilege.** V0.1 tools are public web search and analysis only; no file-system shell, payments, production deploys, or messaging.
 3. **Human approval for consequential actions.** No external communications, purchase, or code deployment without an approval gate.
 4. **Observe real tool results.** Never claim an action happened unless its tool returned success and it was recorded.
-5. **Limit costs and retries.** Prototype: 3 tasks max per button press. V1: enforce cost/token budget, task runtime limits, retries, deduplication, and operator override.
+5. **Limit costs and retries.** Prototype: 3 tasks max per click or opt-in background authorization. No automatic task retries. V1: enforce cost/token budget, task runtime limits, retries, deduplication, and operator override.
 6. **Keep data separate from employer systems.** Do not access SmartGridSuite, PartsPortal, or employer networks without explicit permission and an isolated legal integration.
 
 ## V0.1 flow
@@ -21,6 +21,16 @@ flowchart TD
     A --> S[Save report and activity]
     S --> W
 ```
+
+## V0.2 opt-in local background execution
+
+After the owner generates a plan, the owner may explicitly authorize at most 3 pending research/analysis attempts through Mission Control. A BackgroundService claims and executes them **one at a time** while Archer is running, saving reports and activity to the existing JSON state.
+
+- Authorization state is persisted but **cleared at every restart** to avoid unexpected paid API calls.
+- A failed task stops the worker for that mission; failures require a manual retry.
+- Clicking Pause prevents subsequent tasks, but does not cancel a call already underway.
+- Backend status checks avoid concurrent automatic and manual runs on the same mission.
+- This is a prototype worker, not a robust durable hosted queue, and not a hard API spending cap.
 
 ## V1 target architecture
 
@@ -45,7 +55,7 @@ flowchart TD
 ## Known prototype limitations
 
 - No unit/integration tests yet, and .NET build not validated in authoring environment.
-- A user click triggers steps within one HTTP request; there is no true always-on job worker.
+- Manual runs still use the HTTP request; an opt-in BackgroundService runs up to three research/analysis attempts while the local process is alive. There is still no durable, always-on hosted job scheduler.
 - No user authentication (therefore localhost only).
 - Local JSON serialization assumes one server process; never run multiple instances against the same data folder.
 - Chat memory is a recent conversation window, not semantic retrieval or long-term knowledge indexing.
