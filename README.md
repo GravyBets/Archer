@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 0.2.1 (local prototype)  
+**Version:** 0.2.2 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -206,3 +206,12 @@ Archer can now read an explicitly requested GitHub repository **directly**, rath
 6. Only run the new mission after successful read-only testing. Each AI task will incur API usage charges.
 
 **Limitations:** A bounded snapshot is not a comprehensive security audit, a full code review, proof of a successful compilation, or automated issue remediation. The application still runs only on localhost and performs no repository writes.
+
+
+## v0.2.2 — Better code-review sampling
+
+- The read-only GitHub reader now prioritizes actual GeoShift converter, analyzer, and web UI implementation files before supporting tests.
+- The previous filename matching inadvertently prioritized test files such as `KmlCsvConverterTests.cs` over `KmlCsvConverter.cs`.
+- No change to GitHub permissions or auto-run behavior: repository reading remains allowlisted and read-only.
+- The `/api/github/check` endpoint shows which source files Archer selected; use it before paying for another code-review task.
+- Restart Archer after pulling the update to clear its in-memory GitHub snapshot cache. The reader remains intentionally **partial** and cannot compile, test or edit GeoShift code.
