@@ -119,7 +119,7 @@ app.MapGet("/health/live", () => Results.Ok(new
 {
     status = "ok",
     component = "Archer.MobileGateway",
-    version = "1.9.0",
+    version = "1.10.0",
     publicAccessEnabled = false,
     deliveryEnabled = false
 }));
@@ -436,6 +436,42 @@ app.MapGet("/internal/conversation/bridge", async Task<IResult> (
     return Results.Ok(await journal.BridgePreviewAsync(ct));
 });
 
+// Dedicated read-only service bridge for the owner's local session browser.
+// No mobile bearer, admin or ingest credentials can substitute for the
+// distinct local bridge key. No private desktop history is imported.
+app.MapGet("/internal/conversation/sessions", async Task<IResult> (
+    HttpContext ctx, GatewayConversationJournal journal, CancellationToken ct) =>
+{
+    var bridge = Environment.GetEnvironmentVariable("ARCHER_GATEWAY_BRIDGE_KEY");
+    if (string.IsNullOrWhiteSpace(bridge) ||
+        bridge == Environment.GetEnvironmentVariable("ARCHER_GATEWAY_ADMIN_KEY") ||
+        bridge == Environment.GetEnvironmentVariable("ARCHER_GATEWAY_INGEST_KEY") ||
+        !InternalKeyValid(ctx.Request, "X-Archer-Bridge-Key", "ARCHER_GATEWAY_BRIDGE_KEY"))
+        return Results.StatusCode(403);
+    return Results.Ok(await journal.ListSessionsAsync(ct));
+});
+
+app.MapGet("/internal/conversation/history", async Task<IResult> (
+    Guid? sessionId, long? after, int? limit,
+    HttpContext ctx, GatewayConversationJournal journal, CancellationToken ct) =>
+{
+    var bridge = Environment.GetEnvironmentVariable("ARCHER_GATEWAY_BRIDGE_KEY");
+    if (string.IsNullOrWhiteSpace(bridge) ||
+        bridge == Environment.GetEnvironmentVariable("ARCHER_GATEWAY_ADMIN_KEY") ||
+        bridge == Environment.GetEnvironmentVariable("ARCHER_GATEWAY_INGEST_KEY") ||
+        !InternalKeyValid(ctx.Request, "X-Archer-Bridge-Key", "ARCHER_GATEWAY_BRIDGE_KEY"))
+        return Results.StatusCode(403);
+    try
+    {
+        var count = limit ?? 20;
+        if (count is < 1 or > 20)
+            return Results.BadRequest(new { error = "Local bridge history is limited to 20 records per page." });
+        var history = await journal.SyncAsync(sessionId, after ?? 0, count, ct);
+        return history is null ? Results.NotFound() : Results.Ok(history);
+    }
+    catch (ArgumentException error) { return Results.BadRequest(new { error = error.Message }); }
+});
+
 // Explicit local desktop reply publication. Never reachable with mobile
 // bearer credentials: only the separately configured service-to-service key.
 app.MapPost("/internal/conversation/reply", async Task<IResult> (
@@ -574,5 +610,5 @@ app.MapDelete("/internal/conversation", async Task<IResult> (
     });
 });
 
-Console.WriteLine("Archer Mobile Gateway v1.9.0: LOCAL LOOPBACK ONLY on 127.0.0.1:5091");
+Console.WriteLine("Archer Mobile Gateway v1.10.0: LOCAL LOOPBACK ONLY on 127.0.0.1:5091");
 app.Run();
