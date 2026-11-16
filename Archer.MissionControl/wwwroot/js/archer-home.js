@@ -12,6 +12,7 @@
   const orb = el('orbButton');
   const readToggle = el('voiceReadToggle');
   const stopButton = el('voiceStopButton');
+  const replayButton = el('voiceReplayButton');
   const note = el('voiceSupportNote');
   const input = el('chatText');
 
@@ -26,6 +27,7 @@
   let initialTranscript = '';
   let finalTranscript = '';
   let transientError = false;
+  let lastReply = '';
 
   function statusText(value, hint = '') {
     el('presenceStatus').textContent = value;
@@ -75,8 +77,10 @@
     settle();
   }
 
-  function say(text) {
-    if (!readToggle.checked || !hasSpeechOut || !text) {
+  function say(text, forcePlayback = false) {
+    if (text) lastReply = text;
+    replayButton.disabled = !lastReply || !hasSpeechOut;
+    if ((!readToggle.checked && !forcePlayback) || !hasSpeechOut || !text) {
       setState('responding', 'Archer replied. Read the conversation below.');
       window.setTimeout(settle, 1600);
       return;
@@ -187,6 +191,7 @@
     else input.focus();
   });
   stopButton.addEventListener('click', stopSpeech);
+  replayButton.addEventListener('click', () => { if (lastReply) say(lastReply, true); });
   readToggle.addEventListener('change', () => {
     if (!readToggle.checked) stopSpeech();
   });
@@ -238,6 +243,7 @@
     stopListening,
     failure: softError
   };
+  update(appState.data);
   settle();
 
   window.addEventListener('beforeunload', () => {
