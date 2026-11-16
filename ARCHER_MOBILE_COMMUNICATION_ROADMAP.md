@@ -1,7 +1,7 @@
 # Archer — Mobile, Messaging, Voice & Safe Business Operations Roadmap
 
 Working plan: 2026-11-16. Target: one Archer across Windows, iPhone, text, phone, and (if approved) CarPlay.
-Current baseline: Archer v1.10.0 is LOCALHOST-ONLY. It supports guarded AI, source review/code drafts, site checks, opt-in outbound SMS/one-way calls and manually selected coarse presence. Native iOS, real push, inbound voice/text conversation and cloud hosting DO NOT exist yet.
+Current baseline: Archer v1.11.0 is LOCALHOST-ONLY. It supports guarded AI, source review/code drafts, site checks, opt-in outbound SMS/one-way calls and manually selected coarse presence. Native iOS, real push, inbound voice/text conversation and cloud hosting DO NOT exist yet.
 
 ## Product decisions
 
@@ -29,7 +29,8 @@ Current baseline: Archer v1.10.0 is LOCALHOST-ONLY. It supports guarded AI, sour
 - [x] Local gateway enforces loopback, restrictive Host/Origin, scoped read/ack tokens and layered global/per-device rate limits (v1.4).
 - [ ] Production HTTPS, trusted ingress, secure secret management, outbound caps, input validation review and per-identity distributed rate limits.
 - [x] AES-256-GCM authenticated encryption for the entire local mobile gateway state (inbox, conversation journal, device hashes and audit); migration and wrong/missing key protection in CI (v1.6).
-- [ ] Provision encrypted off-host backups, secure key backup/rotation, successful restore drill and operational health/cost alerts; local encryption alone does NOT satisfy production security.
+- [x] v1.11 offline local **AES-GCM verified backup/verify/restore-new utility**, tamper/key-loss detection and synthetic restore drill in CI; existing files cannot be overwritten.
+- [ ] Configure real encrypted **off-host** backups for your personal home installation, retain your secret key separately, document key rotation, complete a real Windows restore drill and add health/cost alerts. Automated CI is not production backup coverage.
 - [x] Add isolated gateway CI rejecting unauthenticated access, enforcing device scopes, revocation and bounded inbox payloads; gateway has no mission/call/code/GPS endpoint.
 - [ ] Independent penetration test, HTTPS/reverse proxy, mobile client threat review and production audit.
 
@@ -135,7 +136,7 @@ DONE WHEN: GeoShift converts real paying customers and Archer reports genuine bu
 
 ## Execution order
 
-1. **Completed:** v1.1 inbox; v1.2 isolated gateway; v1.3 notification sandbox; v1.4 device security; v1.5 local journal; v1.6 encrypted state; v1.7 draft preview; v1.8 manual replies; v1.9 session cursors; v1.10 read-only session browser. Everything remains localhost-only.
+1. **Completed:** v1.1 inbox; v1.2 isolated gateway; v1.3 notification sandbox; v1.4 device security; v1.5 local journal; v1.6 encrypted state; v1.7 draft preview; v1.8 manual replies; v1.9 session cursors; v1.10 desktop session browser; v1.11 local encrypted backup/restore utility. No cloud exposure.
 2. **Next:** independent security architecture review and a separately authenticated **TLS-ready public gateway design**, provisioning, retention and APNs-device enrollment; no remote access until those gates pass.
 3. **Then:** shared conversation backend, push service (APNs) and native iOS MVP.
 4. **In parallel after security:** Twilio inbound SMS + ConversationRelay with signature checks and strict budget.
@@ -215,3 +216,9 @@ Archived sessions remain readable but cannot accept owner messages or desktop re
 The existing Archer home interface now shows an opt-in **Shared local conversation history** panel with a session selector, read-only owner/Archer messages and incremental **Load next messages** control backed by v1.9's server-assigned cursors. The desktop calls two fixed, separate-key-protected localhost gateway routes via bounded, proxy-free HTTP. The existing `ARCHER_GATEWAY_CHAT_BRIDGE_ENABLED` flag still defaults off. When a desktop reply is explicitly shared, the session browser can refresh. There are no new AI model requests, Twilio calls, pushes or writes in the session browser.
 
 CI tests disabled-default behavior, wrong bridge-key rejection, local session catalog, history ordering before/after a simulated manually shared reply and safe UI rendering. The browser does NOT create or archive sessions, synchronize desktop AI context, allow arbitrary mobile device actions, handle public authentication or make an iPhone remotely accessible. Those are separate production milestones.
+
+### v1.11.0 — Verified offline encrypted backup utility
+
+A new standalone `Archer.GatewayBackup` .NET 10 CLI can `verify` a saved gateway state, `backup` it to an entirely new immutable encrypted file, and `restore-new` a verified backup to a fresh state file only when the local gateway port is not listening. It reuses the EXACT gateway AES-GCM implementation, requires the owner's private 256-bit key, refuses absent/wrong keys and authenticated tag tampering, never creates plaintext output, prints no message/credential content and never overwrites an existing destination.
+
+CI builds the utility, stores a synthetic local encrypted conversation, validates a backup made while the gateway is running, rejects a live restore and overwritten targets, tests incorrect/missing keys and damaged ciphertext, restores to a new file and starts a new gateway process to confirm the same device and session message survive. No external storage, automatic backup schedule, cloud deployment, key rotation or operating-system hardening is provided. A real Windows test and off-host backup plan are still necessary.
