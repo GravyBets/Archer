@@ -38,6 +38,7 @@
       idle: 'Standing by',
       listening: 'Listening',
       thinking: 'Thinking',
+      responding: 'Responding',
       speaking: 'Speaking',
       alert: 'Attention needed',
       error: 'Something went wrong'
@@ -45,7 +46,7 @@
     statusText(descriptions[value] || 'Standing by', hint);
     el('conversationMode').textContent = ({
       idle: 'TEXT READY', listening: 'MIC ACTIVE', thinking: 'PROCESSING',
-      speaking: 'VOICE OUTPUT', alert: 'TASK ALERT', error: 'CHECK STATUS'
+      responding: 'REPLY READY', speaking: 'VOICE OUTPUT', alert: 'TASK ALERT', error: 'CHECK STATUS'
     })[value] || 'TEXT READY';
     mic.setAttribute('aria-pressed', listening ? 'true' : 'false');
     mic.textContent = listening ? '■ Stop listening' : '🎙 Speak';
@@ -75,7 +76,11 @@
   }
 
   function say(text) {
-    if (!readToggle.checked || !hasSpeechOut || !text) { settle(); return; }
+    if (!readToggle.checked || !hasSpeechOut || !text) {
+      setState('responding', 'Archer replied. Read the conversation below.');
+      window.setTimeout(settle, 1600);
+      return;
+    }
     stopSpeech();
     const clean = text.replace(/https?:\/\/\S+/g, 'a link').replace(/[*#_]+/g, '').trim();
     if (!clean) { settle(); return; }
@@ -92,9 +97,13 @@
       if (clipped) note.textContent = 'Only the first portion of a long reply was read; full text is shown above.';
       settle();
     };
-    utterance.onerror = () => {
+    utterance.onerror = event => {
       speaking = false;
       stopButton.disabled = true;
+      if (event.error === 'canceled' || event.error === 'interrupted') {
+        settle();
+        return;
+      }
       softError('Browser voice playback failed. You can still read the reply.');
     };
     window.speechSynthesis.speak(utterance);
