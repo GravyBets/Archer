@@ -78,3 +78,6 @@ public sealed class PlanTaskDraft
 }
 
 public sealed record SetAutoRunRequest(bool Enabled);
+
+// Explicit source selections for read-only Developer Workspace previews.
+public sealed record ReadSourceFilesRequest(string? Repository, List<string>? Paths);
