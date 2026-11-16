@@ -95,7 +95,10 @@ assert not missing, f"JavaScript references missing DOM IDs: {missing}"
 assert page.scripts[-10:] == ["/js/app.js", "/js/archer-home.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js", "/js/coding.js", "/js/communications.js", "/js/inbox.js", "/js/mobile-drafts.js"]
 assert "/api/mobile/conversation-preview" in MOBILE_DRAFTS_JS
 assert "composer.value = message.content" in MOBILE_DRAFTS_JS
-assert "/api/chat" not in MOBILE_DRAFTS_JS
+assert "api('/api/chat'" not in MOBILE_DRAFTS_JS
+assert 'api("/api/chat"' not in MOBILE_DRAFTS_JS
+assert "fetch('/api/chat'" not in MOBILE_DRAFTS_JS
+assert 'fetch("/api/chat"' not in MOBILE_DRAFTS_JS
 assert "/api/inbox" in INBOX_JS
 assert "acknowledge" in INBOX_JS
 assert "textContent" in INBOX_JS
