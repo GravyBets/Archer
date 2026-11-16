@@ -120,11 +120,32 @@ public sealed class GitHubRepositoryReader(HttpClient http)
             return points;
         }
 
-        var candidates = inventory.Where(IsEligible)
-            .OrderByDescending(Score)
-            .ThenBy(x => x.Path, StringComparer.Ordinal)
-            .Take(MaximumFiles)
-            .ToList();
+        // Explicit source selections from Developer Workspace override the old
+        // heuristic sample. Missing paths are errors, never silent fallbacks.
+        var selection = Regex.Match(missionText,
+            @"(?im)^SOURCE FILES:\s*(?<files>[^\r\n]+)$");
+        var requested = selection.Success
+            ? selection.Groups["files"].Value.Split(',',
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            : [];
+        if (requested.Length > 6 || (selection.Success && requested.Length == 0))
+            throw new InvalidOperationException("A code-review mission can select 1–6 files.");
+
+        var candidates = requested.Length > 0
+            ? inventory.Where(IsEligible)
+                .Where(x => requested.Contains(x.Path, StringComparer.Ordinal))
+                .OrderBy(x => Array.IndexOf(requested, x.Path))
+                .ToList()
+            : inventory.Where(IsEligible)
+                .OrderByDescending(Score)
+                .ThenBy(x => x.Path, StringComparer.Ordinal)
+                .Take(MaximumFiles)
+                .ToList();
+
+        if (requested.Length > 0 && (candidates.Count != requested.Length ||
+            candidates.Select(x => x.Path).Distinct(StringComparer.Ordinal).Count() != requested.Length))
+            throw new InvalidOperationException(
+                "A selected source file was not found or is not reviewable. Reopen Developer Workspace and refresh the repository.");
 
         if (candidates.Count == 0)
             throw new InvalidOperationException(
@@ -162,6 +183,156 @@ public sealed class GitHubRepositoryReader(HttpClient http)
         var result = snapshot.ToString();
         _cache[repository] = (DateTimeOffset.UtcNow.AddMinutes(10), result);
         return result;
+    }
+
+
+    // Developer Workspace exposes an explicit, read-only source inventory and preview.
+    // Unlike the historical nine-file automatic sample, the owner can choose EXACT files.
+    // API endpoints remain loopback-only; the allowed repository list still applies.
+    public sealed record ReviewableFile(string Path, string Sha, long Size);
+    public sealed record RepositoryInventory(string Repository, string Branch, string TreeSha,
+        int TotalReviewableFiles, bool Truncated, List<ReviewableFile> Files);
+    public sealed record SourcePreviewFile(string Path, string Url, string Content,
+        long Size, bool Truncated);
+    public sealed record SourcePreview(string Repository, string Branch, string TreeSha,
+        bool Partial, List<SourcePreviewFile> Files);
+
+    private readonly ConcurrentDictionary<string, (DateTimeOffset Expires, RepositoryInventory Value)> _inventories =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private static (string Owner, string Name, string Repository) ValidateReviewRepository(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+            uri.Scheme != Uri.UriSchemeHttps ||
+            !uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) ||
+            uri.Port != 443 || !string.IsNullOrEmpty(uri.UserInfo) ||
+            !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
+            throw new ArgumentException("Use an HTTPS GitHub repository URL (https://github.com/owner/repo).");
+
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length != 2)
+            throw new ArgumentException("Use a repository URL without a file, branch, query, or fragment.");
+
+        var owner = Uri.UnescapeDataString(segments[0]);
+        var name = Uri.UnescapeDataString(segments[1]);
+        if (name.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+            name = name[..^4];
+        if (!Regex.IsMatch(owner, @"^[A-Za-z0-9-]{1,39}$") ||
+            !Regex.IsMatch(name, @"^[A-Za-z0-9_.-]{1,100}$") ||
+            name is "." or "..")
+            throw new ArgumentException("GitHub owner or repository name is invalid.");
+
+        var repository = $"{owner}/{name}";
+        var custom = Environment.GetEnvironmentVariable("ARCHER_GITHUB_ALLOWLIST");
+        var allowed = (string.IsNullOrWhiteSpace(custom) ? "GravyBets/GeoShift" : custom)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (!allowed.Contains(repository, StringComparer.OrdinalIgnoreCase))
+            throw new ArgumentException(
+                $"Repository {repository} isn't allowlisted. Configure ARCHER_GITHUB_ALLOWLIST first.");
+
+        return (owner, name, repository);
+    }
+
+    private static bool IsReviewableFile(string path, long size)
+    {
+        if (string.IsNullOrWhiteSpace(path) || size <= 0 || size > 100_000) return false;
+        var normalized = "/" + path.Replace('\\', '/');
+        string[] excluded =
+        [
+            "/bin/", "/obj/", "/.git/", "/wwwroot/lib/", "/node_modules/",
+            "/vendor/", "/dist/", "/build/", "/packages/", "/secrets/",
+            "/Data/", "/.env", "/.github/", "/private/", "/credentials/"
+        ];
+        if (excluded.Any(x => normalized.Contains(x, StringComparison.OrdinalIgnoreCase)))
+            return false;
+        return normalized.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
+            normalized.EndsWith(".razor", StringComparison.OrdinalIgnoreCase) ||
+            normalized.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ||
+            normalized.EndsWith(".md", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public async Task<RepositoryInventory> ListReviewableFilesAsync(string repositoryUrl, CancellationToken ct)
+    {
+        var (owner, name, repository) = ValidateReviewRepository(repositoryUrl);
+        if (_inventories.TryGetValue(repository, out var cached) &&
+            cached.Expires > DateTimeOffset.UtcNow)
+            return cached.Value;
+
+        var api = $"https://api.github.com/repos/{Uri.EscapeDataString(owner)}/{Uri.EscapeDataString(name)}";
+        using var meta = await ReadJsonAsync(api, ct);
+        if (!meta.RootElement.TryGetProperty("default_branch", out var branchValue))
+            throw new InvalidOperationException("GitHub did not return the repository's default branch.");
+        var branch = branchValue.GetString() ??
+            throw new InvalidOperationException("GitHub returned an empty default branch.");
+
+        using var treeResponse = await ReadJsonAsync(
+            api + "/git/trees/" + Uri.EscapeDataString(branch) + "?recursive=1", ct);
+        var root = treeResponse.RootElement;
+        if (root.TryGetProperty("truncated", out var truncated) &&
+            truncated.ValueKind == JsonValueKind.True)
+            throw new InvalidOperationException("GitHub returned a partial repository tree. Source selection is unavailable.");
+
+        var fileList = root.GetProperty("tree").EnumerateArray()
+            .Where(x => x.TryGetProperty("type", out var kind) && kind.GetString() == "blob" &&
+                x.TryGetProperty("path", out _) && x.TryGetProperty("sha", out _))
+            .Select(x => new ReviewableFile(
+                x.GetProperty("path").GetString() ?? "",
+                x.GetProperty("sha").GetString() ?? "",
+                x.TryGetProperty("size", out var size) ? size.GetInt64() : 0))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Sha) && IsReviewableFile(x.Path, x.Size))
+            .OrderBy(x => x.Path, StringComparer.OrdinalIgnoreCase).ToList();
+
+        var value = new RepositoryInventory(repository, branch,
+            root.GetProperty("sha").GetString() ?? "",
+            fileList.Count, fileList.Count > 300, fileList.Take(300).ToList());
+        _inventories[repository] = (DateTimeOffset.UtcNow.AddMinutes(5), value);
+        return value;
+    }
+
+    public async Task<SourcePreview> PreviewFilesAsync(string repositoryUrl,
+        IReadOnlyList<string> paths, CancellationToken ct)
+    {
+        if (paths.Count is < 1 or > 6 || paths.Any(string.IsNullOrWhiteSpace) ||
+            paths.Distinct(StringComparer.Ordinal).Count() != paths.Count)
+            throw new ArgumentException("Select 1 to 6 distinct source files.");
+
+        var (owner, name, repository) = ValidateReviewRepository(repositoryUrl);
+        var inventory = await ListReviewableFilesAsync(repositoryUrl, ct);
+        var byPath = inventory.Files.ToDictionary(x => x.Path, StringComparer.Ordinal);
+        if (paths.Any(path => !byPath.ContainsKey(path)))
+            throw new ArgumentException(
+                "One or more selected paths aren't eligible files in the current repository inventory.");
+
+        const int maximumTotal = 34_000;
+        const int maximumPerFile = 9_000;
+        var result = new List<SourcePreviewFile>();
+        var remaining = maximumTotal;
+        foreach (var path in paths)
+        {
+            var file = byPath[path];
+            var api = $"https://api.github.com/repos/{Uri.EscapeDataString(owner)}/{Uri.EscapeDataString(name)}";
+            using var blob = await ReadJsonAsync(api + "/git/blobs/" + Uri.EscapeDataString(file.Sha), ct);
+            if (!blob.RootElement.TryGetProperty("encoding", out var encoding) ||
+                !string.Equals(encoding.GetString(), "base64", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"GitHub did not return text content for {path}.");
+
+            var base64 = blob.RootElement.GetProperty("content").GetString() ?? "";
+            var content = Encoding.UTF8.GetString(Convert.FromBase64String(base64.Replace("\n", "")));
+            var allowedLength = Math.Min(maximumPerFile, remaining);
+            if (allowedLength <= 0)
+            {
+                result.Add(new SourcePreviewFile(path, "", "[Preview limit reached]", file.Size, true));
+                continue;
+            }
+            var partial = content.Length > allowedLength;
+            if (partial) content = content[..allowedLength];
+            remaining -= content.Length;
+            var encodedPath = string.Join("/", path.Split('/').Select(Uri.EscapeDataString));
+            var link = $"https://github.com/{owner}/{name}/blob/{Uri.EscapeDataString(inventory.Branch)}/{encodedPath}";
+            result.Add(new SourcePreviewFile(path, link, content, file.Size, partial));
+        }
+        return new SourcePreview(repository, inventory.Branch, inventory.TreeSha,
+            result.Any(x => x.Truncated), result);
     }
 
     private async Task<JsonDocument> ReadJsonAsync(string url, CancellationToken ct)
