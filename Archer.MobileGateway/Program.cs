@@ -12,6 +12,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<GatewayStore>();
 builder.Services.AddSingleton<DeviceTokenService>();
 builder.Services.AddSingleton<GatewayDeliverySimulator>();
+builder.Services.AddSingleton<GatewayConversationJournal>();
 
 // HARD BIND to local loopback. Do not publish this service on the Internet.
 // An authenticated, TLS-terminated reverse proxy and security review are
@@ -117,7 +118,7 @@ app.MapGet("/health/live", () => Results.Ok(new
 {
     status = "ok",
     component = "Archer.MobileGateway",
-    version = "1.4.0",
+    version = "1.5.0",
     publicAccessEnabled = false,
     deliveryEnabled = false
 }));
@@ -407,5 +408,55 @@ app.MapPost("/v1/inbox/{id:guid}/acknowledge", async Task<IResult> (
         : Results.NotFound();
 }).RequireRateLimiting("mobile-device");
 
-Console.WriteLine("Archer Mobile Gateway v1.4.0: LOCAL LOOPBACK ONLY on 127.0.0.1:5091");
+
+// Local, opt-in shared text JOURNAL only. No AI response, real chat sync,
+// streaming speech or phone notification is performed from these routes.
+app.MapGet("/v1/conversation/messages", async Task<IResult> (
+    HttpContext ctx, DeviceTokenService tokens,
+    GatewayConversationJournal journal, CancellationToken ct) =>
+{
+    if (await tokens.AuthenticateAsync(
+        ctx.Request.Headers.Authorization.ToString(), "conversation:read", ct) is null)
+        return Results.Unauthorized();
+    return Results.Ok(await journal.ListAsync(ct));
+}).RequireRateLimiting("mobile-device");
+
+app.MapPost("/v1/conversation/messages", async Task<IResult> (
+    AppendConversationMessageRequest request, HttpContext ctx,
+    DeviceTokenService tokens, GatewayConversationJournal journal,
+    CancellationToken ct) =>
+{
+    var device = await tokens.AuthenticateAsync(
+        ctx.Request.Headers.Authorization.ToString(), "conversation:write", ct);
+    if (device is null) return Results.Unauthorized();
+    try
+    {
+        var result = await journal.AppendAsync(device, request, ct);
+        return result.Outcome == "conflict"
+            ? Results.Conflict(result)
+            : Results.Ok(result);
+    }
+    catch (ArgumentException error)
+    {
+        return Results.BadRequest(new { error = error.Message });
+    }
+}).RequireRateLimiting("mobile-device");
+
+// Manual owner deletion (local administrator only). No one-click device or
+// AI action may erase all history.
+app.MapDelete("/internal/conversation", async Task<IResult> (
+    HttpContext ctx, GatewayConversationJournal journal, CancellationToken ct) =>
+{
+    if (!InternalKeyValid(ctx.Request, "X-Archer-Admin-Key",
+        "ARCHER_GATEWAY_ADMIN_KEY"))
+        return Results.StatusCode(403);
+    var deleted = await journal.ClearAsync(ct);
+    return Results.Ok(new
+    {
+        deleted,
+        note = "Gateway text journal cleared. This does not affect desktop Archer conversation history."
+    });
+});
+
+Console.WriteLine("Archer Mobile Gateway v1.5.0: LOCAL LOOPBACK ONLY on 127.0.0.1:5091");
 app.Run();
