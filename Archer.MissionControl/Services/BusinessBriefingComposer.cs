@@ -80,10 +80,15 @@ public sealed class BusinessBriefingComposer(JsonFileStore store, ApiUsageLedger
         var totals = await usage.BriefingTotalsAsync(now, ct);
 
         var enabled = state.WebsiteMonitors.Where(x => x.Enabled).ToArray();
-        var up = enabled.Count(x => x.Status == "Up");
-        var degraded = enabled.Count(x => x.Status == "Degraded");
-        var down = enabled.Count(x => x.Status == "Down");
+        // A historical "Down" state is not proof of a current outage after the
+        // local Archer process was closed. Treat checks older than 20m as stale.
+        var fresh = enabled.Where(x => x.LastCheckedAtUtc is { } checkedAt &&
+            checkedAt >= now.AddMinutes(-20) && checkedAt <= now).ToArray();
+        var up = fresh.Count(x => x.Status == "Up");
+        var degraded = fresh.Count(x => x.Status == "Degraded");
+        var down = fresh.Count(x => x.Status == "Down");
         var never = enabled.Count(x => !x.LastCheckedAtUtc.HasValue);
+        var stale = enabled.Length - fresh.Length - never;
         var outages24 = state.WebsiteIncidents.Count(i =>
             i.Kind == "Outage" && i.OccurredAtUtc >= cutoff && i.OccurredAtUtc <= now);
         var recovered24 = state.WebsiteIncidents.Count(i =>
@@ -95,7 +100,7 @@ public sealed class BusinessBriefingComposer(JsonFileStore store, ApiUsageLedger
         var activeMissions = state.Missions.Count(x => x.Status is "Running" or "Ready");
 
         var alerts = new List<AlertPreview>();
-        foreach (var site in enabled.Where(x => x.Status is "Down" or "Degraded").Take(10))
+        foreach (var site in fresh.Where(x => x.Status is "Down" or "Degraded").Take(10))
         {
             var critical = site.Status == "Down";
             var priority = critical ? "Critical" : "Attention";
@@ -141,7 +146,7 @@ public sealed class BusinessBriefingComposer(JsonFileStore store, ApiUsageLedger
         body.AppendLine($"Archer briefing — {local:ddd, MMM d yyyy h:mm tt} ({prefs.TimeZoneId})");
         body.AppendLine("Window: last 24 hours unless noted.");
         body.AppendLine($"Missions: {activeMissions} active/ready; {completed24} tasks completed; {failedTasks} currently failed.");
-        body.AppendLine($"Websites: {enabled.Length} checked sites; {up} up, {degraded} degraded, {down} down; {never} not checked yet.");
+        body.AppendLine($"Websites: {enabled.Length} enabled; {up} up, {degraded} degraded, {down} down based on checks in last 20m; {stale} stale, {never} never checked.");
         body.AppendLine($"Availability incidents: {outages24} outages and {recovered24} recoveries recorded.");
         body.AppendLine("AI cost: $" +
             totals.EstimatedCostLast24HoursUsd.ToString("0.0000", CultureInfo.InvariantCulture) +
@@ -169,7 +174,7 @@ public sealed class BusinessBriefingComposer(JsonFileStore store, ApiUsageLedger
                 websites = new
                 {
                     configured = state.WebsiteMonitors.Count, enabled = enabled.Length,
-                    up, degraded, down, neverChecked = never,
+                    up, degraded, down, staleChecked = stale, neverChecked = never,
                     outagesRecorded24Hours = outages24, recoveriesRecorded24Hours = recovered24
                 },
                 usage = totals,
