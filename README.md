@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 0.2.0 (local prototype)  
+**Version:** 0.2.1 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -64,6 +64,7 @@ Archer.MissionControl/
   Domain/Models.cs           Missions, tasks, artifacts, activity, chat
   Services/JsonFileStore.cs  Persistent single-user local state
   Services/MissionAutoRunner.cs  Opt-in bounded background research
+  Services/GitHubRepositoryReader.cs  Allowlisted read-only GitHub code snapshots
   Services/ArcherAiService.cs  OpenAI Responses API integration
   wwwroot/index.html         Mission Control dashboard
   wwwroot/css/app.css        Dashboard theme
@@ -180,3 +181,28 @@ Archer now has a local background task worker. For a mission with pending resear
 6. Restart Archer and confirm auto-run is off until you explicitly re-enable it.
 
 Do not assume this is reliable unattended service yet. It only works while the local Archer process is running, and this update has not been compiled or live-tested in this tool environment.
+
+## v0.2.1 — Read-only GitHub source inspection (November 2026)
+
+Archer can now read an explicitly requested GitHub repository **directly**, rather than trying to infer its code from a web search. This resolves the problem where research reports said they couldn't access GeoShift's source.
+
+**How it works:**
+- A mission must contain a GitHub URL, e.g. `https://github.com/GravyBets/GeoShift`.
+- The repository must be in the explicit allowlist (default: `GravyBets/GeoShift`). Other repositories require the `ARCHER_GITHUB_ALLOWLIST` environment variable, containing comma-separated `owner/repo` entries.
+- Archer fetches the default branch's file inventory and a bounded sample (at most 9 eligible source files and approximately 23,000 characters), then sends those file excerpts alongside the mission task to OpenAI.
+- Source snippets are cached in memory for up to ten minutes to avoid unnecessarily repeated GitHub API calls.
+- Read access is **not** write access: Archer still cannot edit, commit, pull or push code, open a pull request, run build tools, deploy, or control the hosting environment.
+- The selection favors GeoShift core conversion files, analysis UI and tests. Reviews must label findings as partial whenever only a sample of the repository was read.
+- By design, source comments are reference material only; Archer must not obey commands embedded in repository files.
+
+**Private repository option:** If an allowed repository is private, create a fine-grained GitHub token restricted to **only that repository** with **Contents: Read-only**. Configure it as a **user environment variable** named `ARCHER_GITHUB_READ_TOKEN` on the PC running Archer, and restart Visual Studio. **Never** put the token in GitHub or `archer-knowledge.md`. The current GeoShift repository may be publicly readable, in which case this extra token is unnecessary.
+
+**Test WITHOUT spending OpenAI API credits:**
+1. Stop debugging, pull from `main`, rebuild and start Archer.
+2. Confirm `http://127.0.0.1:5087/api/config` says version `0.2.1`.
+3. Open `http://127.0.0.1:5087/api/github/check?repository=https%3A%2F%2Fgithub.com%2FGravyBets%2FGeoShift`.
+4. The result should say `status: readable` and list the actual source files sampled. If not, fix GitHub access first.
+5. To evaluate the code, create a **new mission** referencing the GitHub URL and request focused improvements. Earlier completed reports do not retroactively change.
+6. Only run the new mission after successful read-only testing. Each AI task will incur API usage charges.
+
+**Limitations:** A bounded snapshot is not a comprehensive security audit, a full code review, proof of a successful compilation, or automated issue remediation. The application still runs only on localhost and performs no repository writes.
