@@ -10,7 +10,7 @@ function humanDate(value) { return value ? new Date(value).toLocaleString() : 'â
 function setBusy(value) {
   appState.busy = value;
   document.querySelectorAll('button').forEach(button => {
-    if (button.closest('.nav') || button.id === 'cancelMission') return;
+    if (button.closest('.nav') || button.id === 'cancelMission' || button.dataset.allowBusy === 'true') return;
     button.disabled = value;
   });
 }
@@ -109,6 +109,7 @@ function render() {
   const mission = missions.find(m => m.id === appState.selectedMissionId);
   renderDetail(mission);
   renderChat(conversation);
+  window.ArcherPresence?.update(appState.data);
   $('activityList').innerHTML = activity.length ? activity.map(e => `<div class="activity-entry"><span class="activity-dot ${e.level === 'Success' ? 'success' : e.level === 'Warning' ? 'warning' : ''}"></span><div><strong>${escapeHtml(e.message)}</strong><small>${escapeHtml(humanDate(e.createdAtUtc))}</small></div></div>`).join('') : `<div class="empty-list"><p>No activity yet. Your real mission actions will appear here.</p></div>`;
 }
 function renderDetail(m) {
@@ -162,7 +163,11 @@ function renderDetail(m) {
   }
 }
 function renderChat(conversation) {
-  $('chatMessages').innerHTML = conversation.length ? conversation.map(e => `<div class="chat-message ${e.role === 'user' ? 'from-user' : 'from-archer'}"><div class="chat-speaker">${e.role === 'user' ? 'YOU' : 'ARCHER'}</div><div class="chat-content">${escapeHtml(e.content)}</div><small>${escapeHtml(humanDate(e.createdAtUtc))}</small></div>`).join('') : '<div class="chat-intro"><div class="big-icon">â—‡</div><h3>Archer is standing by.</h3><p>Ask a question, discuss a mission, or make a decision together.</p></div>';
+  const container = $('chatMessages');
+  const wasNearBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 80;
+  const oldScroll = container.scrollTop;
+  container.innerHTML = conversation.length ? conversation.map(e => `<div class="chat-message ${e.role === 'user' ? 'from-user' : 'from-archer'}"><div class="chat-speaker">${e.role === 'user' ? 'YOU' : 'ARCHER'}</div><div class="chat-content">${escapeHtml(e.content)}</div><small>${escapeHtml(humanDate(e.createdAtUtc))}</small></div>`).join('') : '<div class="chat-intro"><h3>Archer is standing by.</h3><p>Ask a question, discuss a mission, or make a decision together.</p></div>';
+  container.scrollTop = wasNearBottom ? container.scrollHeight : oldScroll;
 }
 async function action(run, success) {
   if (appState.busy) return;
@@ -172,17 +177,35 @@ async function action(run, success) {
     const message = typeof success === 'function' ? success(result) : success;
     await refresh();
     notice(message);
-  } catch (error) { notice(error.message, true); }
-  finally { setBusy(false); }
+    return result;
+  } catch (error) {
+    notice(error.message, true);
+    return null;
+  } finally {
+    setBusy(false);
+    window.ArcherPresence?.settle();
+  }
 }
 function showView(view) {
+  const allowed = ['archer', 'missions', 'attention', 'activity'];
+  if (!allowed.includes(view)) view = 'archer';
+  if (view !== 'archer') window.ArcherPresence?.stopListening();
   document.querySelectorAll('.view').forEach(section => section.classList.toggle('hidden', section.id !== `${view}View`));
   document.querySelectorAll('.nav-link').forEach(link => link.classList.toggle('active', link.dataset.view === view));
-  $('breadcrumb').textContent = ({ missions: 'MISSION CONTROL', chat: 'TALK TO ARCHER', activity: 'ACTIVITY' })[view];
+  $('breadcrumb').textContent = ({ archer: 'ARCHER', missions: 'MISSION CONTROL', attention: 'ATTENTION', activity: 'ACTIVITY' })[view];
 }
 document.addEventListener('click', async event => {
   const link = event.target.closest('[data-view]');
   if (link) { showView(link.dataset.view); return; }
+  const navLink = event.target.closest('[data-go-view]');
+  if (navLink) { showView(navLink.dataset.goView); return; }
+  const issue = event.target.closest('[data-open-mission]');
+  if (issue) {
+    appState.selectedMissionId = issue.dataset.openMission;
+    showView('missions');
+    render();
+    return;
+  }
   const card = event.target.closest('[data-mission]');
   if (card) { appState.selectedMissionId = card.dataset.mission; render(); return; }
   if (event.target.closest('#starterMission')) { await createStarterMission(); return; }
@@ -227,9 +250,21 @@ $('chatForm').addEventListener('submit', async event => {
   event.preventDefault();
   const message = $('chatText').value.trim();
   if (!message || appState.busy) return;
-  await action(() => api('/api/chat', { method: 'POST', body: JSON.stringify({ message }) }), () => { $('chatText').value = ''; return 'Archer replied.'; });
-  $('chatMessages').scrollTop = $('chatMessages').scrollHeight;
+  window.ArcherPresence?.stopListening();
+  window.ArcherPresence?.stopSpeech();
+  window.ArcherPresence?.setState('thinking', 'Archer is considering your message.');
+  const result = await action(
+    () => api('/api/chat', { method: 'POST', body: JSON.stringify({ message }) }),
+    'Archer replied.');
+  if (result && typeof result.answer === 'string') {
+    $('chatText').value = '';
+    $('chatMessages').scrollTop = $('chatMessages').scrollHeight;
+    window.ArcherPresence?.reply(result.answer);
+  } else {
+    window.ArcherPresence?.failure('The response could not be completed. Check the error banner above.');
+  }
 });
+showView('archer');
 refresh().catch(error => {
   $('connectionLabel').textContent = 'Local server unavailable';
   notice(`Cannot connect to Archer: ${error.message}`, true);
