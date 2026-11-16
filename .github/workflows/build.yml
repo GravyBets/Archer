@@ -26,11 +26,14 @@ jobs:
           node --check Archer.MissionControl/wwwroot/js/spending.js
           node --check Archer.MissionControl/wwwroot/js/coding.js
           node --check Archer.MissionControl/wwwroot/js/communications.js
+          node --check Archer.MissionControl/wwwroot/js/inbox.js
       - name: Validate UI element wiring
         run: python3 tests/ValidateUi.py
       - name: Smoke test local configuration and usage endpoints
         shell: bash
         run: |
+          mkdir -p /tmp/archer-inbox-ci-state
+          export ARCHER_DATA_DIR=/tmp/archer-inbox-ci-state
           dotnet run --no-build --configuration Release --project Archer.MissionControl/Archer.MissionControl.csproj > /tmp/archer-smoke.log 2>&1 &
           PID=$!
           trap 'kill $PID 2>/dev/null || true' EXIT
@@ -124,4 +127,5 @@ jobs:
             -X POST http://127.0.0.1:5087/api/operations/monitors)
           test "$CODE" = "400"
           python3 -c 'import json; p=json.load(open("/tmp/archer-presence-set.json")); clear=json.load(open("/tmp/archer-presence-cleared.json")); ops=json.load(open("/tmp/archer-operations.json")); assert p["active"]; assert p["presence"]["approxLatitude"]==29.99; assert p["presence"]["approxLongitude"]==-95.12; assert not p["presence"]["shareWithAi"]; assert not clear["active"]; assert ops["channels"]["sms"]=="Not connected"; assert ops["monitors"]==[]; print("PASS: consented coarse presence, clear and safe monitoring defaults")'
-          python3 -c 'import json; c=json.load(open("/tmp/archer-config.json")); u=json.load(open("/tmp/archer-usage.json")); assert c["version"]=="1.0.0", c; assert c["routing"]["mode"]=="adaptive", c; assert u["month"]["requests"]==0, u; assert u["lifetime"]["estimatedCostUsd"]==0, u; print("PASS: Archer v1.0.0 health/config/usage endpoints")'
+          python3 -c 'import json; c=json.load(open("/tmp/archer-config.json")); u=json.load(open("/tmp/archer-usage.json")); assert c["version"]=="1.1.0", c; assert c["routing"]["mode"]=="adaptive", c; assert u["month"]["requests"]==0, u; assert u["lifetime"]["estimatedCostUsd"]==0, u; print("PASS: Archer v1.1.0 health/config/usage endpoints")'
+          python3 tests/SmokeInbox.py /tmp/archer-inbox-ci-state/archer-state.json
