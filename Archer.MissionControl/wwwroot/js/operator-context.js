@@ -291,7 +291,7 @@
         method: 'POST', body: JSON.stringify(data)
       });
       el('briefingPreferenceStatus').textContent =
-        'Preferences saved. No automatic messages or calls are enabled.';
+        'Briefing preferences saved. Separate communication delivery consent is unchanged.';
       notice(response.message);
       renderBriefing(await api('/api/briefing'));
     } catch (error) {
