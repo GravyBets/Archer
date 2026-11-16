@@ -760,8 +760,10 @@ The standalone Archer.MobileGateway now writes its **entire** Git-ignored local 
 
    ```powershell
    $bytes = New-Object byte[] 32
-   [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-   $key = [Convert]::ToHexString($bytes).ToLowerInvariant()
+   $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+   $rng.GetBytes($bytes)
+   $rng.Dispose()
+   $key = ([BitConverter]::ToString($bytes) -replace '-', '').ToLowerInvariant()
    # Store $key securely in your password manager; do not print it in a log.
    [Environment]::SetEnvironmentVariable("ARCHER_GATEWAY_DATA_KEY_HEX", $key, "User")
    Remove-Variable key, bytes
