@@ -239,7 +239,7 @@ def run(state_path):
         headers={"X-Archer-Bridge-Key": BRIDGE})["messages"] == []
     request("/internal/conversation", "DELETE", expected=403)
     deleted = request("/internal/conversation", "DELETE", headers=admin)
-    assert deleted["deleted"] == 1
+    assert deleted["deleted"] == 2  # Owner message + one linked assistant reply.
     assert request("/v1/conversation/messages", headers=talk_bearer)["messages"] == []
     assert request("/internal/conversation/bridge",
         headers={"X-Archer-Bridge-Key": BRIDGE})["messages"] == []
