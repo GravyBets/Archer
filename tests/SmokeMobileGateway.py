@@ -89,6 +89,27 @@ def run(state_path):
     assert item["title"] == "Example site needs review"
     assert "sourceKey" not in item  # Only minimal mobile-facing fields.
     event_id = item["id"]
+    sandbox = request("/v1/delivery-previews", headers=bearer)
+    assert sandbox["actualNotificationsSent"] == 0
+    assert sandbox["previews"] == []
+    request("/v1/delivery-previews", expected=401)
+    request("/internal/delivery/simulate", "POST",
+            {"confirm": True, "maxEvents": 10}, expected=403)
+    request("/internal/delivery/simulate", "POST",
+            {"confirm": False, "maxEvents": 10}, admin, expected=400)
+    planned = request("/internal/delivery/simulate", "POST",
+                      {"confirm": True, "maxEvents": 10}, admin)
+    assert planned["newPreviews"] == 1 and planned["actualNotificationsSent"] == 0
+    assert planned["providerCharges"] is False
+    planned_twice = request("/internal/delivery/simulate", "POST",
+                            {"confirm": True, "maxEvents": 10}, admin)
+    assert planned_twice["newPreviews"] == 0
+    assert planned_twice["duplicatePreviewsSuppressed"] == 1
+    previews = request("/v1/delivery-previews", headers=bearer)["previews"]
+    assert len(previews) == 1
+    assert previews[0]["channel"] == "push-preview"
+    assert previews[0]["interruptOwner"] is False
+    assert previews[0]["requiresIncidentVerification"] is True
     request("/v1/inbox/" + event_id + "/read", "POST", {}, expected=401)
     request("/v1/inbox/" + event_id + "/read", "POST", {}, bearer)
     request("/v1/inbox/" + event_id + "/acknowledge", "POST", {}, bearer)
@@ -116,8 +137,10 @@ def run(state_path):
     assert token not in stored_text
     assert "tokenHashHex" in stored_text
     assert "Example site needs review" in stored_text
+    assert "deliveryPreviews" in stored_text
+    assert "sandbox-policy-1" in stored_text
     assert "Twilio" not in stored_text and "OPENAI_API_KEY" not in stored_text
-    print("PASS: separate mobile gateway authentication, validation, idempotent events, read/ack, revocation, no delivery")
+    print("PASS: isolated gateway auth, dedup and revocation; sandbox routing decisions made zero real pushes, calls or model requests")
 
 
 if __name__ == "__main__":
