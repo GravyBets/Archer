@@ -1,4 +1,4 @@
-# Archer mobile gateway — security and threat review (v1.3.0)
+# Archer mobile gateway — security and threat review (v1.4.0)
 
 **Review date:** 2026-11-16. This is an engineering threat model, NOT an independent penetration test or approval for internet exposure.
 
@@ -41,10 +41,14 @@ Local operator/bootstrap/ingress:
 - POST /internal/devices/enroll — requires X-Archer-Admin-Key (40+ characters), creates random 256-bit bearer ONCE with 1–7 day expiry.
 - GET /internal/devices — same local admin key; returns device metadata only, no hashes/tokens.
 - POST /internal/devices/{id}/revoke — same key; immediately invalidates token.
+- POST /internal/devices/{id}/rotate — same local admin key; atomically replaces device token hash, immediately revokes the old bearer, and returns the new bearer ONCE. New expiry 1–7 days.
+- GET /internal/audit — same local admin key; bounded, redacted device/event action history. No raw tokens, personal message bodies or GPS.
 - POST /internal/events — requires DIFFERENT X-Archer-Ingest-Key (40+ characters); strict shape, 40 events max, 30-day freshness, bounded text; source-key idempotent.
 
 Scoped mobile-facing (still loopback only):
 - GET /v1/inbox — needs unexpired, unrevoked Bearer token with inbox:read.
+- Enrollment can now use `{"scopes":["inbox:read"]}` for a read-only device. In `inbox:ack` scope requests, `inbox:read` is also required; arbitrary permissions are rejected.
+- Additional per-device fixed-window limiter: 30 requests/minute per Authorization digest (on top of global 90/minute per loopback IP). This is in-process local protection, not production distributed rate limiting.
 - POST /v1/inbox/{id}/read and /acknowledge — needs inbox:ack.
 
 Sandbox-only (all endpoints remain loopback-only):
@@ -74,11 +78,18 @@ Generated bearer is only returned on enrollment and SHA-256 of high entropy toke
 | Persistence corruption | Serialized writes with temporary atomic replacement, 200-event bound | Encrypted backups, restore tests, database migration/versioning, crash consistency |
 | Changes while driving | Gateway contains no approval/deployment/business mutation endpoints | Native app driving-mode UX, spoken confirmation limits, safe deferral |
 
-## Notification policy sandbox — added in v1.3.0
+## Notification policy sandbox — added in v1.4.0
 
 The simulator creates noninterrupting push-preview/digest-preview suggestions from currently recorded source events, then persists their result under an event/device/policy idempotency key. Resolved and acknowledged sources are suppressed. Historical or stale source information becomes digest-only. An unverified website incident is never automatically escalated to a telephone call.
 
 No preview is delivered to an Apple device; no APNs device token, push server, message queue, Twilio account, OpenAI request or cost-bearing integration is invoked. The simulator does not have a real retry policy, provider receipt or actual notification delivery status. It cannot be mistaken for a completed production outbox.
+
+## v1.4.0 local device-credential and audit hardening
+
+- Device enrollment now accepts an explicit, tightly restricted scopes list. Existing behavior defaults to read-and-ack; the operator can choose read-only for minimal access.
+- Local admin-only credential rotation generates a fresh 256-bit token; the old hash is overwritten atomically. A revoked/expired device cannot be rotated. Rotation, revocation and source/inbox actions appear in a bounded metadata-only audit log (up to 300 entries) with device/event IDs, action names and timestamps only.
+- All mobile-device endpoints have per-token rate limiting, in addition to the global limiter. The gateway rejects unexpected HTTP Host headers to reduce DNS rebinding exposure, and continues to deny Origin-bearing browser requests. No public ingress has been introduced.
+- CI checks read-only authorization, invalid scopes, old-token rejection immediately after rotation, revoked-device refusal, audit redaction and strict Host behavior. These tests are valuable local regressions, NOT a substitute for a penetration test or production-grade authentication.
 
 ## Local-only opt-in setup
 
@@ -113,4 +124,4 @@ Production deployment stays BLOCKED until all these gates pass.
 - Kestrel explicit endpoint binding: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/endpoints?view=aspnetcore-10.0
 - Kestrel proxy/forwarding security: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/security-considerations
 
-This document inventories the current source at v1.3.0; revisit it when endpoints or authorization logic change.
+This document inventories the current source at v1.4.0; revisit it when endpoints or authorization logic change.
