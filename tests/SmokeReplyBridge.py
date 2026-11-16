@@ -58,7 +58,10 @@ history_path = (DESKTOP + "/api/mobile/session-history?sessionId=" +
 direct_history = req(GATEWAY + "/internal/conversation/history?sessionId=" +
     main_id + "&after=0&limit=20", headers=header)
 assert len(direct_history["messages"]) == 1
-assert direct_history["messages"][0]["sequence"] == 1
+# Earlier synthetic tests delete older records but preserve server cursor
+# high-water marks. A retained first message is NOT necessarily sequence 1.
+first_sequence = direct_history["messages"][0]["sequence"]
+assert first_sequence >= 1
 before = req(history_path)
 assert before["enabled"] and before["connected"], before
 assert len(before["messages"]) == 1, before
@@ -90,16 +93,16 @@ assert req(GATEWAY + "/internal/conversation/bridge", headers=header)["messages"
 after = req(history_path)
 assert after["connected"] and after["enabled"], after
 assert len(after["messages"]) == 2, after
-assert [x["sequence"] for x in after["messages"]] == [1, 2], after
+assert [x["sequence"] for x in after["messages"]] == [first_sequence, first_sequence + 1], after
 assert after["messages"][1]["role"] == "assistant"
 assert after["messages"][1]["replyToMessageId"] == draft["id"]
 assert "Synthetic Archer reply" in after["messages"][1]["content"]
-assert after["highWatermark"] == 2 and not after["hasMore"]
+assert after["highWatermark"] == first_sequence + 1 and not after["hasMore"]
 cursor_path = (DESKTOP + "/api/mobile/session-history?sessionId=" + main_id +
-               "&after=1&limit=1")
+               "&after=" + str(first_sequence) + "&limit=1")
 only_reply = req(cursor_path)
 assert len(only_reply["messages"]) == 1
-assert only_reply["messages"][0]["sequence"] == 2
+assert only_reply["messages"][0]["sequence"] == first_sequence + 1
 assert not only_reply["hasMore"]
 
 audit = req(GATEWAY + "/internal/audit", headers={"X-Archer-Admin-Key": admin})
