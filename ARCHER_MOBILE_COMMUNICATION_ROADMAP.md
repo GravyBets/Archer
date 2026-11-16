@@ -1,7 +1,7 @@
 # Archer — Mobile, Messaging, Voice & Safe Business Operations Roadmap
 
 Working plan: 2026-11-16. Target: one Archer across Windows, iPhone, text, phone, and (if approved) CarPlay.
-Current baseline: Archer v1.8.0 is LOCALHOST-ONLY. It supports guarded AI, source review/code drafts, site checks, opt-in outbound SMS/one-way calls and manually selected coarse presence. Native iOS, real push, inbound voice/text conversation and cloud hosting DO NOT exist yet.
+Current baseline: Archer v1.9.0 is LOCALHOST-ONLY. It supports guarded AI, source review/code drafts, site checks, opt-in outbound SMS/one-way calls and manually selected coarse presence. Native iOS, real push, inbound voice/text conversation and cloud hosting DO NOT exist yet.
 
 ## Product decisions
 
@@ -53,7 +53,8 @@ DONE WHEN: each issue has one durable actionable item, no duplicate paid alert, 
 
 - [x] v1.5 local mobile-gateway **conversation journal prototype** with device-scoped read/write permissions, stable per-device client message IDs, idempotent writes, seven-day read retention, bounded storage and admin-only clear. **Not connected to Archer desktop chat or the AI.**
 - [x] v1.7 separately keyed, read-only **localhost** phone-draft bridge to Windows Archer, with explicit owner enable flag, preview UI, manual copy-to-composer and no automatic model calls.
-- [ ] Define the full authenticated multi-channel conversation service (assistant/owner messages, sessions, ordering, encrypted backups, export/deletion, complete cross-channel lifecycle and persistent PC sync).
+- [x] v1.9 encrypted local gateway **session IDs**, monotonically assigned per-session sequence cursors, 1–100-message incremental pages, archive/read-only policy and migration of v1.8 messages.
+- [ ] Define the full production multi-channel conversation service (account identity, remote sessions, encrypted backups, export/deletion, cross-channel lifecycle, message consistency and desktop/phone history integration).
 - [x] v1.8 manual owner-approved assistant-reply publication from desktop to encrypted gateway, idempotent and linked to a phone-authored draft; NO automatic model call or public access.
 - [ ] Connect Windows and phone chat to the same authenticated production session backend with proper multi-device ordering, privacy, reply streaming and authenticated internet access.
 - [ ] Stream short responses by default, allow detailed mode when requested, and retain clear action boundaries.
@@ -133,7 +134,7 @@ DONE WHEN: GeoShift converts real paying customers and Archer reports genuine bu
 
 ## Execution order
 
-1. **Completed:** v1.1 inbox; v1.2 isolated gateway; v1.3 notification sandbox; v1.4 device security; v1.5 local journal; v1.6 encrypted state; v1.7 local draft preview; v1.8 manual, confirmed assistant reply return to the encrypted gateway. All remain localhost-only.
+1. **Completed:** v1.1 inbox; v1.2 isolated gateway; v1.3 notification sandbox; v1.4 device security; v1.5 local journal; v1.6 encrypted state; v1.7 draft preview; v1.8 manual replies; v1.9 session IDs and monotonic catch-up cursors. Everything is localhost-only.
 2. **Next:** independent security architecture review and a separately authenticated **TLS-ready public gateway design**, provisioning, retention and APNs-device enrollment; no remote access until those gates pass.
 3. **Then:** shared conversation backend, push service (APNs) and native iOS MVP.
 4. **In parallel after security:** Twilio inbound SMS + ConversationRelay with signature checks and strict budget.
@@ -201,3 +202,9 @@ A device may be enrolled with `conversation:read` or both `conversation:read` an
 When an owner selects an unedited local phone-authored draft and explicitly presses the normal Send button, desktop Archer generates and persists a response under existing AI spending controls. The owner may then separately choose **Share last reply with mobile** and confirm. Desktop verifies the latest saved user/assistant pair matches that draft, and a distinct bridge-authenticated localhost route stores one linked assistant reply in the AES-GCM-encrypted gateway. The local mobile journal read API displays both owner and assistant records and their reply linkage.
 
 CI tests explicit authorization, original-message matching, idempotency, conflict refusal and a synthetic desktop-to-gateway round trip with no paid model calls. This does **not** automatically process messages, reply when the PC is off, sync general desktop conversation history, expose the iPhone to a server or deliver push/SMS/calls. The full authenticated production conversation service, sessions, identity, transport, backup, push, real voice and mobile app remain open.
+
+### v1.9.0 — Local conversation sessions and incremental cursors
+
+MobileGateway now stores up to ten **single-owner, local-only** conversation sessions with a fixed Main conversation ID. Explicitly `conversation:write`-authorized devices can create or archive non-Main sessions; read-only devices can list and fetch. Each saved owner message and explicitly shared assistant reply receives a **server-assigned monotonically increasing sequence** scoped to its session. `GET /v1/conversation/messages?sessionId=<guid>&after=<sequence>&limit=<1-100>` returns a bounded page, `nextAfter`, `hasMore`, and `highWatermark`; callers can catch up without relying on device clock order. Legacy v1.8 journal messages automatically migrate in place (under encryption) to Main with deterministic cursors.
+
+Archived sessions remain readable but cannot accept owner messages or desktop replies. Replaying a device clientMessageId in another session is a conflict. Record expiration and the 200-message cap can create sequence gaps, so cursors indicate **position, not delivery guarantees**; a later production design must provide retention-safe sync, explicit gaps/snapshots, owner-controlled export/deletion, cross-device concurrent consistency, authenticated Internet transport and full AI context.

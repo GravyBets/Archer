@@ -15,17 +15,40 @@ public sealed class GatewayConversationJournal(GatewayStore store)
     public sealed record AppendResult(string Outcome, Guid? Id, DateTimeOffset? AtUtc,
         string Note);
 
-    public async Task<object> ListAsync(CancellationToken ct)
+    public Task<object?> ListAsync(CancellationToken ct) =>
+        SyncAsync(null, 0, 100, ct);
+
+    /// <summary>
+    /// Stateless, server-assigned per-session pagination. Do not use device
+    /// clocks as cursors or mistake a message timestamp for a delivery receipt.
+    /// Existing clients without query parameters read the Main conversation.
+    /// </summary>
+    public async Task<object?> SyncAsync(Guid? sessionId, long after, int limit,
+        CancellationToken ct)
     {
+        if (after < 0 || limit is < 1 or > 100 ||
+            sessionId == Guid.Empty)
+            throw new ArgumentException("Use a valid sessionId, after >= 0 and limit 1–100.");
+
+        var id = sessionId ?? GatewayConversationSchema.DefaultSessionId;
         var now = DateTimeOffset.UtcNow;
-        return await store.ReadAsync(state => (object)new
+        return await store.ReadAsync(state =>
         {
-            messages = state.ConversationMessages
-                .Where(x => x.CreatedAtUtc >= now.AddDays(-RetentionDays) &&
-                            x.CreatedAtUtc <= now)
-                .OrderBy(x => x.CreatedAtUtc).ThenBy(x => x.Id)
-                .TakeLast(100)
-                .Select(x => new
+            var session = state.ConversationSessions.FirstOrDefault(x => x.Id == id);
+            if (session is null) return null;
+
+            var candidates = state.ConversationMessages
+                .Where(x => x.SessionId == id && x.Sequence > after &&
+                    x.CreatedAtUtc >= now.AddDays(-RetentionDays) &&
+                    x.CreatedAtUtc <= now)
+                .OrderBy(x => x.Sequence)
+                .Take(limit + 1)
+                .ToArray();
+            var page = candidates.Take(limit).ToArray();
+            return (object)new
+            {
+                sessionId = id,
+                messages = page.Select(x => new
                 {
                     id = x.Id,
                     clientMessageId = x.ClientMessageId,
@@ -33,14 +56,87 @@ public sealed class GatewayConversationJournal(GatewayStore store)
                     role = x.Role,
                     replyToMessageId = x.ReplyToMessageId,
                     content = x.Content,
-                    createdAtUtc = x.CreatedAtUtc
+                    createdAtUtc = x.CreatedAtUtc,
+                    sessionId = x.SessionId,
+                    sequence = x.Sequence
                 }).ToArray(),
-            retentionDays = RetentionDays,
-            savedOnly = true,
-            assistantConnected = false,
-            note = "Shared local journal only. This is not yet connected to desktop chat or an AI responder."
+                nextAfter = page.Length == 0 ? after : page[^1].Sequence,
+                hasMore = candidates.Length > limit,
+                highWatermark = session.LastSequence,
+                archived = session.ArchivedAtUtc is not null,
+                retentionDays = RetentionDays,
+                savedOnly = true,
+                assistantConnected = false,
+                note = "Encrypted local conversation sync only. No live mobile AI or external service is connected."
+            };
         }, ct);
     }
+
+    public async Task<object> ListSessionsAsync(CancellationToken ct)
+    {
+        return await store.ReadAsync(state => (object)new
+        {
+            sessions = state.ConversationSessions.OrderBy(x => x.CreatedAtUtc)
+                .ThenBy(x => x.Id)
+                .Select(x => new
+                {
+                    id = x.Id,
+                    title = x.Title,
+                    archivedAtUtc = x.ArchivedAtUtc,
+                    lastSequence = x.LastSequence
+                }).ToArray(),
+            defaultSessionId = GatewayConversationSchema.DefaultSessionId,
+            localOnly = true
+        }, ct);
+    }
+
+    public async Task<(string Outcome, Guid? Id)> CreateSessionAsync(
+        GatewayDevice device, CreateGatewaySessionRequest request,
+        CancellationToken ct)
+    {
+        var title = request.Title?.Trim() ?? "";
+        if (title.Length is < 2 or > 60 || title.Any(char.IsControl))
+            throw new ArgumentException("Session title must contain 2–60 visible characters.");
+
+        return await store.UpdateAsync(state =>
+        {
+            if (!WritableDevice(state, device, DateTimeOffset.UtcNow))
+                return (Outcome: "unauthorized", Id: (Guid?)null);
+            if (state.ConversationSessions.Count >= 10)
+                return (Outcome: "limit", Id: (Guid?)null);
+            var session = new GatewayConversationSession { Title = title };
+            state.ConversationSessions.Add(session);
+            GatewayAudit.Add(state, "conversation.session_created", device.Id);
+            return (Outcome: "saved", Id: (Guid?)session.Id);
+        }, ct);
+    }
+
+    public async Task<string> ArchiveSessionAsync(
+        GatewayDevice device, Guid sessionId, CancellationToken ct)
+    {
+        if (sessionId == Guid.Empty ||
+            sessionId == GatewayConversationSchema.DefaultSessionId)
+            return "invalid";
+
+        return await store.UpdateAsync(state =>
+        {
+            if (!WritableDevice(state, device, DateTimeOffset.UtcNow))
+                return "unauthorized";
+            var session = state.ConversationSessions.FirstOrDefault(x => x.Id == sessionId);
+            if (session is null) return "not_found";
+            if (session.ArchivedAtUtc is not null) return "archived";
+            session.ArchivedAtUtc = DateTimeOffset.UtcNow;
+            GatewayAudit.Add(state, "conversation.session_archived", device.Id);
+            return "archived";
+        }, ct);
+    }
+
+    private static bool WritableDevice(GatewayState state, GatewayDevice device,
+        DateTimeOffset now) =>
+        state.Devices.Any(x => x.Id == device.Id &&
+            x.RevokedAtUtc is null && x.ExpiresAtUtc > now &&
+            x.TokenHashHex == device.TokenHashHex &&
+            x.Scopes.Contains("conversation:write", StringComparer.Ordinal));
 
     /// <summary>
     /// An additional, separately keyed LOCAL service-to-service preview.
@@ -64,6 +160,7 @@ public sealed class GatewayConversationJournal(GatewayStore store)
                 {
                     id = x.Id,
                     deviceId = x.DeviceId,
+                    sessionId = x.SessionId,
                     content = x.Content,
                     createdAtUtc = x.CreatedAtUtc
                 }).ToArray(),
@@ -89,15 +186,17 @@ public sealed class GatewayConversationJournal(GatewayStore store)
         {
             // Repeat the access check inside the same atomic state update:
             // a token rotated/revoked between HTTP auth and write cannot post.
-            var current = state.Devices.FirstOrDefault(x =>
-                x.Id == device.Id &&
-                x.RevokedAtUtc is null &&
-                x.ExpiresAtUtc > now &&
-                x.TokenHashHex == device.TokenHashHex &&
-                x.Scopes.Contains("conversation:write", StringComparer.Ordinal));
-            if (current is null)
+            if (!WritableDevice(state, device, now))
                 return new AppendResult("unauthorized", null, null,
                     "Device credential is no longer valid.");
+
+            var sessionId = request.SessionId ?? GatewayConversationSchema.DefaultSessionId;
+            var session = state.ConversationSessions.FirstOrDefault(x => x.Id == sessionId);
+            if (session is null) return new AppendResult("not_found", null, null,
+                "Conversation session does not exist.");
+            if (session.ArchivedAtUtc is not null)
+                return new AppendResult("archived", null, null,
+                    "Conversation session is archived and cannot accept new messages.");
 
             // Restrict storage to one week and cap total retained records.
             state.ConversationMessages.RemoveAll(x =>
@@ -107,7 +206,8 @@ public sealed class GatewayConversationJournal(GatewayStore store)
 
             if (found is not null)
             {
-                if (!string.Equals(found.Content, text, StringComparison.Ordinal))
+                if (found.SessionId != sessionId ||
+                    !string.Equals(found.Content, text, StringComparison.Ordinal))
                     return new AppendResult("conflict", found.Id, found.CreatedAtUtc,
                         "Client message ID was already used with different content. Nothing changed.");
                 return new AppendResult("duplicate", found.Id, found.CreatedAtUtc,
@@ -118,6 +218,8 @@ public sealed class GatewayConversationJournal(GatewayStore store)
             {
                 DeviceId = device.Id,
                 ClientMessageId = request.ClientMessageId,
+                SessionId = sessionId,
+                Sequence = checked(++session.LastSequence),
                 Content = text,
                 CreatedAtUtc = now
             };
@@ -164,6 +266,11 @@ public sealed class GatewayConversationJournal(GatewayStore store)
                 return new AppendResult("not_found", null, null,
                     "No exact matching current owner draft was found. No assistant text saved.");
 
+            var session = state.ConversationSessions.FirstOrDefault(x => x.Id == original.SessionId);
+            if (session is null || session.ArchivedAtUtc is not null)
+                return new AppendResult("not_found", null, null,
+                    "The source session is unavailable or archived.");
+
             var previous = state.ConversationMessages.FirstOrDefault(x =>
                 x.Role == "assistant" && x.ReplyToMessageId == original.Id);
             if (previous is not null)
@@ -180,6 +287,8 @@ public sealed class GatewayConversationJournal(GatewayStore store)
                 DeviceId = Guid.Empty, // trusted local desktop service, not a device
                 ClientMessageId = original.Id,
                 ReplyToMessageId = original.Id,
+                SessionId = original.SessionId,
+                Sequence = checked(++session.LastSequence),
                 Role = "assistant",
                 Content = answer,
                 CreatedAtUtc = now

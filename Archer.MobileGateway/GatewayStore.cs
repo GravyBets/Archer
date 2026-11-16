@@ -55,16 +55,23 @@ public sealed class GatewayStore
         // Never access or mutate the on-disk gateway state without an owner-
         // configured encryption key. Health checks can run without one.
         _encryption.RequireKey();
-        if (!File.Exists(_path)) return new GatewayState();
+        if (!File.Exists(_path))
+        {
+            var fresh = new GatewayState();
+            GatewayConversationSchema.Upgrade(fresh);
+            return fresh;
+        }
 
         var source = await File.ReadAllTextAsync(_path, ct);
         var (plainJson, legacy) = _encryption.DecryptOrIdentifyLegacy(source);
         var state = JsonSerializer.Deserialize<GatewayState>(plainJson, Json) ??
             throw new InvalidDataException("Gateway state could not be parsed. It will not be reset.");
 
-        if (legacy)
+        var sessionMigration = GatewayConversationSchema.Upgrade(state);
+        if (legacy || sessionMigration)
         {
-            // v1.5 plaintext migration: encrypt and atomically replace the
+            // v1.5 plaintext migration and v1.9 session cursor migration:
+            // encrypt and atomically replace the
             // canonical file BEFORE returning any state data to an API.
             // Existing file-system backups/snapshots may still contain
             // plaintext: they must be handled by the owner separately.
@@ -104,6 +111,7 @@ public sealed class GatewayState
     public List<GatewayAuditEntry> Audit { get; set; } = [];
     // Opt-in local messages only. No AI calls or automatic desktop chat synchronization.
     public List<GatewayConversationMessage> ConversationMessages { get; set; } = [];
+    public List<GatewayConversationSession> ConversationSessions { get; set; } = [];
 }
 
 public sealed class GatewayDevice
@@ -150,14 +158,28 @@ public sealed class GatewayConversationMessage
     public string Content { get; set; } = "";
     // Only assistant records have an owner-draft reference.
     public Guid? ReplyToMessageId { get; set; }
+    public Guid SessionId { get; set; }
+    // Server-assigned, immutable per-session cursor; independent of device time.
+    public long Sequence { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
 }
+
+public sealed class GatewayConversationSession
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Title { get; set; } = "";
+    public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? ArchivedAtUtc { get; set; }
+    public long LastSequence { get; set; }
+}
+
+public sealed record CreateGatewaySessionRequest(string? Title);
 
 public sealed record PublishGatewayReplyRequest(
     Guid InReplyToId, string? ExpectedOwnerText, string? Content);
 
 public sealed record AppendConversationMessageRequest(
-    Guid ClientMessageId, string? Content);
+    Guid ClientMessageId, string? Content, Guid? SessionId = null);
 
 public sealed class GatewayAuditEntry
 {

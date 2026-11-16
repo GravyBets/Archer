@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 1.8.0 (local prototype)  
+**Version:** 1.9.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -843,3 +843,18 @@ This is the first **controlled two-direction message exchange** between a locall
 GitHub CI tests denied mobile-bearer publishing, wrong/missing service key, mismatched original messages, one reply per draft, replay conflicts, local encrypted journal reading, and a synthetic desktop→gateway integration that never calls OpenAI or Twilio. Browser visuals and personal Windows setup remain to be tested after a pull.
 
 See the [master roadmap](ARCHER_MOBILE_COMMUNICATION_ROADMAP.md) and [security review](ARCHER_MOBILE_SECURITY_REVIEW.md) for production identity, full conversation sync, key management, push notifications, iPhone app and British voice still to do.
+
+## v1.9.0 — Local conversation sessions, cursors and catch-up
+
+The standalone Archer.MobileGateway now supports multiple **local single-owner conversation sessions** rather than one undifferentiated journal. This is the foundation for future desktop/iPhone conversation synchronization, **not actual remote mobile access**.
+
+- The original Main conversation has a fixed stable `sessionId`. Existing encrypted journal messages (including owner drafts and manually shared assistant replies) automatically migrate to that session, with deterministic server-assigned `sequence` numbers. Original message IDs, reply associations, texts and encryption are retained.
+- Enrolled devices with explicit `conversation:read` can list sessions via `GET /v1/conversation/sessions`. Devices with both `conversation:read` and `conversation:write` can create one with `POST /v1/conversation/sessions`, JSON `{"title":"GeoShift launch"}`. Up to ten total sessions are supported in this local prototype.
+- Write a message with `POST /v1/conversation/messages`, including `clientMessageId`, `content`, and optionally `sessionId` (omitting the ID retains backward-compatible Main session behavior).
+- Read incrementally with `GET /v1/conversation/messages?sessionId=<guid>&after=0&limit=50`. Returned messages include per-session, server-assigned sequence numbers; `nextAfter`, `hasMore` and `highWatermark` support bounded polling/catch-up. Devices should persist the last successful `nextAfter`, never use their local wall clock as a cursor. The default page limit is 100, and allowed limits are 1–100.
+- Archive a non-Main session with `POST /v1/conversation/sessions/{id}/archive`, using a conversation-write device token. Archived history is readable, but cannot accept new owner texts or desktop assistant replies. The default Main conversation cannot be archived.
+- A device's `clientMessageId` is unique across sessions; replay in another session is rejected, preventing accidental cross-thread duplication. A manually approved desktop reply inherits the session of the owner message it answers.
+
+**Important limitations:** all sessions belong to the **same local owner**, and a device with `conversation:read` can read every local session. Cursors may skip older records discarded by the seven-day/200-message journal retention; they are not proof of complete delivery. There is no cloud identity, Internet access, device push, genuine shared AI context, multiuser tenancy, native iPhone app or long-term export/backup yet.
+
+GitHub Actions runs a new separate synthetic session test for device permissions, session isolation, pagination, duplicates across sessions, archiving, encrypted restart and cursor preservation. Existing gateway, desktop bridge, and encryption migration tests also run. Test the interface at home after one Git → Pull; you still don't need to install anything on your work PC.
