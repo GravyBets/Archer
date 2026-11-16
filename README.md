@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 0.2.2 (local prototype)  
+**Version:** 0.2.3 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -215,3 +215,16 @@ Archer can now read an explicitly requested GitHub repository **directly**, rath
 - No change to GitHub permissions or auto-run behavior: repository reading remains allowlisted and read-only.
 - The `/api/github/check` endpoint shows which source files Archer selected; use it before paying for another code-review task.
 - Restart Archer after pulling the update to clear its in-memory GitHub snapshot cache. The reader remains intentionally **partial** and cannot compile, test or edit GeoShift code.
+
+## v0.2.3 — Source-verified code reviews
+
+After a real GeoShift development-review mission, several confident recommendations turned out to describe protections already in the code: longitude/latitude range checks, CSV escaping, skip-count warnings, and the 10-data-row preview limit. This version strengthens the **AI's code-review instructions**:
+
+- Verify whether the behavior is already implemented before recommending a change.
+- State the inspected source file and method and classify each finding as **Verified defect**, **Possible issue**, or **Already handled**.
+- Do not infer absent functionality from an incomplete source snapshot.
+- Re-check earlier AI-generated reports against actual code rather than repeating unverified claims.
+- Specifically examine coordinate range checks, quoted CSV output, header versus data preview rows, and whether the KMZ stream guard's extra byte is intentional.
+- Never claim a build, test run, or repository modification occurred unless a real tool performed it.
+
+**Scope:** This is a prompt-level guardrail, not an independent verifier or guarantee of correct reports. Archer still samples only part of the repository and cannot make code changes. For a fair comparison, create a **new development review mission** after upgrading to 0.2.3; previously completed reports do not regenerate automatically.
