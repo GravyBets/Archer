@@ -21,7 +21,7 @@
       </nav>
       <div class="sidebar-bottom">
         <div class="sidebar-status"><span class="pulse-dot"></span><span id="connectionLabel">Checking local server...</span></div>
-        <div class="version">V0.5.0 · LOCAL DEVELOPMENT</div>
+        <div class="version">V0.5.1 · LOCAL DEVELOPMENT</div>
       </div>
     </aside>
     <main class="content">
@@ -68,9 +68,15 @@
             </form>
             <div class="voice-preferences">
               <label class="voice-toggle"><input type="checkbox" id="voiceReadToggle" /> Read Archer's replies aloud</label>
+              <label class="voice-chooser" for="voiceChoiceSelect">Archer's British voice
+                <select id="voiceChoiceSelect" aria-label="Select Archer's British speaking voice">
+                  <option value="">Finding local voices…</option>
+                </select>
+              </label>
               <button type="button" class="voice-stop" id="voiceReplayButton" disabled>Read last reply</button>
               <button type="button" class="voice-stop" id="voiceStopButton" data-allow-busy="true" disabled>Stop speaking</button>
               <span id="voiceSupportNote">Voice uses browser features; no phone connection is enabled.</span>
+              <span id="voiceAccentStatus" role="status">British male voice availability depends on your installed browser voices.</span>
             </div>
           </section>
         </section>
@@ -191,7 +197,7 @@
           </div>
         </section>
         <section id="activityView" class="view hidden"><div class="hero"><div class="eyebrow">EXECUTION HISTORY <span class="eyebrow-line"></span></div><h1>Activity<span class="accent">.</span></h1><p>What Archer has actually done, with completed work stored on disk.</p></div><div class="panel"><div id="activityList" class="activity-list"></div></div></section>
-        <footer class="footer">ARCHER / V0.5 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
+        <footer class="footer">ARCHER / V0.5.1 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
       </div>
     </main>
   </div>
