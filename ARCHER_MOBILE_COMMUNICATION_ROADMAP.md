@@ -1,7 +1,7 @@
 # Archer — Mobile, Messaging, Voice & Safe Business Operations Roadmap
 
 Working plan: 2026-11-16. Target: one Archer across Windows, iPhone, text, phone, and (if approved) CarPlay.
-Current baseline: Archer v1.6.0 is LOCALHOST-ONLY. It supports guarded AI, source review/code drafts, site checks, opt-in outbound SMS/one-way calls and manually selected coarse presence. Native iOS, real push, inbound voice/text conversation and cloud hosting DO NOT exist yet.
+Current baseline: Archer v1.7.0 is LOCALHOST-ONLY. It supports guarded AI, source review/code drafts, site checks, opt-in outbound SMS/one-way calls and manually selected coarse presence. Native iOS, real push, inbound voice/text conversation and cloud hosting DO NOT exist yet.
 
 ## Product decisions
 
@@ -52,6 +52,7 @@ DONE WHEN: each issue has one durable actionable item, no duplicate paid alert, 
 ### P2: Unified conversation and natural British voice
 
 - [x] v1.5 local mobile-gateway **conversation journal prototype** with device-scoped read/write permissions, stable per-device client message IDs, idempotent writes, seven-day read retention, bounded storage and admin-only clear. **Not connected to Archer desktop chat or the AI.**
+- [x] v1.7 separately keyed, read-only **localhost** phone-draft bridge to Windows Archer, with explicit owner enable flag, preview UI, manual copy-to-composer and no automatic model calls.
 - [ ] Define the full authenticated multi-channel conversation service (assistant/owner messages, sessions, ordering, encrypted backups, export/deletion, complete cross-channel lifecycle and persistent PC sync).
 - [ ] Connect Windows and phone chat to the same authenticated session backend.
 - [ ] Stream short responses by default, allow detailed mode when requested, and retain clear action boundaries.
@@ -131,7 +132,7 @@ DONE WHEN: GeoShift converts real paying customers and Archer reports genuine bu
 
 ## Execution order
 
-1. **Completed:** v1.1 inbox; v1.2 isolated gateway; v1.3 notification sandbox; v1.4 device security; v1.5 local conversation journal; v1.6 authenticated local gateway state encryption (all still localhost-only).
+1. **Completed:** v1.1 inbox; v1.2 isolated gateway; v1.3 notification sandbox; v1.4 device security; v1.5 local journal; v1.6 encrypted state; v1.7 opt-in, read-only desktop draft bridge (still localhost-only).
 2. **Next:** independent security architecture review and a separately authenticated **TLS-ready public gateway design**, provisioning, retention and APNs-device enrollment; no remote access until those gates pass.
 3. **Then:** shared conversation backend, push service (APNs) and native iOS MVP.
 4. **In parallel after security:** Twilio inbound SMS + ConversationRelay with signature checks and strict budget.
@@ -184,4 +185,12 @@ A device may be enrolled with `conversation:read` or both `conversation:read` an
 - First read of a recognizable v1.5 plaintext state performs in-place encrypted migration BEFORE returning data. Incorrect/missing key, tampering or unsupported format causes a hard failure rather than resetting or overwriting state.
 - Missing key means liveness can be inspected, but `GET /health/ready` reports not ready and every state operation is denied. Encryption does not make plain HTTP safe for public access.
 - CI verifies migration, recovery with the original key, wrong-key denial, missing-key denial, tamper detection and absence of plaintext in the persisted gateway file.
-- **Remaining:** independent encrypted backups, legacy plaintext snapshot cleanup, documented key rotation, secret manager, identity, HTTPS, a secure desktop conversation bridge, APNs and an iPhone client.
+- **Remaining:** independent encrypted backups, legacy plaintext snapshot cleanup, documented key rotation, secret manager, identity, HTTPS, production desktop chat synchronization, APNs and an iPhone client.
+
+### v1.7.0 bridge milestone: local phone drafts visible on Archer PC
+
+- A **separate 40+ character** `ARCHER_GATEWAY_BRIDGE_KEY`, unrelated to admin and event-ingest keys, authorizes only `GET /internal/conversation/bridge` on the isolated local gateway.
+- Desktop MissionControl exposes a bounded read-only preview only when the owner explicitly enables `ARCHER_GATEWAY_CHAT_BRIDGE_ENABLED=true`, with the same separate key configured locally. It does not transmit existing desktop conversation data to the gateway.
+- The Archer home view now shows recent phone-authored drafts with a **Use in chat composer** button. This merely fills the textarea; the owner must review/edit and **press Send** before any OpenAI charges or state changes occur.
+- CI exercises both processes simultaneously with an encrypted synthetic phone message; checks unauthorized bridge requests, key separation, desktop preview content and zero auto-AI submissions.
+- **Not yet full shared chat:** desktop assistant replies are not written back to gateway, no live iPhone app, no public HTTPS, no background processing of mobile messages, no multiuser account identity, no automatic context merging.
