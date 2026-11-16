@@ -42,6 +42,18 @@ public sealed class GatewayStateEncryption
         _key = Convert.FromHexString(hex);
     }
 
+    // CLI-only use: creates a second isolated encryption instance to rotate
+    // a verified state into a NEW file. Production gateway DI always uses
+    // the public parameterless environment-key constructor above.
+    private GatewayStateEncryption(byte[] explicitKey) => _key = explicitKey;
+
+    public static GatewayStateEncryption FromExplicitHex(string hex)
+    {
+        if (hex.Length != 64 || !hex.All(char.IsAsciiHexDigit))
+            throw new ArgumentException("A new random 256-bit key is required.");
+        return new GatewayStateEncryption(Convert.FromHexString(hex));
+    }
+
     public bool IsReady => _key is { Length: 32 };
 
     public void RequireKey()
