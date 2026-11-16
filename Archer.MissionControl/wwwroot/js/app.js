@@ -84,14 +84,32 @@ function renderDetail(m) {
     html += `<div class="section-label">MISSION PLAN <span>${complete}/${m.tasks.length} COMPLETE</span></div>`;
     if (m.summary) html += `<p class="mission-summary">${escapeHtml(m.summary)}</p>`;
     html += '<div class="task-list">' + m.tasks.map((t, idx) => `<div class="task"><div class="task-number ${t.status === 'Completed' ? 'complete' : ''}">${t.status === 'Completed' ? '✓' : idx + 1}</div><div class="task-content"><div class="task-line"><strong>${escapeHtml(t.title)}</strong><span class="task-tag">${escapeHtml(t.status)}</span></div><p>${escapeHtml(t.description)}</p>${t.lastError ? `<div class="task-error">${escapeHtml(t.lastError)} ${t.status === 'Failed' ? `<button class="text-button" data-action="retry" data-task="${escapeHtml(t.id)}">Retry</button>` : ''}</div>` : ''}</div></div>`).join('') + '</div>';
-    if (pending) html += `<div class="run-actions"><button class="button primary" data-action="run" data-steps="1">▶ Run next step</button><button class="button secondary" data-action="run" data-steps="3">▶ Run up to 3 steps</button></div>`;
+    if (m.autoRunEnabled) {
+      html += `<div class="run-actions"><button class="button secondary" data-action="autorun" data-enabled="false">⏸ Pause automatic execution</button><span class="mission-summary">Automatic mode active · ${m.autoRunTasksRemaining ?? 0} task attempt(s) remaining. Current work may finish after pausing.</span></div>`;
+    } else if (pending && m.status !== 'Running' && m.status !== 'Archived') {
+      html += `<div class="run-actions"><button class="button primary" data-action="run" data-steps="1">▶ Run next step</button><button class="button secondary" data-action="run" data-steps="3">▶ Run up to 3 steps</button></div>`;
+      if (!m.tasks.some(t => t.status === 'Failed')) {
+        html += `<div class="run-actions"><button class="button secondary" data-action="autorun" data-enabled="true">✦ Auto-run up to 3 tasks</button><span class="mission-summary">Opt-in · local app stays open · no automatic retries.</span></div>`;
+      }
+    }
   }
   if (m.artifacts.length) {
     html += `<div class="section-label artifacts-heading">DELIVERABLES <span>${m.artifacts.length}</span></div>`;
     html += m.artifacts.slice().reverse().map(a => `<details class="artifact"><summary><span>▤</span> ${escapeHtml(a.title)} <small>${escapeHtml(humanDate(a.createdAtUtc))}</small></summary><div class="report-text" id="artifact-${escapeHtml(a.id)}"></div></details>`).join('');
   }
+  const openArtifacts = Array.from(detail.querySelectorAll('details.artifact[open]')).map(el => {
+    const report = el.querySelector('.report-text');
+    return { id: report?.id, scrollTop: report?.scrollTop ?? 0 };
+  }).filter(x => x.id);
   detail.innerHTML = html;
   m.artifacts.forEach(a => { const el = $(`artifact-${a.id}`); if (el) el.textContent = a.content; });
+  for (const old of openArtifacts) {
+    const report = $(old.id);
+    if (!report) continue;
+    const details = report.closest('details');
+    if (details) details.open = true;
+    report.scrollTop = old.scrollTop;
+  }
 }
 function renderChat(conversation) {
   $('chatMessages').innerHTML = conversation.length ? conversation.map(e => `<div class="chat-message ${e.role === 'user' ? 'from-user' : 'from-archer'}"><div class="chat-speaker">${e.role === 'user' ? 'YOU' : 'ARCHER'}</div><div class="chat-content">${escapeHtml(e.content)}</div><small>${escapeHtml(humanDate(e.createdAtUtc))}</small></div>`).join('') : '<div class="chat-intro"><div class="big-icon">◇</div><h3>Archer is standing by.</h3><p>Ask a question, discuss a mission, or make a decision together.</p></div>';
@@ -127,6 +145,10 @@ document.addEventListener('click', async event => {
     const steps = Number(act.dataset.steps);
     await action(() => api(`/api/missions/${id}/run`, { method: 'POST', body: JSON.stringify({ maxSteps: steps }) }),
       result => result.error ? `Completed ${result.stepsCompleted} task(s). Last task failed: ${result.error}` : `Completed ${result.stepsCompleted} task(s). Open Deliverables to inspect actual results.`);
+  } else if (act.dataset.action === 'autorun') {
+    const enabled = act.dataset.enabled === 'true';
+    await action(() => api(`/api/missions/${id}/autorun`, { method: 'POST', body: JSON.stringify({ enabled }) }),
+      result => result.message);
   } else if (act.dataset.action === 'retry') {
     await action(() => api(`/api/missions/${id}/tasks/${act.dataset.task}/retry`, { method: 'POST' }), 'Task queued for retry.');
   }
@@ -162,3 +184,11 @@ refresh().catch(error => {
   $('connectionLabel').textContent = 'Local server unavailable';
   notice(`Cannot connect to Archer: ${error.message}`, true);
 });
+
+// Refresh while authorized background work is active, without interfering
+// with user operations. Completed reports can still be read while updating.
+window.setInterval(() => {
+  if (appState.busy) return;
+  const running = appState.data.missions.some(m => m.autoRunEnabled || m.status === 'Running');
+  if (running) refresh().catch(error => console.warn('Archer refresh failed:', error.message));
+}, 5000);
