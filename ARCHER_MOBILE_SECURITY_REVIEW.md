@@ -1,4 +1,4 @@
-# Archer mobile gateway — security and threat review (v1.8.0)
+# Archer mobile gateway — security and threat review (v1.9.0)
 
 **Review date:** 2026-11-16. This is an engineering threat model, NOT an independent penetration test or approval for internet exposure.
 
@@ -129,6 +129,16 @@ No preview is delivered to an Apple device; no APNs device token, push server, m
 - A successful gateway write does **not** prove a push or SMS was delivered. It only stores encrypted content for a future authorized device client; there is currently no real iPhone app.
 - Current desktop storage remains a separate **unencrypted local** conversation file, and the extra sharing action copies only the selected answer; it does not solve production encryption and retention for desktop history. Production audit, authenticated two-way sync, cross-channel ordering, idempotent AI-cost reservations, and secure deletion/backup remain undone.
 
+
+## v1.9.0 — Local session and cursor threat boundaries
+
+- The gateway offers **GET/POST /v1/conversation/sessions** and **POST /v1/conversation/sessions/{id}/archive**. Explicit conversation:read scope permits listing, conversation:write permits creation/archive. The fixed Main conversation cannot be archived. Maximum ten sessions per single local owner; there is **no multi-user tenant isolation or external identity**.
+- GET /v1/conversation/messages now accepts optional sessionId, after and limit query fields. Server-assigned per-session sequence numbers and nextAfter/highWatermark support bounded catch-up, rather than trusting a client's system clock. Messages can have **gaps** due to aging/retention and global 200-record cap; cursor continuity alone does not prove complete delivery.
+- Existing encrypted state is migrated in place: pre-v1.9 messages are deterministically assigned the Main session ID and sequence values, retaining existing message IDs and reply linkage. No plaintext state is created by this migration. The original key must remain available.
+- Cross-session reuse of a device/client message ID is rejected; a desktop assistant reply inherits the session of the exact referenced owner message. Archived sessions remain readable but cannot accept messages or new desktop replies. The separate bridge-key requirement remains.
+- Device read scopes currently allow reading **all sessions of the one local owner**. This is intentional for one owner but not suitable for shared accounts or business teams. Additional user/device access controls, encrypted off-host backup, limits for concurrent sync, tenant-level permission checks and an audit/export/deletion policy remain required for future remote hosting.
+- CI uses synthetic local session creation, paginated catch-up, replay conflicts, archive refusal, restart persistence and encrypted migration. No push/SMS/phone, model request or public listener.
+
 ## Local-only opt-in setup
 
 Prerequisites: .NET 10 SDK, separate optional process. Values must be cryptographically random and never committed to Git.
@@ -162,4 +172,4 @@ Production deployment stays BLOCKED until all these gates pass.
 - Kestrel explicit endpoint binding: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/endpoints?view=aspnetcore-10.0
 - Kestrel proxy/forwarding security: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/security-considerations
 
-This document inventories the current source at v1.8.0; revisit it when endpoints or authorization logic change.
+This document inventories the current source at v1.9.0; revisit it when endpoints or authorization logic change.
