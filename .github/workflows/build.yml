@@ -20,6 +20,7 @@ jobs:
         run: |
           node --check Archer.MissionControl/wwwroot/js/app.js
           node --check Archer.MissionControl/wwwroot/js/archer-home.js
+          node --check Archer.MissionControl/wwwroot/js/orb-field.js
       - name: Validate UI element wiring
         run: python3 tests/ValidateUi.py
       - name: Smoke test local configuration and usage endpoints
@@ -43,4 +44,4 @@ jobs:
           curl -fsS http://127.0.0.1:5087/ > /tmp/archer-root.html
           curl -fsS http://127.0.0.1:5087/api/config > /tmp/archer-config.json
           curl -fsS http://127.0.0.1:5087/api/usage > /tmp/archer-usage.json
-          python3 -c 'import json; c=json.load(open("/tmp/archer-config.json")); u=json.load(open("/tmp/archer-usage.json")); assert c["version"]=="0.4.0", c; assert c["routing"]["mode"]=="adaptive", c; assert u["month"]["requests"]==0, u; assert u["lifetime"]["estimatedCostUsd"]==0, u; print("PASS: Archer v0.4.0 health/config/usage endpoints")'
+          python3 -c 'import json; c=json.load(open("/tmp/archer-config.json")); u=json.load(open("/tmp/archer-usage.json")); assert c["version"]=="0.4.1", c; assert c["routing"]["mode"]=="adaptive", c; assert u["month"]["requests"]==0, u; assert u["lifetime"]["estimatedCostUsd"]==0, u; print("PASS: Archer v0.4.1 health/config/usage endpoints")'

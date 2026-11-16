@@ -20,7 +20,7 @@
       </nav>
       <div class="sidebar-bottom">
         <div class="sidebar-status"><span class="pulse-dot"></span><span id="connectionLabel">Checking local server...</span></div>
-        <div class="version">V0.4.0 · LOCAL DEVELOPMENT</div>
+        <div class="version">V0.4.1 · LOCAL DEVELOPMENT</div>
       </div>
     </aside>
     <main class="content">
@@ -43,6 +43,7 @@
               <span class="orb-light"></span>
               <span class="orb-shine"></span>
             </button>
+            <canvas id="orbParticleField" class="orb-particle-field" aria-hidden="true"></canvas>
             <div class="presence-floor"></div>
           </div>
           <div class="presence-caption">
@@ -127,12 +128,13 @@
           </div>
         </section>
         <section id="activityView" class="view hidden"><div class="hero"><div class="eyebrow">EXECUTION HISTORY <span class="eyebrow-line"></span></div><h1>Activity<span class="accent">.</span></h1><p>What Archer has actually done, with completed work stored on disk.</p></div><div class="panel"><div id="activityList" class="activity-list"></div></div></section>
-        <footer class="footer">ARCHER / V0.4 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
+        <footer class="footer">ARCHER / V0.4.1 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
       </div>
     </main>
   </div>
   <dialog id="missionDialog" class="modal"><form id="missionForm" method="dialog"><div class="modal-head"><div class="eyebrow">NEW OBJECTIVE</div><h2>Assign a mission</h2><p>Tell Archer what success looks like.</p></div><label for="missionTitle">Mission name</label><input id="missionTitle" maxlength="100" required minlength="3" placeholder="Build $1,000/month in recurring revenue" /><label for="missionObjective">Objective</label><textarea id="missionObjective" maxlength="3000" minlength="10" required rows="5" placeholder="Research, compare, and validate business opportunities that could generate recurring revenue. Prioritize real customer demand and practical execution."></textarea><div class="modal-actions"><button type="button" class="button secondary" id="cancelMission">Cancel</button><button class="button primary" type="submit">Create Mission</button></div></form></dialog>
   <script src="/js/app.js" defer></script>
   <script src="/js/archer-home.js" defer></script>
+  <script src="/js/orb-field.js" defer></script>
 </body>
 </html>
