@@ -27,7 +27,7 @@ public sealed class GatewayConversationJournal(GatewayStore store)
         CancellationToken ct)
     {
         if (after < 0 || limit is < 1 or > 100 ||
-            sessionId is Guid.Empty)
+            sessionId == Guid.Empty)
             throw new ArgumentException("Use a valid sessionId, after >= 0 and limit 1–100.");
 
         var id = sessionId ?? GatewayConversationSchema.DefaultSessionId;
