@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 1.8.0 (local prototype)  
+**Version:** 1.9.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
