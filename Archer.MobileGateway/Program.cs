@@ -9,6 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // This deliberately does not reference Archer.MissionControl, its state,
 // GitHub write token, AI service, Twilio gateway, or owner location.
+builder.Services.AddSingleton<GatewayStateEncryption>();
 builder.Services.AddSingleton<GatewayStore>();
 builder.Services.AddSingleton<DeviceTokenService>();
 builder.Services.AddSingleton<GatewayDeliverySimulator>();
@@ -118,10 +119,19 @@ app.MapGet("/health/live", () => Results.Ok(new
 {
     status = "ok",
     component = "Archer.MobileGateway",
-    version = "1.5.0",
+    version = "1.6.0",
     publicAccessEnabled = false,
     deliveryEnabled = false
 }));
+
+// Separate readiness from process liveness. Without a valid private key,
+// absolutely NO gateway data read/write operation is permitted.
+app.MapGet("/health/ready", (GatewayStateEncryption encryption) =>
+    encryption.IsReady
+        ? Results.Ok(new { status = "ready", encryptedState = true, publicAccessEnabled = false })
+        : Results.Problem(title: "Gateway encryption key not configured",
+            detail: "Configure a private 256-bit ARCHER_GATEWAY_DATA_KEY_HEX. Data operations are disabled.",
+            statusCode: 503));
 
 // Provisioning is restricted to loopback AND a distinct, long local admin
 // secret. The generated random device bearer is returned ONCE only.
@@ -461,5 +471,5 @@ app.MapDelete("/internal/conversation", async Task<IResult> (
     });
 });
 
-Console.WriteLine("Archer Mobile Gateway v1.5.0: LOCAL LOOPBACK ONLY on 127.0.0.1:5091");
+Console.WriteLine("Archer Mobile Gateway v1.6.0: LOCAL LOOPBACK ONLY on 127.0.0.1:5091");
 app.Run();

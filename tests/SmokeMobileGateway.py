@@ -42,6 +42,8 @@ def run(state_path):
     health = request("/health/live")
     assert health["publicAccessEnabled"] is False
     assert health["deliveryEnabled"] is False
+    ready = request("/health/ready")
+    assert ready["encryptedState"] is True
     request("/health/live", headers={"Origin": "https://malicious.invalid"}, expected=403)
     request("/health/live", headers={"Host": "malicious.invalid:5091"}, expected=403)
     request("/internal/audit", expected=403)
@@ -237,19 +239,19 @@ def run(state_path):
     assert len(audit["entries"]) < 300
     request("/v1/inbox", headers=bearer, expected=401)
     stored_text = state_path.read_text(encoding="utf-8")
-    assert token not in stored_text
-    assert new_token not in stored_text
-    assert reader["deviceToken"] not in stored_text
-    assert talker["deviceToken"] not in stored_text
-    assert watcher["deviceToken"] not in stored_text
-    assert message["content"] not in stored_text
-    assert "tokenHashHex" in stored_text
-    assert "device.rotated" in stored_text
-    assert "device.revoked" in stored_text
-    assert "Example site needs review" in stored_text
-    assert "deliveryPreviews" in stored_text
-    assert "sandbox-policy-1" in stored_text
-    assert "Twilio" not in stored_text and "OPENAI_API_KEY" not in stored_text
+    encrypted = json.loads(stored_text)
+    assert encrypted["format"] == "archer-gateway-aes256gcm-v1"
+    assert all(encrypted.get(name) for name in ("nonce", "ciphertext", "tag"))
+    assert set(encrypted) == {"format", "nonce", "ciphertext", "tag"}
+    # No sensitive fields, messages, device hashes, tokens or audit trail appear on disk.
+    for secret in (
+        token, new_token, reader["deviceToken"], talker["deviceToken"],
+        watcher["deviceToken"], message["content"], "tokenHashHex",
+        "device.rotated", "device.revoked", "Example site needs review",
+        "deliveryPreviews", "sandbox-policy-1",
+        "Twilio", "OPENAI_API_KEY"
+    ):
+        assert secret not in stored_text, "State leaked a plaintext field: " + secret[:16]
     print("PASS: local gateway scoped journal, shared read, idempotent messages, private deletion, rotation, audit and zero AI sends")
 
 

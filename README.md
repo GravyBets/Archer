@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 1.5.0 (local prototype)  
+**Version:** 1.6.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -743,9 +743,49 @@ Archer.MobileGateway now supports the first **device-scoped, single-owner messag
 - **POST `/v1/conversation/messages`** with a conversation-write bearer and JSON like `{"clientMessageId":"<new UUID>","content":"Hi Archer"}` saves one inert text record. Same device + same UUID + same text is safely idempotent; conflicting reuse gives HTTP 409. Max 1,600 characters per message.
 - **DELETE `/internal/conversation`** with the separate local `X-Archer-Admin-Key` wipes only this test journal, and logs metadata-only deletion. It does not alter desktop history.
 - Messages are bounded to 200, with read visibility restricted to the most recent seven days. Older entries are pruned on subsequent writes. Records and audit live in a separate, Git-ignored local gateway JSON file.
-- **Do not use for real sensitive conversations yet.** This prototype stores message content **unencrypted at rest** on your home PC. A future secure backend will require encrypted storage/backup, identity login, authenticated desktop sync, session ordering, transport TLS, iOS Keychain, deletion/export and retention controls.
+- **Historical v1.5 limitation (addressed by v1.6):** The original prototype stored journal text unencrypted at rest. New v1.6 gateway state is encrypted, but secure remote identity, transport and backup protection remain outstanding. A future secure backend will require encrypted storage/backup, identity login, authenticated desktop sync, session ordering, transport TLS, iOS Keychain, deletion/export and retention controls.
 - No model tokens or phone minutes are spent by these APIs, and **nothing sends a reply automatically**. The native app and unified two-way conversation service remain to be built.
 
 GitHub CI tests device scope isolation, cross-device visibility, duplicate and conflicting message IDs, administrative clear, credential rotation/revocation, and ensures the journal never sends AI or phone requests. No action on your work computer is needed. This doesn't enable cloud hosting or phone connectivity.
 
 See the [current security review](ARCHER_MOBILE_SECURITY_REVIEW.md) and [master development roadmap](ARCHER_MOBILE_COMMUNICATION_ROADMAP.md) for remaining blockers.
+
+## v1.6.0 — Encrypted gateway state (still localhost only)
+
+The standalone Archer.MobileGateway now writes its **entire** Git-ignored local data file using authenticated **AES-256-GCM**, including conversation text, notification descriptions, device credential hashes, previews and audit metadata. There is **no built-in, sample or default encryption key**, and this does **not** open remote access.
+
+### Personal home PC setup (ONLY if you choose to run the separate MobileGateway)
+
+1. Generate **32 cryptographically random bytes**, encoded as **64 lowercase hexadecimal characters**, using a trusted local password manager, OS secure random generator, or the following local PowerShell snippet. Do not paste the result into this chat, GitHub, project files or command output that will be shared:
+
+   ```powershell
+   $bytes = New-Object byte[] 32
+   $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+   $rng.GetBytes($bytes)
+   $rng.Dispose()
+   $key = ([BitConverter]::ToString($bytes) -replace '-', '').ToLowerInvariant()
+   # Store $key securely in your password manager; do not print it in a log.
+   [Environment]::SetEnvironmentVariable("ARCHER_GATEWAY_DATA_KEY_HEX", $key, "User")
+   Remove-Variable key, bytes
+   ```
+
+2. **Back up this key separately in a secure place.** Losing it means losing access to encrypted gateway state. The same key must be available each time the gateway runs. If you previously used the gateway on an older version, use a trusted copy of the current state and original key. No automated key-rotation or recovery system is provided yet.
+3. Restart Visual Studio and any gateway process to inherit the user environment variable. When running the optional standalone gateway, `GET http://127.0.0.1:5091/health/live` remains a basic liveness check, and `GET /health/ready` shows `encryptedState:true` only when a correctly formatted key is configured.
+4. On the first state read with a key, recognizable older `mobile-gateway-state.json` **plaintext v1.5** data is atomically replaced with an encrypted file **before** any data is returned. If the key is missing, the state cannot be read or overwritten. **Wrong keys and tampering do not silently reset the file.**
+5. Do not upload historical plaintext data files, backups, temporary files or recovered disk snapshots. Encryption after migration does not erase older copies from prior backups or underlying disk sectors.
+
+No key is needed to **build** Archer or use its normal MissionControl desktop app. The encryption key is required only for local gateway data operations; without one, `/health/ready` is 503. Your previous v1.5 gateway data remains untouched until you intentionally configure and access the encrypted gateway.
+
+**Important:** This protects stored local gateway data from casual file disclosure, not from an attacker who controls your computer/account or knows your encryption key. It is not a production cloud database, a mobile app, a key vault, trusted HTTPS, an encrypted offsite backup or live AI chat. Both processes stay localhost-only. Do not port-forward or expose Archer to a public web server.
+
+### CI / verification
+
+GitHub Actions tests both .NET 10 builds, the existing Archer endpoints, the mobile gateway's authentication, device permissions and routing, and a new synthetic encryption harness:
+
+- Full state contains only encrypted envelope fields, not raw message text, tokens, monitor labels or audit metadata.
+- Old synthetic v1.5 plaintext state migrates with message contents intact.
+- The correct original key can read a migrated state on restart.
+- Wrong key, absent key and modified ciphertext cannot read, reset or overwrite the protected state.
+- All existing device revocation, rate limits, and no-charge/no-delivery behavior remain unchanged.
+
+See [ARCHER_MOBILE_SECURITY_REVIEW.md](ARCHER_MOBILE_SECURITY_REVIEW.md) and [ARCHER_MOBILE_COMMUNICATION_ROADMAP.md](ARCHER_MOBILE_COMMUNICATION_ROADMAP.md) for remaining identity, authenticated desktop sync, backup, iPhone and cloud milestones.
