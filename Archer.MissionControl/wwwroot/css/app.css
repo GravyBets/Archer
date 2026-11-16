@@ -367,3 +367,22 @@
 .coding-publish-controls{border-top:1px solid #2e4457;margin-top:17px;padding-top:14px;display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .coding-publish-controls p{flex:1;min-width:250px;margin:0}
 @media(max-width:650px){.coding-agent-content{padding:13px}.coding-actions>.button,.coding-publish-controls>.button{width:100%}.coding-publish-controls p{min-width:0}}
+
+
+/* v1.0 communications: opt-in provider delivery and mobile foundation */
+.communications-content{padding:18px 23px}
+.communications-content>p:first-child{color:#d4eee6;font-size:13px;margin:0}
+.communications-content h3{font-size:13px;color:#d6e8ed;margin:20px 0 10px}
+.communications-test-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px;border:1px solid #2e4356;border-radius:9px;padding:14px;margin:16px 0}
+.communications-test-actions>span{color:#91aabe;font-size:11px;flex:1;line-height:1.5}
+.communications-prefs{border:1px solid #30465b;background:#0d1b2b;padding:16px;border-radius:9px}
+.communications-prefs .voice-toggle{margin:0 0 14px;font-size:12px;color:#b1cbd5;white-space:normal;line-height:1.5}
+.communications-save-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-top:16px}
+.communications-save-row span{color:#89a6b6;font-size:11px;flex:1}
+.communications-attempts{max-height:320px;overflow:auto;border:1px solid #2b4052;border-radius:8px}
+.communications-attempt{padding:12px 14px;border-bottom:1px solid #293b4f;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.communications-attempt:last-child{border:0}
+.communications-attempt strong{font-size:11px;color:#c2dce1}
+.communications-attempt small{font-size:10px;color:#87a2b3;white-space:nowrap}
+.communications-mobile{margin-top:20px}
+@media(max-width:650px){.communications-content{padding:14px}.communications-test-actions>.button{width:100%}.communications-attempt{flex-direction:column;align-items:flex-start}}
