@@ -34,7 +34,7 @@ await app.Services.GetRequiredService<JsonFileStore>().RecoverInterruptedTasksAs
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "0.7.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "0.8.0" }));
 
 app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
 {
@@ -42,7 +42,7 @@ app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
     model = ai.Model,
     routing = ai.Routing,
     mode = "Local only · Research and analysis only",
-    version = "0.7.0"
+    version = "0.8.0"
 }));
 
 app.MapGet("/api/state", async (JsonFileStore store, CancellationToken ct) =>
@@ -51,6 +51,25 @@ app.MapGet("/api/state", async (JsonFileStore store, CancellationToken ct) =>
 // Only Archer's local, API-reported usage. This is not an OpenAI billing endpoint.
 app.MapGet("/api/usage", async (ApiUsageLedger ledger, CancellationToken ct) =>
     Results.Ok(await ledger.SummaryAsync(ct)));
+
+// Local, conservative budget preflight control. Not a provider-wide spending cap.
+app.MapGet("/api/spending", async (ApiUsageLedger ledger, CancellationToken ct) =>
+    Results.Ok(await ledger.SpendingAsync(ct)));
+
+app.MapPost("/api/spending/settings", async Task<IResult> (
+    ApiUsageLedger.SpendSettingsRequest request, ApiUsageLedger ledger, CancellationToken ct) =>
+{
+    try
+    {
+        var settings = await ledger.UpdateSpendSettingsAsync(request, ct);
+        return Results.Ok(new
+        {
+            settings,
+            message = "Local budget settings saved. Limits are estimates, not a provider billing cap."
+        });
+    }
+    catch (ArgumentException error) { return Results.BadRequest(new { error = error.Message }); }
+});
 
 // A deterministic local briefing preview. No AI call, SMS, phone call or scheduled delivery.
 app.MapGet("/api/briefing", async (BusinessBriefingComposer composer, CancellationToken ct) =>
@@ -520,7 +539,7 @@ app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore
 
 app.MapFallbackToFile("index.html");
 
-Console.WriteLine("ARCHER Mission Control V0.7.0 — http://127.0.0.1:5087");
+Console.WriteLine("ARCHER Mission Control V0.8.0 — http://127.0.0.1:5087");
 app.Run("http://127.0.0.1:5087");
 
 static IResult MissingApiKey() => Results.BadRequest(new
