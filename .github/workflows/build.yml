@@ -16,3 +16,5 @@ jobs:
         run: dotnet restore Archer.MissionControl/Archer.MissionControl.csproj
       - name: Build
         run: dotnet build Archer.MissionControl/Archer.MissionControl.csproj --configuration Release --no-restore
+      - name: Check dashboard JavaScript
+        run: node --check Archer.MissionControl/wwwroot/js/app.js
