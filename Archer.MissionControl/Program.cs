@@ -3,6 +3,7 @@ using Archer.MissionControl.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<JsonFileStore>();
+builder.Services.AddHostedService<MissionAutoRunner>();
 builder.Services.AddHttpClient<ArcherAiService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(240);
@@ -17,14 +18,14 @@ await app.Services.GetRequiredService<JsonFileStore>().RecoverInterruptedTasksAs
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "0.1.4" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "0.2.0" }));
 
 app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
 {
     configured = ai.IsConfigured,
     model = ai.Model,
     mode = "Local only · Research and analysis only",
-    version = "0.1.4"
+    version = "0.2.0"
 }));
 
 app.MapGet("/api/state", async (JsonFileStore store, CancellationToken ct) =>
@@ -79,6 +80,46 @@ app.MapPost("/api/missions/{id:guid}/plan", async Task<IResult> (Guid id, JsonFi
     catch (Exception error) { return Results.Problem(title: "Could not create plan", detail: error.Message, statusCode: 502); }
 });
 
+app.MapPost("/api/missions/{id:guid}/autorun", async Task<IResult> (Guid id, SetAutoRunRequest request, JsonFileStore store, ArcherAiService ai, CancellationToken ct) =>
+{
+    if (request.Enabled && !ai.IsConfigured) return MissingApiKey();
+
+    var result = await store.UpdateAsync(state =>
+    {
+        var mission = state.Missions.FirstOrDefault(m => m.Id == id);
+        if (mission is null) return "notfound";
+        if (!request.Enabled)
+        {
+            mission.AutoRunEnabled = false;
+            mission.AutoRunTasksRemaining = 0;
+            mission.UpdatedAtUtc = DateTimeOffset.UtcNow;
+            Log(state, id, "Automatic execution paused. The current API request may still finish.");
+            return "paused";
+        }
+        if (mission.Status is "Running" or "Archived" or "Completed" ||
+            mission.Tasks.Count == 0 || !mission.Tasks.Any(t => t.Status == "Pending") ||
+            mission.Tasks.Any(t => t.Status == "Failed"))
+            return "ineligible";
+
+        // Explicit opt-in authorizes no more than three task attempts, without auto-retries.
+        // This does NOT implement a hard monetary spending limit.
+        mission.AutoRunEnabled = true;
+        mission.AutoRunTasksRemaining = Math.Min(3, mission.Tasks.Count(t => t.Status == "Pending"));
+        mission.Status = "Ready";
+        mission.UpdatedAtUtc = DateTimeOffset.UtcNow;
+        Log(state, id, $"Authorized automatic execution of up to {mission.AutoRunTasksRemaining} pending tasks.");
+        return "armed";
+    }, ct);
+
+    return result switch
+    {
+        "notfound" => Results.NotFound(new { error = "Mission not found." }),
+        "ineligible" => Results.Conflict(new { error = "Create a plan with pending tasks first. Retry failed tasks before enabling automatic execution." }),
+        "armed" => Results.Ok(new { message = "Automatic research enabled for up to three tasks. Keep Archer running." }),
+        _ => Results.Ok(new { message = "Automatic research paused. Any currently running task may finish." })
+    };
+});
+
 app.MapPost("/api/missions/{id:guid}/run", async Task<IResult> (Guid id, RunMissionRequest request, JsonFileStore store, ArcherAiService ai, CancellationToken ct) =>
 {
     if (!ai.IsConfigured) return MissingApiKey();
@@ -89,7 +130,7 @@ app.MapPost("/api/missions/{id:guid}/run", async Task<IResult> (Guid id, RunMiss
     {
         var mission = state.Missions.FirstOrDefault(m => m.Id == id);
         if (mission is null) return "notfound";
-        if (mission.Status is "Running" or "Archived") return "busy";
+        if (mission.Status is "Running" or "Archived" || mission.AutoRunEnabled) return "busy";
         if (mission.Tasks.Count == 0) return "unplanned";
         if (!mission.Tasks.Any(t => t.Status == "Pending")) return "nothing";
         mission.Status = "Running";
@@ -101,7 +142,7 @@ app.MapPost("/api/missions/{id:guid}/run", async Task<IResult> (Guid id, RunMiss
         return started == "notfound" ? Results.NotFound(new { error = "Mission not found." }) :
             Results.Conflict(new { error = started switch
             {
-                "busy" => "Mission is already running or archived.",
+                "busy" => "Mission is already running, archived, or automatic execution is armed.",
                 "unplanned" => "Create a mission plan first.",
                 _ => "No pending tasks. Retry a failed task or create a new mission."
             } });
@@ -216,7 +257,7 @@ app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore
 
 app.MapFallbackToFile("index.html");
 
-Console.WriteLine("ARCHER Mission Control V0.1.4 — http://127.0.0.1:5087");
+Console.WriteLine("ARCHER Mission Control V0.2.0 — http://127.0.0.1:5087");
 app.Run("http://127.0.0.1:5087");
 
 static IResult MissingApiKey() => Results.BadRequest(new
