@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 1.3.0 (local prototype)  
+**Version:** 1.4.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -710,3 +710,26 @@ The explicit sandbox policy currently:
 **Important:** every preview reports `actualNotificationsSent: 0`. No real message, phone call, Apple APNs push, chat turn, geographic tracking or provider fee is incurred. This isn't a reliable delivery queue yet and doesn't provide iPhone notifications. The simulator runs only on an explicit local admin test request; it is not scheduled. The 1.2.0 authentication boundaries remain intact.
 
 **Testing:** CI runs synthetic event ingestion, authorization rejection, explicit confirmation, duplicate prevention, receipt-free routing, preserved read/acknowledgment, device revocation and no external provider actions. See [the gateway security review](ARCHER_MOBILE_SECURITY_REVIEW.md) and [updated master to-do list](ARCHER_MOBILE_COMMUNICATION_ROADMAP.md). You can test this later on your personal home PC; no setup is needed at work.
+
+## v1.4.0 — Local device security and audit upgrades
+
+The separate `Archer.MobileGateway` is now more resilient to device credential loss and least-privilege access. **It remains localhost-only and is NOT approved for public hosting.**
+
+- Local administrator can enroll either a read-only device (`["inbox:read"]`) or a read-and-ack device (`["inbox:read","inbox:ack"]`). All other scopes and acknowledgement without read permission are rejected. Existing enrollments default to read+ack for backward compatibility.
+- `POST /internal/devices/{id}/rotate` with `X-Archer-Admin-Key` and JSON `{"lifetimeDays":1}` replaces an active device token atomically. The **old token stops working immediately** and the new bearer is returned **once**. Rotating a revoked or expired device is refused.
+- `GET /internal/audit` uses the same local admin key and shows up to 100 recent audit entries (from a capped history of 300), containing action, device/event IDs and timestamps. It never intentionally records raw tokens, personal location or alert text. Read/ack records identify the device involved.
+- The gateway rejects unexpected HTTP Host values (defense against DNS rebinding), maintains an origin restriction, and adds 30 requests/minute per Authorization digest on mobile inbox APIs, on top of its existing loopback IP rate limit.
+- Rotating requires re-provisioning a future device client with the new bearer. **Do not** transmit it through a chat, source file, URL query string, SMS or unencrypted remote connection.
+
+### API endpoints (localhost only)
+
+- `POST http://127.0.0.1:5091/internal/devices/enroll` with private admin header and JSON `{"label":"Read-only test","lifetimeDays":1,"scopes":["inbox:read"]}`.
+- `POST http://127.0.0.1:5091/internal/devices/{id}/rotate` with private admin header and JSON `{"lifetimeDays":1}`.
+- `POST http://127.0.0.1:5091/internal/devices/{id}/revoke` with private admin header.
+- `GET http://127.0.0.1:5091/internal/audit` with private admin header (metadata only).
+
+Secrets must stay in private local environment settings, not GitHub or this chat. The optional MissionControl→gateway sync remains off by default and no paid AI, SMS, phone or APNs operation is introduced by this release.
+
+**Verification:** CI compiles both .NET 10 projects and exercises wrong Host and missing admin keys, arbitrary scope rejection, read-only authorization, successful rotation, old-token denial, revocation, and audit privacy. This is local test coverage, **not** a secure remote iPhone login, mobile pairing flow or penetration test.
+
+For production blockers and ongoing tasks, see [ARCHER_MOBILE_SECURITY_REVIEW.md](ARCHER_MOBILE_SECURITY_REVIEW.md) and [ARCHER_MOBILE_COMMUNICATION_ROADMAP.md](ARCHER_MOBILE_COMMUNICATION_ROADMAP.md).
