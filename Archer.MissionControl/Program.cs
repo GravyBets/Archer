@@ -3,6 +3,7 @@ using Archer.MissionControl.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<JsonFileStore>();
+builder.Services.AddSingleton<ApiUsageLedger>();
 builder.Services.AddHostedService<MissionAutoRunner>();
 builder.Services.AddHttpClient("github-reader", client => client.Timeout = TimeSpan.FromSeconds(90));
 builder.Services.AddSingleton<GitHubRepositoryReader>(service =>
@@ -21,18 +22,23 @@ await app.Services.GetRequiredService<JsonFileStore>().RecoverInterruptedTasksAs
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "0.2.3" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "0.3.0" }));
 
 app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
 {
     configured = ai.IsConfigured,
     model = ai.Model,
+    routing = ai.Routing,
     mode = "Local only · Research and analysis only",
-    version = "0.2.3"
+    version = "0.3.0"
 }));
 
 app.MapGet("/api/state", async (JsonFileStore store, CancellationToken ct) =>
     Results.Ok(await store.ReadAsync(state => state, ct)));
+
+// Only Archer's local, API-reported usage. This is not an OpenAI billing endpoint.
+app.MapGet("/api/usage", async (ApiUsageLedger ledger, CancellationToken ct) =>
+    Results.Ok(await ledger.SummaryAsync(ct)));
 
 // Free, read-only diagnostic: verifies actual repository access without using any AI tokens.
 app.MapGet("/api/github/check", async Task<IResult> (string repository, GitHubRepositoryReader reader, CancellationToken ct) =>
@@ -279,7 +285,7 @@ app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore
 
 app.MapFallbackToFile("index.html");
 
-Console.WriteLine("ARCHER Mission Control V0.2.3 — http://127.0.0.1:5087");
+Console.WriteLine("ARCHER Mission Control V0.3.0 — http://127.0.0.1:5087");
 app.Run("http://127.0.0.1:5087");
 
 static IResult MissingApiKey() => Results.BadRequest(new
