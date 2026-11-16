@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 0.1.3 (local prototype)  
+**Version:** 0.1.4 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -121,3 +121,34 @@ If you already ran Archer from an extracted ZIP, the cloned repository is a **di
 4. Open **Deliverables** to inspect citations, useful findings, and uncertainties. A successfully completed HTTP request is not proof all research facts are correct.
 
 This is a bounded mitigation, not a guarantee. Very long research can still hit token limits or HTTP timeouts. No automatic paid retries were added; manual Retry costs API credits. This version is **not yet tested live** against the owner's OpenAI API account.
+
+## v0.1.4 — Private project knowledge (November 2026)
+
+The first successful GeoShift mission revealed a grounding issue: Archer looked for the user's project name on the public web and confused it with unrelated entities. This update:
+
+- Reminds the AI that a project may be private or unpublished; a public name match is **not** evidence that it is the user's project.
+- Adds an **optional private project brief** that Archer includes in mission planning, research, analysis, and chat requests.
+- Keeps the private context out of GitHub by reading it from the ignored `Data` folder. The project does not create or populate the file automatically.
+
+### Set up Archer's local project knowledge
+
+1. Stop Archer, pull the latest `main`, and rebuild.
+2. Create the folder `Archer.MissionControl/Data` if it doesn't exist.
+3. Create a plain UTF-8 text file named `Archer.MissionControl/Data/archer-knowledge.md`.
+4. Describe your own software projects, target customers, definitions, important facts, and goals. For example:
+
+```markdown
+# My projects
+GeoShift is my own unpublished KML/KMZ to CSV conversion utility.
+GeoShift is not the Texas consultancy or any other public company with that name.
+The target customer needs reliable geographic data migration and file conversion.
+Investigate KML/KMZ conversion competitors, customer pain points, and pricing;
+don't search for GeoShift as if it were an established public product.
+```
+
+5. Run Archer and confirm `/api/config` reports `0.1.4`.
+6. Continue the existing mission. Earlier deliverables remain unchanged; the new background will inform **future** tasks only.
+
+Optional: point `ARCHER_KNOWLEDGE_FILE` to another local file. If it is a relative path, Archer resolves it from the project content root. The first 12,000 characters are included in API requests. Don't store API keys, secrets, or employer-confidential data in this file: **the context is sent to the OpenAI API when you run AI tasks**.
+
+This is the first small step toward longer-term memory, not a complete autonomous memory system. It does not automatically inspect private repositories, read all prior conversations, or independently verify the user's project details.
