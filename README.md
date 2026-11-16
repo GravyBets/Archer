@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 0.9.0 (local prototype)  
+**Version:** 1.0.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -562,3 +562,53 @@ The publishing API checks the allowed repository and current GitHub blob SHAs **
 6. Do not merge or deploy until you're happy with the generated changes and actual test results.
 
 The CI checks Archer's .NET build, JavaScript wiring, local startup, and that publishing is **disabled by default**. Actual paid code generation and token-based PR publishing require your Windows environment and explicit consent; the CI does not perform either.
+
+## v1.0.0 — Optional SMS, British phone alerts and mobile presence ingress
+
+This release adds an **optional, disabled-by-default Twilio delivery adapter**. Archer can now submit an explicitly authorized test text or voice call to a single configured destination. Owners may also separately opt in to scheduled daily SMS briefings and calls for critical website availability incidents. **Nothing is sent without external credentials, an exact phone number, explicit configuration AND your consent.**
+
+### Twilio setup (only when you're ready)
+
+Set these **Windows user environment variables** (not in source control, chat transcripts, repositories, or local project-knowledge notes):
+
+- `ARCHER_TWILIO_ENABLED=true` (exact lowercase `true` is required)
+- `TWILIO_ACCOUNT_SID=AC...` (your own account SID)
+- `TWILIO_AUTH_TOKEN=...` (your own private auth token)
+- `ARCHER_TWILIO_FROM=+1...` (your authorized Twilio sending number)
+- `ARCHER_TWILIO_TO=+1...` (your own phone, verified/approved as required)
+  
+Restart Visual Studio and Archer so the server receives the variables. No keys or full phone numbers are displayed in the UI. The **Operations → SMS & phone alerts** panel shows a masked recipient and configuration status.
+
+Click **Send one test SMS** or **Place one test call** only when you actually want a possibly billable communication; each requires a confirmation dialog. These are real provider requests, NOT dry runs. Status `Submitted` means the provider accepted an API request, **not** that the phone received it. Review Twilio's own delivery status for confirmation.
+
+The test voice uses Twilio's `Polly.Brian-Neural` with British English (`en-GB`), a male neural voice listed by Twilio. Availability, pronunciation, naturalness and charges depend on your account. Phone calls are not currently live, two-way AI conversations—these are **outbound one-way spoken notifications**. Twilio documentation: https://www.twilio.com/docs/voice/twiml/say/text-speech
+
+**Twilio pricing, SMS segmentation, telephone airtime and neural TTS fees are separate from Archer's OpenAI token budget.**
+
+### Optional automatic reports and alerts
+
+After a successful test, you can explicitly enable these **separate** settings in Operations:
+
+- **Daily SMS briefing:** One brief, truncated summary around your configured local time on a day when Archer is actually running and not in quiet hours. The scheduler checks a five-minute window; if Archer is offline at that time it does NOT backfill or send an unexpected catch-up message.
+- **Urgent website outage call:** One-way British-voiced call after **three consecutive failed public HTTPS checks**, when the last check is less than 20 minutes old, the outage has a current, unacknowledged incident, and quiet hours permit it (unless you've separately opted into critical overrides). A website reachability alarm is **not proof** that payment processing or all site functionality failed.
+- Delivery attempts are durably reserved before provider calls. **Maximum three SMS attempts per UTC day and one call attempt per UTC day**, including manual tests. Each daily briefing date and outage incident has its own deduplication key across Archer restarts. Ambiguous provider failures are marked `Uncertain`, count against limits, and **are never automatically retried**. Actual provider billing may still occur.
+- You can disable either form of automatic delivery at any time from Operations. The app still runs only on `127.0.0.1`, and none of this works when your PC/server is shut down.
+- This does **not** integrate with GeoShift payments, analytics, customer support or customer communication. Those require separate business-specific integrations and authorization.
+
+**Safety:** Make your first test call while you can check your phone and Twilio account. Do not initially enable unattended urgent calling without monitoring known test endpoints and understanding potential false alarms. Protect your Twilio API credentials and spending settings. Archer never accepts arbitrary phone numbers in incoming requests.
+
+### iPhone presence: first token-gated backend step, NOT mobile tracking
+
+An optional endpoint `POST /api/mobile/presence` has been added, but is disabled unless you set `ARCHER_MOBILE_PRESENCE_ENABLED=true` and a securely random `ARCHER_MOBILE_PRESENCE_TOKEN` of at least 32 characters. A request must use the `Authorization: Bearer ...` header. It accepts a single activity choice (`Available`, `Driving`, `Working`, `Shopping`, `Busy`, `Other`), an optional general place label (max 60 characters), expiry 15/60/120 minutes, and explicit `shareWithAi` permission. **No GPS coordinates, background routes, or movement history are ingested through this endpoint.** Every new update overwrites the previous snapshot; it expires.
+
+The app **still listens only on the PC's loopback address**, so a phone can't call this endpoint remotely. DO NOT port-forward Archer, expose its unauthenticated dashboard, or publish the bearer token in any URL. An authenticated and encrypted mobile companion/gateway must be built and security-reviewed before any real iOS Shortcuts automation or background presence is possible. `GET /api/mobile/capabilities` reports availability without returning credentials.
+
+### Manual verification
+
+1. Stop Archer, pull from `main`, rebuild, and confirm `GET /api/config` reports version `1.0.0`.
+2. Without any new credentials, **Operations → SMS & phone alerts** should show `NOT CONFIGURED`; the test buttons must be disabled. Daily/urgent automatic sending must be disabled. `GET /api/mobile/capabilities` must report `enabled:false`.
+3. Optional live setup: configure Twilio user environment variables, restart Archer, verify the **masked** phone number, click exactly one test SMS, inspect Twilio's own delivery report and phone. Then separately test one UK-accent voice call if desired.
+4. Only after confirming correct delivery and expected charges, explicitly save daily SMS and/or urgent call opt-ins. Review quiet hours and the one-call-per-day limit. Check the recent attempt log.
+5. Optional mobile API testing should be done **locally with a test token**, not by exposing the app publicly. iPhone background delivery is not implemented.
+
+GitHub CI verifies compilation, JS/DOM wiring, localhost API startup, **disabled default delivery**, required SMS confirmation, blocked mobile ingest without a token and refusal to enable delivery without Twilio. CI does **not** send a real text, make a phone call or test mobile routing.

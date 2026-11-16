@@ -22,7 +22,7 @@
       </nav>
       <div class="sidebar-bottom">
         <div class="sidebar-status"><span class="pulse-dot"></span><span id="connectionLabel">Checking local server...</span></div>
-        <div class="version">V0.9.0 · LOCAL DEVELOPMENT</div>
+        <div class="version">V1.0.0 · LOCAL DEVELOPMENT</div>
       </div>
     </aside>
     <main class="content">
@@ -294,11 +294,11 @@
               <div id="briefingAlertList" class="briefing-alert-list">
                 <p class="developer-empty">No alert previews loaded.</p>
               </div>
-              <p class="briefing-footnote">Suggestions only. Archer cannot send SMS, make calls or bypass your quiet hours. Outage checks should be verified before urgent escalation.</p>
+              <p class="briefing-footnote">The preview itself sends nothing. Real delivery requires separately enabled Twilio settings; outage checks should be verified before urgent escalation.</p>
             </div>
             <form id="briefingPreferencesForm" class="briefing-preferences">
               <div><h3>Future delivery preferences</h3>
-                <p>Set your intended daily update and quiet hours now. These settings control previews only.</p></div>
+                <p>Set your intended daily update and quiet hours. Separate delivery consent is configured below.</p></div>
               <div class="briefing-fields">
                 <label>Timezone
                   <select id="briefingTimezone">
@@ -342,14 +342,48 @@
               <span id="operationsIncidentCount" class="count">0</span></div>
             <div id="operationsIncidentList" class="operations-incident-list"><div class="developer-empty">No website incidents recorded.</div></div>
           </section>
-          <section class="panel operations-communications">
-            <div class="panel-header"><div><h2>Future notifications</h2><p>What Archer will eventually send to you</p></div></div>
-            <div class="operations-channel-grid">
-              <div><strong>Daily text briefing</strong><span>Not connected — needs a delivery provider, consent, schedule and trusted business metrics</span></div>
-              <div><strong>Urgent phone calls</strong><span>Not connected — requires verified number, escalation rules, quiet hours and retries</span></div>
+          <section class="panel operations-communications" aria-labelledby="communicationHeading">
+            <div class="panel-header">
+              <div><h2 id="communicationHeading">SMS &amp; phone alerts</h2>
+                <p>Opt-in Twilio delivery to one preconfigured number, with durable daily limits</p></div>
+              <span id="communicationsProviderStatus" class="developer-readonly">DISABLED</span>
+            </div>
+            <div class="communications-content">
+              <p id="communicationsDestination">Recipient: not configured</p>
+              <p class="developer-footnote">Delivery requires a Twilio account, your own verified number, a Twilio sending number, and private environment settings. Normal AI budget limits do not cover SMS, calls or speech-synthesis charges.</p>
+              <div class="communications-test-actions">
+                <button id="communicationsSmsTest" type="button" class="button secondary" disabled>Send one test SMS</button>
+                <button id="communicationsCallTest" type="button" class="button secondary" disabled>Place one test call</button>
+                <span id="communicationsTestStatus" role="status">No requests submitted.</span>
+              </div>
+              <form id="communicationsPreferencesForm" class="communications-prefs">
+                <label class="voice-toggle"><input id="communicationsDailySms" type="checkbox" disabled />
+                  Send a daily briefing at the configured hour (while Archer is running)</label>
+                <label class="voice-toggle"><input id="communicationsUrgentCalls" type="checkbox" disabled />
+                  Call once for a verified website monitoring threshold (maximum one call per UTC day)</label>
+                <div class="communications-save-row">
+                  <span id="communicationsSaveStatus" role="status">Automatic sending is off until you explicitly enable it.</span>
+                  <button id="communicationsSaveButton" type="submit" class="button primary" disabled>Save delivery consent</button>
+                </div>
+              </form>
+              <h3>Recent delivery attempts</h3>
+              <div id="communicationsAttempts" class="communications-attempts">
+                <p class="developer-empty">No SMS or calls attempted.</p>
+              </div>
+              <p class="developer-footnote">Provider status "Submitted" does not mean your phone received a message or call. Unexpected failures count against daily limits to prevent accidental repeated billing. SMS is limited to three attempts/day and calls to one/day. No automatic retries.</p>
             </div>
           </section>
-          <p class="developer-footnote">Website checks are not proof that your business is healthy. Payment failures, revenue, customer support and deployments need separate authorized integrations. This local version cannot send texts or place calls.</p>
+          <section class="panel communications-mobile" aria-labelledby="mobileHeading">
+            <div class="panel-header"><div>
+              <h2 id="mobileHeading">iPhone companion foundation</h2>
+              <p>A future secure way for Archer to learn your current activity, with consent</p>
+            </div><span id="mobileIngestStatus" class="developer-readonly">DISABLED</span></div>
+            <div class="communications-content">
+              <p id="mobileIngestDescription">Mobile activity ingest is disabled.</p>
+              <p class="developer-footnote">The optional token-gated API accepts a single expiring activity snapshot, without GPS coordinates or location history. Archer still listens on your PC's loopback address, so your phone cannot reach it remotely. Do not port-forward Archer or expose the dashboard. A dedicated authenticated HTTPS mobile gateway or companion app is required before real iPhone automation.</p>
+            </div>
+          </section>
+          <p class="developer-footnote">Website reachability is not proof that business payments, sales, conversions or support are healthy. Those need separate approved integrations.</p>
         </section>
                 <section id="attentionView" class="view hidden" aria-labelledby="attentionTitle">
           <div class="hero"><div class="eyebrow">OPERATOR OVERSIGHT <span class="eyebrow-line"></span></div><h1 id="attentionTitle">Attention<span class="accent">.</span></h1><p>Local mission failures and the approval boundaries we're building toward.</p></div>
@@ -363,7 +397,7 @@
           </div>
         </section>
         <section id="activityView" class="view hidden"><div class="hero"><div class="eyebrow">EXECUTION HISTORY <span class="eyebrow-line"></span></div><h1>Activity<span class="accent">.</span></h1><p>What Archer has actually done, with completed work stored on disk.</p></div><div class="panel"><div id="activityList" class="activity-list"></div></div></section>
-        <footer class="footer">ARCHER / V0.9 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
+        <footer class="footer">ARCHER / V1.0 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
       </div>
     </main>
   </div>
@@ -375,5 +409,6 @@
   <script src="/js/operator-context.js" defer></script>
   <script src="/js/spending.js" defer></script>
   <script src="/js/coding.js" defer></script>
+  <script src="/js/communications.js" defer></script>
 </body>
 </html>

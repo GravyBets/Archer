@@ -17,6 +17,10 @@ builder.Services.AddHttpClient("site-health", client =>
     UseProxy = false
 });
 builder.Services.AddHostedService<WebsiteMonitorWorker>();
+builder.Services.AddHttpClient<TwilioGateway>(client =>
+    client.Timeout = TimeSpan.FromSeconds(25));
+builder.Services.AddSingleton<CommunicationCoordinator>();
+builder.Services.AddHostedService<CommunicationWorker>();
 builder.Services.AddHttpClient("github-reader", client => client.Timeout = TimeSpan.FromSeconds(90));
 builder.Services.AddSingleton<GitHubRepositoryReader>(service =>
     new GitHubRepositoryReader(service.GetRequiredService<IHttpClientFactory>().CreateClient("github-reader")));
@@ -38,15 +42,15 @@ await app.Services.GetRequiredService<JsonFileStore>().RecoverInterruptedTasksAs
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "0.9.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "1.0.0" }));
 
 app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
 {
     configured = ai.IsConfigured,
     model = ai.Model,
     routing = ai.Routing,
-    mode = "Local only · Research, analysis, and owner-approved code draft PRs",
-    version = "0.9.0"
+    mode = "Local only · Guarded AI, approved code drafts, opt-in phone integrations",
+    version = "1.0.0"
 }));
 
 app.MapGet("/api/state", async (JsonFileStore store, CancellationToken ct) =>
@@ -129,6 +133,95 @@ app.MapPost("/api/briefing/preferences", async Task<IResult> (
     });
 });
 
+// Explicit consent and stable deduplication required for any SMS/call.
+app.MapGet("/api/communications", async (CommunicationCoordinator coordinator, CancellationToken ct) =>
+    Results.Ok(await coordinator.GetStatusAsync(ct)));
+
+app.MapPost("/api/communications/preferences", async Task<IResult> (
+    UpdateCommunicationPreferencesRequest request, CommunicationCoordinator coordinator, CancellationToken ct) =>
+{
+    try { return Results.Ok(await coordinator.SavePreferencesAsync(request, ct)); }
+    catch (ArgumentException error) { return Results.BadRequest(new { error = error.Message }); }
+    catch (InvalidOperationException error) { return Results.BadRequest(new { error = error.Message }); }
+});
+
+app.MapPost("/api/communications/test-sms", async Task<IResult> (
+    ConfirmCommunicationRequest request, CommunicationCoordinator coordinator, CancellationToken ct) =>
+{
+    if (!request.Confirm)
+        return Results.BadRequest(new { error = "Confirm that you want one SMS sent to your configured number." });
+    try
+    {
+        var sid = await coordinator.ManualSmsTestAsync(ct);
+        return Results.Ok(new
+        {
+            status = "submitted",
+            providerId = sid,
+            message = "Twilio accepted the SMS request. Delivery to your phone is not yet confirmed."
+        });
+    }
+    catch (Exception error)
+    {
+        return Results.Problem(title: "SMS test could not be submitted",
+            detail: error.Message, statusCode: 502);
+    }
+});
+
+app.MapPost("/api/communications/test-call", async Task<IResult> (
+    ConfirmCommunicationRequest request, CommunicationCoordinator coordinator, CancellationToken ct) =>
+{
+    if (!request.Confirm)
+        return Results.BadRequest(new { error = "Confirm that you authorize one billable test call." });
+    try
+    {
+        var sid = await coordinator.ManualCallTestAsync(ct);
+        return Results.Ok(new
+        {
+            status = "submitted",
+            providerId = sid,
+            message = "Twilio accepted the test call request. It is not proof your phone rang or answered."
+        });
+    }
+    catch (Exception error)
+    {
+        return Results.Problem(title: "Voice call test could not be submitted",
+            detail: error.Message, statusCode: 502);
+    }
+});
+
+// Optional mobile-presence ingress is token-gated and disabled by default.
+// Never open the entire Archer local dashboard to the Internet or LAN.
+app.MapGet("/api/mobile/capabilities", () => Results.Ok(new
+{
+    enabled = MobilePresenceIngress.Enabled,
+    locationTracking = false,
+    requiresHttpsGateway = true,
+    note = "A mobile phone cannot reach Archer on 127.0.0.1. Use a future authenticated HTTPS companion; do not expose port 5087."
+}));
+
+app.MapPost("/api/mobile/presence", async Task<IResult> (
+    MobilePresenceRequest request, HttpRequest httpRequest, JsonFileStore store, CancellationToken ct) =>
+{
+    var header = httpRequest.Headers.Authorization.ToString();
+    if (!MobilePresenceIngress.Authorized(header))
+        return Results.StatusCode(403);
+
+    OwnerPresence snapshot;
+    try { snapshot = MobilePresenceIngress.Convert(request); }
+    catch (ArgumentException error) { return Results.BadRequest(new { error = error.Message }); }
+    await store.UpdateAsync(state =>
+    {
+        state.Presence = snapshot;
+        return true;
+    }, ct);
+    return Results.Ok(new
+    {
+        status = "accepted",
+        expiresAtUtc = snapshot.ExpiresAtUtc,
+        detail = "Single activity snapshot saved without coordinates or history."
+    });
+});
+
 // Owner presence is opt-in, expiring and LOCAL ONLY. Never infer activity from coordinates.
 app.MapGet("/api/presence", async (JsonFileStore store, CancellationToken ct) =>
 {
@@ -182,15 +275,15 @@ app.MapDelete("/api/presence", async (JsonFileStore store, CancellationToken ct)
 
 // Website availability monitoring is opt-in and restricted to public HTTPS
 // hosts explicitly listed in ARCHER_MONITOR_HOSTS. No AI, SMS or phone calls.
-app.MapGet("/api/operations", async (JsonFileStore store, CancellationToken ct) =>
+app.MapGet("/api/operations", async (JsonFileStore store, TwilioGateway gateway, CancellationToken ct) =>
 {
     return Results.Ok(await store.ReadAsync(state => new
     {
         monitors = state.WebsiteMonitors,
         incidents = state.WebsiteIncidents.Take(40).ToArray(),
-        channels = new { sms = "Not connected", phone = "Not connected" },
+        channels = new { sms = gateway.IsConfigured ? "Configured; opt-in required" : "Not connected", phone = gateway.IsConfigured ? "Configured; opt-in required" : "Not connected" },
         monitorIntervalMinutes = 5,
-        message = "This checks public HTTPS availability, not purchases, revenue, customer support, or payment processing. It only runs while Archer is open."
+        message = "This checks public HTTPS availability, not purchases, revenue, customer support, or payment processing. Phone notifications require separate explicit opt-in and only run while Archer is open."
     }, ct));
 });
 
@@ -681,7 +774,7 @@ app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore
 
 app.MapFallbackToFile("index.html");
 
-Console.WriteLine("ARCHER Mission Control V0.9.0 — http://127.0.0.1:5087");
+Console.WriteLine("ARCHER Mission Control V1.0.0 — http://127.0.0.1:5087");
 app.Run("http://127.0.0.1:5087");
 
 static IResult MissingApiKey() => Results.BadRequest(new

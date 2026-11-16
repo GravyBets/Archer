@@ -11,6 +11,8 @@ public sealed class ArcherState
     public List<WebsiteIncident> WebsiteIncidents { get; set; } = [];
     // Reviewable coding drafts are local until explicitly approved for publication.
     public List<CodeProposal> CodeProposals { get; set; } = [];
+    public CommunicationPreferences CommunicationPreferences { get; set; } = new();
+    public List<CommunicationAttempt> CommunicationAttempts { get; set; } = [];
     // Notification routing preferences are preview-only until real delivery is explicitly configured.
     public BriefingPreferences BriefingPreferences { get; set; } = new();
 }
@@ -175,3 +177,27 @@ public sealed class CodeProposalFile
 
 public sealed record DraftCodeRequest(string? Repository, List<string>? Paths, string? Instruction);
 public sealed record PublishCodeRequest(bool Confirm);
+
+public sealed class CommunicationPreferences
+{
+    // Disabled by default. Opt in only after Twilio credentials and recipient are verified.
+    public bool DailySmsEnabled { get; set; }
+    public bool UrgentCallsEnabled { get; set; }
+}
+
+public sealed class CommunicationAttempt
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Kind { get; set; } = "";
+    public string Channel { get; set; } = "";
+    public string DeduplicationKey { get; set; } = "";
+    public string Status { get; set; } = "Reserved";
+    public string? ProviderReference { get; set; }
+    public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public sealed record UpdateCommunicationPreferencesRequest(
+    bool DailySmsEnabled, bool UrgentCallsEnabled, bool ConfirmCharges);
+public sealed record ConfirmCommunicationRequest(bool Confirm);
+public sealed record MobilePresenceRequest(
+    string? Activity, string? PlaceLabel, int DurationMinutes, bool ShareWithAi);

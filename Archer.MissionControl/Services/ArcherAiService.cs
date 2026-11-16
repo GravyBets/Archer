@@ -339,7 +339,7 @@ public sealed class ArcherAiService(
                 "Do not imply that missions or tasks were created unless an actual tool created them."),
             input = $"MISSION CONTEXT:\n{missions}\nOWNER PRESENCE (opt-in only):\n{personalPresence}\n" +
                 $"LOCAL WEBSITE AVAILABILITY (not revenue or customer telemetry):\n{websiteHealth}\n" +
-                $"Unacknowledged availability incidents: {unacknowledged}. No SMS or phone integrations are connected.\n" +
+                $"Unacknowledged availability incidents: {unacknowledged}. Twilio SMS/call delivery, if configured, is controlled separately from chat. Never claim a message was delivered without a real provider result.\n" +
                 $"RECENT CONVERSATION:\n{conversation}\nuser: {message}\nassistant:"
         };
         return CompleteAsync(payload, choice.Model, "chat", ct);
