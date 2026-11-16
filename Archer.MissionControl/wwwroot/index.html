@@ -19,7 +19,7 @@
       </nav>
       <div class="sidebar-bottom">
         <div class="sidebar-status"><span class="pulse-dot"></span><span id="connectionLabel">Checking local server...</span></div>
-        <div class="version">V0.1.2 · LOCAL DEVELOPMENT</div>
+        <div class="version">V0.3.0 · LOCAL DEVELOPMENT</div>
       </div>
     </aside>
     <main class="content">
@@ -37,6 +37,33 @@
             <div class="stat"><span class="stat-label">ACTIVE / READY</span><strong id="statActive">0</strong><small>Ready for work</small></div>
             <div class="stat"><span class="stat-label">AI CONNECTION</span><strong class="connection-state" id="statApi">—</strong><small id="modelLabel">Check configuration</small></div>
           </div>
+          <section class="panel usage-panel" aria-labelledby="usageHeading">
+            <div class="usage-panel-heading">
+              <div><h2 id="usageHeading">AI Usage &amp; Cost</h2><p>Estimated API spending, based on token counts returned by OpenAI</p></div>
+              <span class="usage-mode" id="usageModelMode">Checking model routing...</span>
+            </div>
+            <div class="usage-stats">
+              <div class="usage-stat"><span>THIS MONTH (UTC)</span><strong id="usageMonthCost">$0.0000</strong><small>Estimated API cost</small></div>
+              <div class="usage-stat"><span>ALL TIME TRACKED</span><strong id="usageLifetimeCost">$0.0000</strong><small>Since tracking was enabled</small></div>
+              <div class="usage-stat"><span>THIS MONTH TOKENS</span><strong id="usageMonthTokens">0</strong><small id="usageTokenDetail">Input + output</small></div>
+              <div class="usage-stat"><span>API REQUESTS</span><strong id="usageRequests">0</strong><small id="usageRequestDetail">0 web searches this month</small></div>
+            </div>
+            <div class="usage-details">
+              <div class="usage-detail-section">
+                <h3>Models used <span>Current UTC month</span></h3>
+                <div id="usageModelBreakdown" class="usage-model-list"><p class="usage-empty">No usage recorded yet.</p></div>
+              </div>
+              <div class="usage-detail-section">
+                <h3>Recent requests <span>Latest 8</span></h3>
+                <div class="usage-table-scroll">
+                  <table class="usage-table"><thead><tr><th>Task</th><th>Model</th><th>Tokens</th><th>Est. cost</th></tr></thead>
+                    <tbody id="usageRecentRows"><tr><td colspan="4">No requests recorded yet.</td></tr></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <p class="usage-disclaimer" id="usageDisclaimer">Estimates only, not a billing statement. Usage begins when tracking is installed; no historical backfill.</p>
+          </section>
           <div class="main-grid">
             <section class="panel missions-panel"><div class="panel-header"><div><h2>Missions</h2><p>Your current objectives</p></div><span id="missionCount" class="count">0</span></div><div id="missionList" class="mission-list"></div></section>
             <section class="panel details-panel"><div class="panel-header"><div><h2 id="detailHeading">Mission overview</h2><p id="detailSubheading">Select a mission to view its progress</p></div><span id="missionBadge" class="status-badge hidden"></span></div><div id="missionDetail" class="detail-body"><div class="empty-detail"><div class="big-icon">◎</div><h3>Mission awaiting command</h3><p>Create your first mission to begin.</p></div></div></section>
@@ -47,7 +74,7 @@
           <div class="panel chat-panel"><div id="chatMessages" class="chat-messages"></div><form id="chatForm" class="chat-composer"><textarea id="chatText" rows="2" maxlength="3000" placeholder="What should we work on next?"></textarea><button class="button primary" type="submit">Send ↗</button></form></div>
         </section>
         <section id="activityView" class="view hidden"><div class="hero"><div class="eyebrow">EXECUTION HISTORY <span class="eyebrow-line"></span></div><h1>Activity<span class="accent">.</span></h1><p>What Archer has actually done, with completed work stored on disk.</p></div><div class="panel"><div id="activityList" class="activity-list"></div></div></section>
-        <footer class="footer">ARCHER / V0.1 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
+        <footer class="footer">ARCHER / V0.3 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
       </div>
     </main>
   </div>
