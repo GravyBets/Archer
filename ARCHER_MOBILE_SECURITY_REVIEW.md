@@ -1,4 +1,4 @@
-# Archer mobile gateway — security and threat review (v1.5.0)
+# Archer mobile gateway — security and threat review (v1.6.0)
 
 **Review date:** 2026-11-16. This is an engineering threat model, NOT an independent penetration test or approval for internet exposure.
 
@@ -101,6 +101,16 @@ No preview is delivered to an Apple device; no APNs device token, push server, m
 - Each explicitly conversation-authorised local test device can read the single-owner journal. There is no multi-user account isolation, encrypted backups, message sync to the PC, production identity, or public TLS.
 - Tests verify read/write scopes, cross-device local visibility, duplicate replay and conflict, manual deletion, audit redaction and no assistant responses or provider dispatch.
 
+## v1.6.0 encrypted local state and key-loss protection
+
+- The whole gateway JSON state (events, audit metadata, device-token hashes, dry-run routing and conversation messages) is encrypted at rest with AES-256-GCM using a **random 256-bit key provided in the owner's private process environment**. Encrypted envelope includes a fresh 96-bit nonce, authentication tag, format version and ciphertext. Associated authenticated data binds it to Archer's state format. This covers all new state writes; no plaintext field is intentionally persisted in the canonical gateway state file.
+- No sample/default key. When ARCHER_GATEWAY_DATA_KEY_HEX is missing, state reads/writes fail closed. A separate /health/ready endpoint returns 503; /health/live stays available for simple liveness.
+- Existing recognizable v1.5 plaintext state automatically migrates to an encrypted file on first read when a valid key is present. **Before migration, old plaintext remains on disk. After migration, old file-system snapshots, cloud drive backups and deleted disk blocks can still contain plaintext**; handle these separately.
+- A wrong key, modified ciphertext/tag, unrecognized state format or missing key never resets an encrypted state file. The API may return HTTP 500 for failed data access; the encrypted file remains unchanged. Before rotating or replacing a key, test backup/restore with the ORIGINAL key.
+- The key must be separately backed up somewhere secure. **Losing it means losing access to existing encrypted gateway state**; there is no recovery key or rotation helper implemented yet. Never include the key in Git, CI logs, chat, code, screenshots, phone messages or backup folders containing the ciphertext.
+- AES-GCM at-rest encryption does not protect against malicious programs running under the same OS user or protect network traffic; the gateway is still loopback-only HTTP, not a production mobile service. The key remains in process memory; OS secrets management, access-controlled service account, key rotation, encrypted backups and secure authenticated HTTPS are outstanding.
+- CI exercises synthetic legacy migration, successful recovery, wrong/missing keys, ciphertext tampering and data preservation in addition to the normal gateway auth, rate-limit and non-delivery tests.
+
 ## Local-only opt-in setup
 
 Prerequisites: .NET 10 SDK, separate optional process. Values must be cryptographically random and never committed to Git.
@@ -121,7 +131,7 @@ Start Archer.MobileGateway **locally**. GET http://127.0.0.1:5091/health/live sh
 - [ ] Terminate HTTPS with a trusted certificate and strict proxy/IP handling. Never trust arbitrary Forwarded headers or bind 5087.
 - [ ] Add authenticated subscription for APNs device tokens, registration/revocation and push payload minimisation.
 - [ ] Add per-device rate limits, privacy/retention controls, audit log, secret manager and protection against stolen credentials.
-- [ ] Add external penetration testing (including replay, origin, brute force, revoked tokens), backups, restore and disaster recovery tests.
+- [ ] Add external penetration testing (including replay, origin, brute force, revoked tokens), secure key rotation, encrypted off-host backups, restore and disaster recovery tests.
 - [ ] Build/review iPhone app and device keychain, confirm Apple developer account and App Store/TestFlight requirements.
 - [ ] Design source and gateway acknowledgement reconciliation, queued delivery and provider receipts.
 - [ ] Independently validate projected OpenAI/Twilio/hosting costs and cost enforcement.
@@ -134,4 +144,4 @@ Production deployment stays BLOCKED until all these gates pass.
 - Kestrel explicit endpoint binding: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/endpoints?view=aspnetcore-10.0
 - Kestrel proxy/forwarding security: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/security-considerations
 
-This document inventories the current source at v1.5.0; revisit it when endpoints or authorization logic change.
+This document inventories the current source at v1.6.0; revisit it when endpoints or authorization logic change.
