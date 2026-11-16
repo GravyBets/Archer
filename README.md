@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 1.4.0 (local prototype)  
+**Version:** 1.5.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -733,3 +733,19 @@ Secrets must stay in private local environment settings, not GitHub or this chat
 **Verification:** CI compiles both .NET 10 projects and exercises wrong Host and missing admin keys, arbitrary scope rejection, read-only authorization, successful rotation, old-token denial, revocation, and audit privacy. This is local test coverage, **not** a secure remote iPhone login, mobile pairing flow or penetration test.
 
 For production blockers and ongoing tasks, see [ARCHER_MOBILE_SECURITY_REVIEW.md](ARCHER_MOBILE_SECURITY_REVIEW.md) and [ARCHER_MOBILE_COMMUNICATION_ROADMAP.md](ARCHER_MOBILE_COMMUNICATION_ROADMAP.md).
+
+## v1.5.0 — Shared local message journal for future iPhone conversations
+
+Archer.MobileGateway now supports the first **device-scoped, single-owner message journal**. It is a local storage prototype only—not the live British-voiced AI, not the existing desktop Archer chat, and not remote access from an iPhone.
+
+- **Opt-in scopes:** enroll a local test device with `["conversation:read"]` to view journal entries, or `["conversation:read","conversation:write"]` to add entries. Neither scope grants access to the mission dashboard, GitHub, AI billing, Twilio or the inbox. Existing inbox-only tokens cannot access conversation content.
+- **GET `http://127.0.0.1:5091/v1/conversation/messages`** with the device bearer shows recent local owner-authored messages, time stamps, and which authorised device saved them. Responses explicitly say `savedOnly: true` and `assistantConnected: false`.
+- **POST `/v1/conversation/messages`** with a conversation-write bearer and JSON like `{"clientMessageId":"<new UUID>","content":"Hi Archer"}` saves one inert text record. Same device + same UUID + same text is safely idempotent; conflicting reuse gives HTTP 409. Max 1,600 characters per message.
+- **DELETE `/internal/conversation`** with the separate local `X-Archer-Admin-Key` wipes only this test journal, and logs metadata-only deletion. It does not alter desktop history.
+- Messages are bounded to 200, with read visibility restricted to the most recent seven days. Older entries are pruned on subsequent writes. Records and audit live in a separate, Git-ignored local gateway JSON file.
+- **Do not use for real sensitive conversations yet.** This prototype stores message content **unencrypted at rest** on your home PC. A future secure backend will require encrypted storage/backup, identity login, authenticated desktop sync, session ordering, transport TLS, iOS Keychain, deletion/export and retention controls.
+- No model tokens or phone minutes are spent by these APIs, and **nothing sends a reply automatically**. The native app and unified two-way conversation service remain to be built.
+
+GitHub CI tests device scope isolation, cross-device visibility, duplicate and conflicting message IDs, administrative clear, credential rotation/revocation, and ensures the journal never sends AI or phone requests. No action on your work computer is needed. This doesn't enable cloud hosting or phone connectivity.
+
+See the [current security review](ARCHER_MOBILE_SECURITY_REVIEW.md) and [master development roadmap](ARCHER_MOBILE_COMMUNICATION_ROADMAP.md) for remaining blockers.
