@@ -85,7 +85,8 @@ def run(state_path):
     listed = request("/v1/inbox", headers=bearer)
     assert listed["count"] == 1 and not listed["deliveryEnabled"]
     item = listed["items"][0]
-    assert item["priority"] == "UrgentReview" and item["sourceKey"] if False else True
+    assert item["priority"] == "UrgentReview"
+    assert item["title"] == "Example site needs review"
     assert "sourceKey" not in item  # Only minimal mobile-facing fields.
     event_id = item["id"]
     request("/v1/inbox/" + event_id + "/read", "POST", {}, expected=401)
