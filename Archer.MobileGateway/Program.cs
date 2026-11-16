@@ -35,6 +35,25 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
                 AutoReplenishment = true
             }));
+
+    // Per-device limiter is additional to the global 90/minute loopback-IP
+    // limiter. Partition by the SHA-256 digest of the Authorization header,
+    // never by the raw bearer itself or a value written to logs.
+    options.AddPolicy("mobile-device", context =>
+    {
+        var auth = context.Request.Headers.Authorization.ToString();
+        var digest = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(auth)));
+        return RateLimitPartition.GetFixedWindowLimiter(
+            "mobile:" + digest,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            });
+    });
 });
 
 var app = builder.Build();
@@ -48,7 +67,10 @@ app.Use(async (context, next) =>
     // requests are not. No cookies, CORS or session sharing are enabled.
     if (!IPAddress.IsLoopback(context.Connection.RemoteIpAddress ??
                               IPAddress.None) ||
-        context.Request.Headers.ContainsKey("Origin"))
+        context.Request.Headers.ContainsKey("Origin") ||
+        context.Request.Host.Port != 5091 ||
+        (context.Request.Host.Host != "127.0.0.1" &&
+         context.Request.Host.Host != "localhost"))
     {
         context.Response.StatusCode = StatusCodes.Status403Forbidden;
         return;
@@ -95,7 +117,7 @@ app.MapGet("/health/live", () => Results.Ok(new
 {
     status = "ok",
     component = "Archer.MobileGateway",
-    version = "1.3.0",
+    version = "1.4.0",
     publicAccessEnabled = false,
     deliveryEnabled = false
 }));
@@ -112,7 +134,7 @@ app.MapPost("/internal/devices/enroll", async Task<IResult> (
     try
     {
         var enrolled = await tokens.EnrollAsync(request.Label?.Trim() ?? "",
-            request.LifetimeDays, ct);
+            request.LifetimeDays, request.Scopes, ct);
         return Results.Ok(new
         {
             deviceId = enrolled.Id,
@@ -147,7 +169,8 @@ app.MapGet("/internal/devices", async Task<IResult> (
             scopes = d.Scopes,
             enrolledAtUtc = d.EnrolledAtUtc,
             expiresAtUtc = d.ExpiresAtUtc,
-            revokedAtUtc = d.RevokedAtUtc
+            revokedAtUtc = d.RevokedAtUtc,
+            rotatedAtUtc = d.RotatedAtUtc
             // Never send the hashed or original bearer.
         }).ToArray(), ct));
 });
@@ -162,12 +185,60 @@ app.MapPost("/internal/devices/{id:guid}/revoke", async Task<IResult> (
     {
         var device = state.Devices.FirstOrDefault(d => d.Id == id);
         if (device is null) return false;
-        device.RevokedAtUtc ??= DateTimeOffset.UtcNow;
+        if (device.RevokedAtUtc is null)
+        {
+            device.RevokedAtUtc = DateTimeOffset.UtcNow;
+            GatewayAudit.Add(state, "device.revoked", device.Id);
+        }
         return true;
     }, ct);
     return found
         ? Results.Ok(new { revoked = true, note = "Existing device tokens are immediately invalid." })
         : Results.NotFound();
+});
+
+// Only a LOCAL admin can rotate a device. This invalidates the old bearer
+// atomically; the new bearer is returned ONCE, never stored in plaintext.
+app.MapPost("/internal/devices/{id:guid}/rotate", async Task<IResult> (
+    Guid id, RotateDeviceRequest request, HttpContext ctx,
+    DeviceTokenService tokens, CancellationToken ct) =>
+{
+    if (!InternalKeyValid(ctx.Request, "X-Archer-Admin-Key",
+        "ARCHER_GATEWAY_ADMIN_KEY"))
+        return Results.StatusCode(403);
+    try
+    {
+        var result = await tokens.RotateAsync(id, request.LifetimeDays, ct);
+        return result is null ? Results.NotFound(new { error = "Device not active or expired." }) :
+            Results.Ok(new
+            {
+                deviceId = result.Id,
+                label = result.Label,
+                scopes = result.Scopes,
+                expiresAtUtc = result.ExpiresAtUtc,
+                deviceToken = result.Token,
+                caution = "Previous token immediately invalidated. New token shown once."
+            });
+    }
+    catch (ArgumentException error)
+    {
+        return Results.BadRequest(new { error = error.Message });
+    }
+});
+
+// Audit events intentionally exclude event bodies and all tokens. Admin only.
+app.MapGet("/internal/audit", async Task<IResult> (
+    HttpContext ctx, GatewayStore store, CancellationToken ct) =>
+{
+    if (!InternalKeyValid(ctx.Request, "X-Archer-Admin-Key",
+        "ARCHER_GATEWAY_ADMIN_KEY"))
+        return Results.StatusCode(403);
+    return Results.Ok(await store.ReadAsync(state => new
+    {
+        entries = state.Audit.Take(100).ToArray(),
+        retained = state.Audit.Count,
+        noCredentialsLogged = true
+    }, ct));
 });
 
 // A DIFFERENT local-only ingest key is used for event syncing. The client
@@ -208,13 +279,17 @@ app.MapPost("/internal/events", async Task<IResult> (
                     ResolvedAtUtc = item.ResolvedAtUtc
                 });
                 additions++;
+                GatewayAudit.Add(state, "event.ingested", eventId: state.Events[^1].Id);
             }
             else
             {
                 // Never clear existing read/ack or a resolved status when an
                 // older snapshot is replayed after a network interruption.
                 if (existing.ResolvedAtUtc is null && item.ResolvedAtUtc is not null)
+                {
                     existing.ResolvedAtUtc = item.ResolvedAtUtc;
+                    GatewayAudit.Add(state, "event.resolved", eventId: existing.Id);
+                }
             }
         }
         state.Events = state.Events.OrderByDescending(x => x.OccurredAtUtc)
@@ -258,7 +333,7 @@ app.MapGet("/v1/delivery-previews", async Task<IResult> (
         ctx.Request.Headers.Authorization.ToString(), "inbox:read", ct);
     if (device is null) return Results.Unauthorized();
     return Results.Ok(await simulator.GetForDeviceAsync(device.Id, ct));
-});
+}).RequireRateLimiting("mobile-device");
 
 app.MapGet("/v1/inbox", async Task<IResult> (
     HttpContext ctx, DeviceTokenService tokens, GatewayStore store,
@@ -282,45 +357,55 @@ app.MapGet("/v1/inbox", async Task<IResult> (
                 resolvedAtUtc = x.ResolvedAtUtc
             }).ToArray(), ct);
     return Results.Ok(new { items, count = items.Length, deliveryEnabled = false });
-});
+}).RequireRateLimiting("mobile-device");
 
 app.MapPost("/v1/inbox/{id:guid}/read", async Task<IResult> (
     Guid id, HttpContext ctx, DeviceTokenService tokens,
     GatewayStore store, CancellationToken ct) =>
 {
-    if (await tokens.AuthenticateAsync(
-        ctx.Request.Headers.Authorization.ToString(), "inbox:ack", ct) is null)
+    var device = await tokens.AuthenticateAsync(
+        ctx.Request.Headers.Authorization.ToString(), "inbox:ack", ct);
+    if (device is null)
         return Results.Unauthorized();
     var found = await store.UpdateAsync(state =>
     {
         var item = state.Events.FirstOrDefault(x => x.Id == id);
         if (item is null) return false;
-        item.ReadAtUtc ??= DateTimeOffset.UtcNow;
+        if (item.ReadAtUtc is null)
+        {
+            item.ReadAtUtc = DateTimeOffset.UtcNow;
+            GatewayAudit.Add(state, "inbox.read", device.Id, item.Id);
+        }
         return true;
     }, ct);
     return found ? Results.Ok(new { read = true }) : Results.NotFound();
-});
+}).RequireRateLimiting("mobile-device");
 
 app.MapPost("/v1/inbox/{id:guid}/acknowledge", async Task<IResult> (
     Guid id, HttpContext ctx, DeviceTokenService tokens,
     GatewayStore store, CancellationToken ct) =>
 {
-    if (await tokens.AuthenticateAsync(
-        ctx.Request.Headers.Authorization.ToString(), "inbox:ack", ct) is null)
+    var device = await tokens.AuthenticateAsync(
+        ctx.Request.Headers.Authorization.ToString(), "inbox:ack", ct);
+    if (device is null)
         return Results.Unauthorized();
     var found = await store.UpdateAsync(state =>
     {
         var item = state.Events.FirstOrDefault(x => x.Id == id);
         if (item is null) return false;
         item.ReadAtUtc ??= DateTimeOffset.UtcNow;
-        item.AcknowledgedAtUtc ??= DateTimeOffset.UtcNow;
+        if (item.AcknowledgedAtUtc is null)
+        {
+            item.AcknowledgedAtUtc = DateTimeOffset.UtcNow;
+            GatewayAudit.Add(state, "inbox.acknowledged", device.Id, item.Id);
+        }
         return true;
     }, ct);
     return found
         ? Results.Ok(new { acknowledged = true,
             note = "Only the gateway inbox was acknowledged; source missions and incident status were not changed." })
         : Results.NotFound();
-});
+}).RequireRateLimiting("mobile-device");
 
-Console.WriteLine("Archer Mobile Gateway v1.3.0: LOCAL LOOPBACK ONLY on 127.0.0.1:5091");
+Console.WriteLine("Archer Mobile Gateway v1.4.0: LOCAL LOOPBACK ONLY on 127.0.0.1:5091");
 app.Run();

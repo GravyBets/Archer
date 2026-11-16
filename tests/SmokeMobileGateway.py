@@ -43,12 +43,22 @@ def run(state_path):
     assert health["publicAccessEnabled"] is False
     assert health["deliveryEnabled"] is False
     request("/health/live", headers={"Origin": "https://malicious.invalid"}, expected=403)
+    request("/health/live", headers={"Host": "malicious.invalid:5091"}, expected=403)
+    request("/internal/audit", expected=403)
+    request("/internal/devices/" + str(uuid4()) + "/rotate", "POST",
+            {"lifetimeDays": 1}, expected=403)
     request("/v1/inbox", expected=401)
     request("/v1/inbox", headers={"Authorization": "Bearer totally-fake"}, expected=401)
     request("/internal/devices", expected=403)
     request("/internal/devices/enroll", method="POST",
             body={"label": "Synthetic iPhone", "lifetimeDays": 1}, expected=403)
     request("/internal/events", method="POST", body={"events": []}, expected=403)
+    request("/internal/devices/enroll", "POST",
+            {"label": "Invalid scope", "lifetimeDays": 1, "scopes": ["admin:write"]},
+            admin, expected=400)
+    request("/internal/devices/enroll", "POST",
+            {"label": "Invalid scope", "lifetimeDays": 1, "scopes": ["inbox:ack"]},
+            admin, expected=400)
 
     enrolled = request("/internal/devices/enroll", method="POST",
                        body={"label": "Synthetic iPhone", "lifetimeDays": 1},
@@ -131,16 +141,65 @@ def run(state_path):
     malformed["priority"] = "MoneyMoved"
     request("/internal/events", "POST", {"events": [malformed]}, ingest, expected=400)
 
+    # A least-privileged device may VIEW but cannot acknowledge.
+    reader = request("/internal/devices/enroll", "POST",
+        {"label": "Read only", "lifetimeDays": 1, "scopes": ["inbox:read"]}, admin)
+    readonly_bearer = {"Authorization": "Bearer " + reader["deviceToken"]}
+    assert reader["scopes"] == ["inbox:read"]
+    assert request("/v1/inbox", headers=readonly_bearer)["count"] == 1
+    request("/v1/inbox/" + event_id + "/read", "POST", {}, readonly_bearer,
+            expected=401)
+    request("/v1/inbox/" + event_id + "/acknowledge", "POST", {},
+            readonly_bearer, expected=401)
+
+    # Rotate can only be done by admin, old bearer dies immediately.
+    request("/internal/devices/" + device_id + "/rotate", "POST",
+            {"lifetimeDays": 1}, expected=403)
+    request("/internal/devices/" + device_id + "/rotate", "POST",
+            {"lifetimeDays": 99}, admin, expected=400)
+    replacement = request("/internal/devices/" + device_id + "/rotate",
+                          "POST", {"lifetimeDays": 1}, admin)
+    assert replacement["deviceId"] == device_id
+    new_token = replacement["deviceToken"]
+    assert new_token != token
+    rotated_bearer = {"Authorization": "Bearer " + new_token}
+    request("/v1/inbox", headers=bearer, expected=401)
+    assert request("/v1/inbox", headers=rotated_bearer)["count"] == 1
+    inventory = request("/internal/devices", headers=admin)
+    current_device = next(x for x in inventory if x["id"] == device_id)
+    assert current_device["rotatedAtUtc"]
+    assert "deviceToken" not in json.dumps(inventory)
+
+    audit = request("/internal/audit", headers=admin)
+    actions = {x["action"] for x in audit["entries"]}
+    required = {"device.enrolled", "device.rotated",
+                "event.ingested", "event.resolved",
+                "inbox.read", "inbox.acknowledged"}
+    assert required.issubset(actions), actions
+    assert token not in json.dumps(audit)
+    assert new_token not in json.dumps(audit)
+    assert "Example site needs review" not in json.dumps(audit)
+
     request("/internal/devices/" + device_id + "/revoke", "POST", {}, admin)
+    request("/v1/inbox", headers=rotated_bearer, expected=401)
+    request("/internal/devices/" + device_id + "/rotate", "POST",
+            {"lifetimeDays": 1}, admin, expected=404)
+    audit = request("/internal/audit", headers=admin)
+    assert "device.revoked" in {x["action"] for x in audit["entries"]}
+    assert len(audit["entries"]) < 300
     request("/v1/inbox", headers=bearer, expected=401)
     stored_text = state_path.read_text(encoding="utf-8")
     assert token not in stored_text
+    assert new_token not in stored_text
+    assert reader["deviceToken"] not in stored_text
     assert "tokenHashHex" in stored_text
+    assert "device.rotated" in stored_text
+    assert "device.revoked" in stored_text
     assert "Example site needs review" in stored_text
     assert "deliveryPreviews" in stored_text
     assert "sandbox-policy-1" in stored_text
     assert "Twilio" not in stored_text and "OPENAI_API_KEY" not in stored_text
-    print("PASS: isolated gateway auth, dedup and revocation; sandbox routing decisions made zero real pushes, calls or model requests")
+    print("PASS: gateway scope isolation, rotation, instant revoke, redacted audit and provider-free notification routing")
 
 
 if __name__ == "__main__":

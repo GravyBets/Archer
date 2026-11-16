@@ -1,7 +1,7 @@
 # Archer — Mobile, Messaging, Voice & Safe Business Operations Roadmap
 
 Working plan: 2026-11-16. Target: one Archer across Windows, iPhone, text, phone, and (if approved) CarPlay.
-Current baseline: Archer v1.3.0 is LOCALHOST-ONLY. It supports guarded AI, source review/code drafts, site checks, opt-in outbound SMS/one-way calls and manually selected coarse presence. Native iOS, real push, inbound voice/text conversation and cloud hosting DO NOT exist yet.
+Current baseline: Archer v1.4.0 is LOCALHOST-ONLY. It supports guarded AI, source review/code drafts, site checks, opt-in outbound SMS/one-way calls and manually selected coarse presence. Native iOS, real push, inbound voice/text conversation and cloud hosting DO NOT exist yet.
 
 ## Product decisions
 
@@ -24,8 +24,10 @@ Current baseline: Archer v1.3.0 is LOCALHOST-ONLY. It supports guarded AI, sourc
 - [x] **Local gateway prototype:** separate project and process bound to 127.0.0.1:5091; limited authenticated inbox, independent storage and no admin/AI/GitHub/Twilio routes (v1.2).
 - [ ] Harden and deploy a **separate authenticated public/mobile gateway** behind TLS without exposing today's unauthenticated dashboard or port 5087.
 - [x] Initial owner-enrolled random device tokens with hash-only storage, read/ack scopes, 1–7 day expiry and immediate admin revocation (v1.2 local).
-- [ ] Secure remote pairing, owner identity/login, refresh/rotation, per-device audit logs and stolen-device recovery.
-- [ ] HTTPS only, secure secret management, outbound limits, input validation, scoped permissions and rate limiting.
+- [x] Local admin-only device token rotation invalidating old tokens, read-only versus read/ack scope selection, per-device rate limiting, redacted device event audit and revoke tests (v1.4).
+- [ ] Secure **remote** pairing, owner identity/login, production refresh/rotation protocol, device audit export, stolen-device recovery and physical-device keychain integration.
+- [x] Local gateway enforces loopback, restrictive Host/Origin, scoped read/ack tokens and layered global/per-device rate limits (v1.4).
+- [ ] Production HTTPS, trusted ingress, secure secret management, outbound caps, input validation review and per-identity distributed rate limits.
 - [ ] Provision encrypted backups and complete a restore drill; add operational health and cost alerts.
 - [x] Add isolated gateway CI rejecting unauthenticated access, enforcing device scopes, revocation and bounded inbox payloads; gateway has no mission/call/code/GPS endpoint.
 - [ ] Independent penetration test, HTTPS/reverse proxy, mobile client threat review and production audit.
@@ -127,7 +129,7 @@ DONE WHEN: GeoShift converts real paying customers and Archer reports genuine bu
 
 ## Execution order
 
-1. **Completed:** v1.1 local source-backed inbox; v1.2 loopback-only authenticated gateway and security review; v1.3 provider-free notification routing sandbox with deduplication, no production credentials or external access.
+1. **Completed:** v1.1 local inbox; v1.2 separate loopback gateway; v1.3 provider-free notification sandbox; v1.4 local device rotation, least privilege, redacted audits and layered rate limits. No cloud exposure.
 2. **Next:** independent security architecture review and a separately authenticated **TLS-ready public gateway design**, provisioning, retention and APNs-device enrollment; no remote access until those gates pass.
 3. **Then:** shared conversation backend, push service (APNs) and native iOS MVP.
 4. **In parallel after security:** Twilio inbound SMS + ConversationRelay with signature checks and strict budget.
@@ -161,3 +163,11 @@ The separate Archer.MobileGateway project is a **local API prototype**, not an i
 ### Implementation note — v1.3.0 (2026-11-16)
 
 The standalone gateway now has an admin-key-protected `POST /internal/delivery/simulate` endpoint and `GET /internal/delivery/preview`, plus scoped `GET /v1/delivery-previews` for an enrolled test device. **All routes are still localhost-only.** Simulations choose a noninterrupting push-preview or digest-preview, or suppress already acknowledged/resolved items. An unverified website outage is marked as requiring further verification and **cannot directly initiate a call**. Stable event/device/policy keys prevent repeat mock routes. CI verifies this with zero provider requests. This is intentionally not APNs, an actual SMS/call, a worker, a billing event or a remotely accessible app.
+
+### v1.4.0 security milestone — local device lifecycle
+
+- Administrator may enroll a read-only device (`inbox:read`) or the prior full inbox read/ack scope set. New scopes cannot grant chat, missions, GitHub, calls or any other permission.
+- Admin-only token rotation immediately invalidates previous bearer, with a maximum seven-day new lifetime. Rotation of revoked or expired devices is denied; stale devices require fresh enrollment.
+- New redacted audit entries identify enrolled/rotated/revoked device IDs, event ingestion/resolution, and which device read/acknowledged an inbox event, with a 300-entry cap. No raw tokens, text contents, phone numbers or locations in the audit feed.
+- DNS rebinding Host headers are refused, alongside Origin restrictions and loopback-only binding. A second per-device window limit protects inbox reads and acknowledgments in addition to the existing IP limiter.
+- **Still unfinished:** remotely trusted identity, secure iOS pairing, certificate-backed HTTPS, deployment, independently reviewed security, public ingress and actual pushes. No cloud expense.
