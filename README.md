@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 1.0.0 (local prototype)  
+**Version:** 1.1.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -11,6 +11,7 @@ This is a **real starting codebase**, not a screenshot or a mockup. It includes:
 - **Developer Workspace** with allowlisted GitHub source inventory, selected-file previews, and review-mission drafts
 - Opt-in **Operations** page for public HTTPS site monitoring and local outage/recovery records
 - Expiring, user-declared **Presence** context with optional one-time approximate browser location
+- Persistent **Inbox** for locally observed website incidents and failed mission tasks (not push or SMS)
 - Local **Attention** view showing failed tasks; approvals are clearly marked as not yet integrated
 - AI-generated bounded mission plans (3–5 research/analysis tasks)
 - Local main-dashboard AI usage analytics (token counts, observed web searches, estimated costs)
@@ -612,3 +613,28 @@ The app **still listens only on the PC's loopback address**, so a phone can't ca
 5. Optional mobile API testing should be done **locally with a test token**, not by exposing the app publicly. iPhone background delivery is not implemented.
 
 GitHub CI verifies compilation, JS/DOM wiring, localhost API startup, **disabled default delivery**, required SMS confirmation, blocked mobile ingest without a token and refusal to enable delivery without Twilio. CI does **not** send a real text, make a phone call or test mobile routing.
+
+## v1.1.0 — Unified operator inbox & mobile/voice roadmap
+
+See **[ARCHER_MOBILE_COMMUNICATION_ROADMAP.md](ARCHER_MOBILE_COMMUNICATION_ROADMAP.md)** for the tracked, phased plan for secure remote access, a native iPhone app, APNs push, shared conversations, a natural British voice, verified emergency escalation, secure inbound text/telephone calls, optional activity awareness and eventual CarPlay entitlement. Dependencies, acceptance criteria and required owner decisions are written out in that file.
+
+### Delivered in v1.1.0: local inbox foundation
+
+- A new **Inbox** page provides a readable, filterable history of real locally recorded website incidents and failed mission tasks. It includes source category, evidence, priority, first-recorded time, and separate **Read** and **Acknowledge** actions.
+- Items use stable source-derived keys and persist in the existing Git-ignored Archer state file. Refreshing the dashboard or restarting the app does **not** generate another alert for the same recorded incident.
+- The inbox worker reconciles source events approximately every 45 seconds while Archer is running, even if the dashboard isn't open.
+- If the original website records a successful recovery check, or a failed task is no longer marked Failed, its inbox event is marked **resolved** without deleting the historical record.
+- Inbox history is bounded to 200 items. Read/acknowledge timestamps never silently change mission status, alter website monitors, submit GitHub changes or contact anyone.
+- Website reachability incidents have priority **Urgent review** but are never called confirmed revenue/payment outages; the site must be investigated. Local status can be stale if monitoring was interrupted.
+- APIs: `GET /api/inbox`, `POST /api/inbox/{id}/read`, `POST /api/inbox/{id}/acknowledge`.
+- The local inbox is the **first event source for the future phone app**, not a push-notification system. It does not connect to APNs, Twilio, a new cloud server, Apple background activity, or a personal phone number. It does not incur model fees simply to show an event.
+
+### Test after a pull
+
+1. Stop Archer, **Git → Pull**, rebuild, launch, and verify `/api/config` reports `1.1.0`.
+2. Open **Inbox** and verify existing failed mission tasks or website incidents appear **once**. If you have none, the honest empty state is expected.
+3. Open the inbox repeatedly, use **Unread** / **Needs review**, mark an item read, then acknowledge. Reopen the page and verify those actions persist.
+4. Review a related mission or Operations item; confirming an inbox item must not retry or change the underlying task/site by itself.
+5. See the new mobile/communication roadmap file for the upcoming P0 security architecture work. **Do not expose localhost or configure background iPhone tracking** to test this version.
+
+Automated CI validates .NET compilation, all JavaScript files, expected UI element IDs and a synthetic-source API smoke: stable deduplication, read/ack, recovery and no new Twilio attempts. A Windows visual review and a separate production security review are still required.

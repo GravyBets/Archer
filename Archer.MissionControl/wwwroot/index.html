@@ -17,12 +17,13 @@
         <button class="nav-link" data-view="missions"><span class="nav-icon">▦</span> Mission Control</button>
         <button class="nav-link" data-view="developer"><span class="nav-icon">⌘</span> Developer</button>
         <button class="nav-link" data-view="operations"><span class="nav-icon">◈</span> Operations</button>
+        <button class="nav-link" data-view="inbox"><span class="nav-icon">✉</span> Inbox <span id="inboxNavCount" class="inbox-nav-count hidden">0</span></button>
         <button class="nav-link" data-view="attention"><span class="nav-icon">◇</span> Attention <span id="attentionNavCount" class="attention-nav-count hidden">0</span></button>
         <button class="nav-link" data-view="activity"><span class="nav-icon">◷</span> Activity</button>
       </nav>
       <div class="sidebar-bottom">
         <div class="sidebar-status"><span class="pulse-dot"></span><span id="connectionLabel">Checking local server...</span></div>
-        <div class="version">V1.0.0 · LOCAL DEVELOPMENT</div>
+        <div class="version">V1.1.0 · LOCAL DEVELOPMENT</div>
       </div>
     </aside>
     <main class="content">
@@ -385,19 +386,46 @@
           </section>
           <p class="developer-footnote">Website reachability is not proof that business payments, sales, conversions or support are healthy. Those need separate approved integrations.</p>
         </section>
-                <section id="attentionView" class="view hidden" aria-labelledby="attentionTitle">
+                <section id="inboxView" class="view hidden" aria-labelledby="inboxTitle">
+          <div class="hero"><div class="eyebrow">ONE OPERATOR · ONE EVENT INBOX <span class="eyebrow-line"></span></div>
+            <h1 id="inboxTitle">Inbox<span class="accent">.</span></h1>
+            <p>A shared source for future phone and iPhone alerts. For now this is local-only — no messages are sent from this page.</p>
+          </div>
+          <section class="panel">
+            <div class="panel-header">
+              <div><h2>Operator notifications</h2>
+                <p>Grounded in recorded website incidents and failed mission tasks</p></div>
+              <span class="developer-readonly">LOCAL / NO DELIVERY</span>
+            </div>
+            <div class="inbox-toolbar">
+              <label for="inboxFilter">Show
+                <select id="inboxFilter">
+                  <option value="all">All events</option>
+                  <option value="unread">Unread</option>
+                  <option value="action">Needs review</option>
+                </select></label>
+              <span id="inboxTotals" role="status">Loading notifications…</span>
+              <button id="inboxRefreshButton" type="button" class="button secondary">Refresh inbox</button>
+            </div>
+            <div id="inboxItems" class="inbox-items" aria-live="polite">
+              <p class="developer-empty">Checking the local event history.</p>
+            </div>
+          </section>
+          <p class="developer-footnote">A website reaching three failed HTTPS checks means it needs investigation, not that checkout or the entire business is down. Acknowledging an inbox item does not fix a website or retry a mission. This is not an APNs, SMS or telephone delivery queue yet.</p>
+        </section>
+        <section id="attentionView" class="view hidden" aria-labelledby="attentionTitle">
           <div class="hero"><div class="eyebrow">OPERATOR OVERSIGHT <span class="eyebrow-line"></span></div><h1 id="attentionTitle">Attention<span class="accent">.</span></h1><p>Local mission failures and the approval boundaries we're building toward.</p></div>
           <div class="attention-grid">
             <section class="panel"><div class="panel-header"><div><h2>Mission issues</h2><p>Actual failed tasks recorded in this local instance</p></div><span id="attentionIssueCount" class="count">0</span></div><div class="attention-list" id="attentionFailures"></div></section>
             <section class="panel"><div class="panel-header"><div><h2>Approvals</h2><p>Future safety boundary for external actions</p></div></div>
               <div class="approval-placeholder"><div class="approval-symbol" aria-hidden="true">◇</div><h3>No approval-capable actions connected</h3>
-              <p>Archer can research and analyze approved tasks, but cannot yet deploy code, send messages, move money, or merge a pull request. Those abilities will require explicit permissions and a review queue.</p>
+              <p>Archer can prepare code drafts and optionally send explicitly approved communications, but it cannot automatically merge, deploy, move money, or approve high-risk work. Those abilities require separate protected workflows.</p>
               <span class="approval-footnote">No customer or infrastructure monitoring is connected yet.</span></div>
             </section>
           </div>
         </section>
         <section id="activityView" class="view hidden"><div class="hero"><div class="eyebrow">EXECUTION HISTORY <span class="eyebrow-line"></span></div><h1>Activity<span class="accent">.</span></h1><p>What Archer has actually done, with completed work stored on disk.</p></div><div class="panel"><div id="activityList" class="activity-list"></div></div></section>
-        <footer class="footer">ARCHER / V1.0 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
+        <footer class="footer">ARCHER / V1.1 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
       </div>
     </main>
   </div>
@@ -410,5 +438,6 @@
   <script src="/js/spending.js" defer></script>
   <script src="/js/coding.js" defer></script>
   <script src="/js/communications.js" defer></script>
+  <script src="/js/inbox.js" defer></script>
 </body>
 </html>

@@ -13,6 +13,7 @@ OPERATOR_JS = (ROOT / "js" / "operator-context.js").read_text(encoding="utf-8")
 SPEND_JS = (ROOT / "js" / "spending.js").read_text(encoding="utf-8")
 CODING_JS = (ROOT / "js" / "coding.js").read_text(encoding="utf-8")
 COMMUNICATIONS_JS = (ROOT / "js" / "communications.js").read_text(encoding="utf-8")
+INBOX_JS = (ROOT / "js" / "inbox.js").read_text(encoding="utf-8")
 FIELD_JS = (ROOT / "js" / "orb-field.js").read_text(encoding="utf-8")
 CSS = (ROOT / "css" / "app.css").read_text(encoding="utf-8")
 
@@ -38,7 +39,7 @@ page = Inventory()
 page.feed(HTML)
 assert len(page.ids) == len(set(page.ids)), "Duplicate HTML element IDs detected"
 
-expected_views = {"archer", "missions", "developer", "operations", "attention", "activity"}
+expected_views = {"archer", "missions", "developer", "operations", "inbox", "attention", "activity"}
 assert expected_views == set(page.views), f"Unexpected navigation: {page.views}"
 for view in expected_views:
     assert f"{view}View" in page.ids, f"Missing {view} view"
@@ -75,19 +76,23 @@ required = {
     "communicationsPreferencesForm", "communicationsDailySms",
     "communicationsUrgentCalls", "communicationsSaveButton",
     "communicationsSaveStatus", "communicationsAttempts", "mobileHeading",
-    "mobileIngestStatus", "mobileIngestDescription"
+    "mobileIngestStatus", "mobileIngestDescription",
+    "inboxNavCount", "inboxTitle", "inboxFilter", "inboxTotals", "inboxItems", "inboxRefreshButton"
 }
 assert required.issubset(page.ids), f"Missing expected IDs: {required.difference(page.ids)}"
 
 # Only check literal calls. Dynamically generated IDs are intentionally excluded.
 literal_id_pattern = re.compile(r"(?:\$\(|\bel\()\s*'([A-Za-z][A-Za-z0-9-]+)'\s*\)")
-referred_ids = set(literal_id_pattern.findall(JS + "\n" + HOME_JS + "\n" + FIELD_JS + "\n" + DEVELOPER_JS + "\n" + OPERATOR_JS + "\n" + SPEND_JS + "\n" + CODING_JS + "\n" + COMMUNICATIONS_JS))
+referred_ids = set(literal_id_pattern.findall(JS + "\n" + HOME_JS + "\n" + FIELD_JS + "\n" + DEVELOPER_JS + "\n" + OPERATOR_JS + "\n" + SPEND_JS + "\n" + CODING_JS + "\n" + COMMUNICATIONS_JS + "\n" + INBOX_JS))
 # Created dynamically in the mission-list empty state.
 dynamic_ids = {"starterMission"}
 missing = referred_ids.difference(page.ids).difference(dynamic_ids)
 assert not missing, f"JavaScript references missing DOM IDs: {missing}"
 
-assert page.scripts[-8:] == ["/js/app.js", "/js/archer-home.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js", "/js/coding.js", "/js/communications.js"]
+assert page.scripts[-9:] == ["/js/app.js", "/js/archer-home.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js", "/js/coding.js", "/js/communications.js", "/js/inbox.js"]
+assert "/api/inbox" in INBOX_JS
+assert "acknowledge" in INBOX_JS
+assert "textContent" in INBOX_JS
 assert "/api/communications" in COMMUNICATIONS_JS
 assert "/api/mobile/capabilities" in COMMUNICATIONS_JS
 assert "window.confirm(" in COMMUNICATIONS_JS

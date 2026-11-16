@@ -198,14 +198,16 @@ async function action(run, success) {
   }
 }
 function showView(view) {
-  const allowed = ['archer', 'missions', 'developer', 'operations', 'attention', 'activity'];
+  const allowed = ['archer', 'missions', 'developer', 'operations', 'inbox', 'attention', 'activity'];
   if (!allowed.includes(view)) view = 'archer';
   if (view !== 'archer') window.ArcherPresence?.stopListening();
   document.querySelectorAll('.view').forEach(section => section.classList.toggle('hidden', section.id !== `${view}View`));
   document.querySelectorAll('.nav-link').forEach(link => link.classList.toggle('active', link.dataset.view === view));
-  $('breadcrumb').textContent = ({ archer: 'ARCHER', missions: 'MISSION CONTROL', developer: 'DEVELOPER', operations: 'OPERATIONS', attention: 'ATTENTION', activity: 'ACTIVITY' })[view];
+  $('breadcrumb').textContent = ({ archer: 'ARCHER', missions: 'MISSION CONTROL', developer: 'DEVELOPER', operations: 'OPERATIONS', inbox: 'INBOX', attention: 'ATTENTION', activity: 'ACTIVITY' })[view];
   if (view === 'operations' || view === 'archer')
     window.OperatorContext?.refresh().catch(error => console.warn('Context refresh failed:', error.message));
+  if (view === 'inbox')
+    window.ArcherInbox?.refresh().catch(error => console.warn('Inbox refresh failed:', error.message));
 }
 document.addEventListener('click', async event => {
   const link = event.target.closest('[data-view]');
