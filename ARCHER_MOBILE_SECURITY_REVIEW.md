@@ -1,4 +1,4 @@
-# Archer mobile gateway — security and threat review (v1.6.0)
+# Archer mobile gateway — security and threat review (v1.7.0)
 
 **Review date:** 2026-11-16. This is an engineering threat model, NOT an independent penetration test or approval for internet exposure.
 
@@ -111,6 +111,14 @@ No preview is delivered to an Apple device; no APNs device token, push server, m
 - AES-GCM at-rest encryption does not protect against malicious programs running under the same OS user or protect network traffic; the gateway is still loopback-only HTTP, not a production mobile service. The key remains in process memory; OS secrets management, access-controlled service account, key rotation, encrypted backups and secure authenticated HTTPS are outstanding.
 - CI exercises synthetic legacy migration, successful recovery, wrong/missing keys, ciphertext tampering and data preservation in addition to the normal gateway auth, rate-limit and non-delivery tests.
 
+## v1.7.0 read-only local desktop bridge and explicit consent
+
+- **GET /internal/conversation/bridge** is a gateway loopback-only endpoint that returns at most 30 recent owner-authored local journal drafts. It requires a new, distinct, 40+ character X-Archer-Bridge-Key secret. The bridge key must not match the gateway's administrator or event-ingest key. Mobile device bearer tokens do not authorise this route.
+- MissionControl adds **GET /api/mobile/conversation-preview**, disabled unless ARCHER_GATEWAY_CHAT_BRIDGE_ENABLED=true AND a separate ARCHER_GATEWAY_BRIDGE_KEY is configured. It calls ONLY the fixed 127.0.0.1:5091 target, using a proxy-free, redirect-free client and a bounded response size. Raw private keys are not reflected in browser errors.
+- The optional desktop UI previews phone-authored text and copies a selected draft into the local chat composer; **it does not call the chat API, import existing desktop transcripts, automatically execute the draft, write back assistant replies or incur AI charges**. The owner must explicitly press Send.
+- The gateway remains local HTTP and uses a static shared key for localhost development. There is **no mutual TLS, OIDC, hardware-backed client identity, remote app authentication or true multi-channel session sync**. A malicious process under the same OS account may read secrets or impersonate a service on the local port; further isolation and authenticated encrypted transport are production blockers.
+- Turning on this bridge intentionally presents recent gateway phone drafts inside the existing localhost desktop dashboard. Do not enable on a shared or employer computer.
+- CI tests unauthorised access, key separation, device token isolation, synthetic end-to-end gateway-to-desktop read, zero automatic AI operations and disabled-by-default mode. This is not a production mobile app.
 ## Local-only opt-in setup
 
 Prerequisites: .NET 10 SDK, separate optional process. Values must be cryptographically random and never committed to Git.
@@ -144,4 +152,4 @@ Production deployment stays BLOCKED until all these gates pass.
 - Kestrel explicit endpoint binding: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/endpoints?view=aspnetcore-10.0
 - Kestrel proxy/forwarding security: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/security-considerations
 
-This document inventories the current source at v1.6.0; revisit it when endpoints or authorization logic change.
+This document inventories the current source at v1.7.0; revisit it when endpoints or authorization logic change.
