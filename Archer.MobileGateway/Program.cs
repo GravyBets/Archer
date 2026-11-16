@@ -432,9 +432,12 @@ app.MapPost("/v1/conversation/messages", async Task<IResult> (
     try
     {
         var result = await journal.AppendAsync(device, request, ct);
-        return result.Outcome == "conflict"
-            ? Results.Conflict(result)
-            : Results.Ok(result);
+        return result.Outcome switch
+        {
+            "unauthorized" => Results.Unauthorized(),
+            "conflict" => Results.Conflict(result),
+            _ => Results.Ok(result)
+        };
     }
     catch (ArgumentException error)
     {
