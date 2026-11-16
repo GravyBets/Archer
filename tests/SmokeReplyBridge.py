@@ -55,6 +55,10 @@ assert len(catalog["sessions"]) == 1, catalog
 main_id = catalog["defaultSessionId"]
 history_path = (DESKTOP + "/api/mobile/session-history?sessionId=" +
                 main_id + "&after=0&limit=20")
+direct_history = req(GATEWAY + "/internal/conversation/history?sessionId=" +
+    main_id + "&after=0&limit=20", headers=header)
+assert len(direct_history["messages"]) == 1
+assert direct_history["messages"][0]["sequence"] == 1
 before = req(history_path)
 assert before["enabled"] and before["connected"], before
 assert len(before["messages"]) == 1, before
