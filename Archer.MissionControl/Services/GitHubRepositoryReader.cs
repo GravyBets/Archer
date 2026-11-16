@@ -90,19 +90,33 @@ public sealed class GitHubRepositoryReader(HttpClient http)
 
         static int Score(SourceFile file)
         {
-            var path = file.Path;
-            var points = 0;
-            if (path.Equals("README.md", StringComparison.OrdinalIgnoreCase)) points += 110;
-            if (path.Contains("KmlCsvConverter", StringComparison.OrdinalIgnoreCase)) points += 105;
-            if (path.Contains("Analyze.razor", StringComparison.OrdinalIgnoreCase)) points += 100;
-            if (path.Contains("KmlAnalyzer", StringComparison.OrdinalIgnoreCase)) points += 90;
-            if (path.Contains("KmzAnalyzer", StringComparison.OrdinalIgnoreCase)) points += 87;
-            if (path.Contains("KmlAttributeReader", StringComparison.OrdinalIgnoreCase)) points += 80;
-            if (path.Contains("CsvPreviewReader", StringComparison.OrdinalIgnoreCase)) points += 77;
-            if (path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)) points += 65;
-            if (path.Contains("GeoShift.Tests/", StringComparison.OrdinalIgnoreCase)) points += 40;
-            if (path.Contains("Program.cs", StringComparison.OrdinalIgnoreCase)) points += 25;
-            if (path.Contains("wwwroot/", StringComparison.OrdinalIgnoreCase)) points -= 15;
+            var path = file.Path.Replace('\\', '/');
+            var points = 25;
+
+            // Prioritize implementation files. Tests often contain the same component
+            // name and used to outrank the actual code they were testing.
+            if (path.Contains("/GeoShift.Core/", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("GeoShift.Core/", StringComparison.OrdinalIgnoreCase))
+                points += 55;
+            if (path.Contains("/GeoShift.Web/", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("GeoShift.Web/", StringComparison.OrdinalIgnoreCase))
+                points += 40;
+            if (path.Contains(".Tests/", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("GeoShift.Tests/", StringComparison.OrdinalIgnoreCase))
+                points -= 65;
+
+            if (path.EndsWith("/KmlCsvConverter.cs", StringComparison.OrdinalIgnoreCase)) points += 170;
+            if (path.EndsWith("/Analyze.razor", StringComparison.OrdinalIgnoreCase)) points += 165;
+            if (path.EndsWith("/KmzAnalyzer.cs", StringComparison.OrdinalIgnoreCase)) points += 155;
+            if (path.EndsWith("/KmlAnalyzer.cs", StringComparison.OrdinalIgnoreCase)) points += 145;
+            if (path.EndsWith("/KmlAttributeReader.cs", StringComparison.OrdinalIgnoreCase)) points += 130;
+            if (path.EndsWith("/CsvPreviewReader.cs", StringComparison.OrdinalIgnoreCase)) points += 120;
+            if (path.Equals("README.md", StringComparison.OrdinalIgnoreCase)) points += 100;
+            if (path.EndsWith("/Program.cs", StringComparison.OrdinalIgnoreCase)) points += 80;
+            if (path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)) points += 55;
+            if (path.EndsWith("Tests.cs", StringComparison.OrdinalIgnoreCase) ||
+                path.EndsWith("Tests.cs.cs", StringComparison.OrdinalIgnoreCase))
+                points += 55;
             return points;
         }
 
