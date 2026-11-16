@@ -5,6 +5,17 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<JsonFileStore>();
 builder.Services.AddSingleton<ApiUsageLedger>();
 builder.Services.AddHostedService<MissionAutoRunner>();
+builder.Services.AddHttpClient("site-health", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("ArcherHealthMonitor/0.6");
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    AllowAutoRedirect = false,
+    UseCookies = false,
+    UseProxy = false
+});
+builder.Services.AddHostedService<WebsiteMonitorWorker>();
 builder.Services.AddHttpClient("github-reader", client => client.Timeout = TimeSpan.FromSeconds(90));
 builder.Services.AddSingleton<GitHubRepositoryReader>(service =>
     new GitHubRepositoryReader(service.GetRequiredService<IHttpClientFactory>().CreateClient("github-reader")));
@@ -22,7 +33,7 @@ await app.Services.GetRequiredService<JsonFileStore>().RecoverInterruptedTasksAs
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "0.5.1" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "0.6.0" }));
 
 app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
 {
@@ -30,7 +41,7 @@ app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
     model = ai.Model,
     routing = ai.Routing,
     mode = "Local only · Research and analysis only",
-    version = "0.5.1"
+    version = "0.6.0"
 }));
 
 app.MapGet("/api/state", async (JsonFileStore store, CancellationToken ct) =>
@@ -39,6 +50,140 @@ app.MapGet("/api/state", async (JsonFileStore store, CancellationToken ct) =>
 // Only Archer's local, API-reported usage. This is not an OpenAI billing endpoint.
 app.MapGet("/api/usage", async (ApiUsageLedger ledger, CancellationToken ct) =>
     Results.Ok(await ledger.SummaryAsync(ct)));
+
+// Owner presence is opt-in, expiring and LOCAL ONLY. Never infer activity from coordinates.
+app.MapGet("/api/presence", async (JsonFileStore store, CancellationToken ct) =>
+{
+    var presence = await store.ReadAsync(state => state.Presence, ct);
+    return Results.Ok(new
+    {
+        active = presence is not null && presence.ExpiresAtUtc > DateTimeOffset.UtcNow,
+        presence = presence is not null && presence.ExpiresAtUtc > DateTimeOffset.UtcNow ? presence : null,
+        note = "One-time approximate location only, with an explicit expiry. No background phone tracking."
+    });
+});
+
+app.MapPost("/api/presence", async Task<IResult> (
+    UpdatePresenceRequest request, JsonFileStore store, CancellationToken ct) =>
+{
+    var permitted = new[] { "Available", "Driving", "Working", "Shopping", "Busy", "Other" };
+    var activity = request.Activity?.Trim() ?? "";
+    var label = request.PlaceLabel?.Trim() ?? "";
+    if (!permitted.Contains(activity, StringComparer.Ordinal) ||
+        label.Length > 60 || request.DurationMinutes is not (15 or 60 or 240 or 480))
+        return Results.BadRequest(new { error = "Choose a known activity, place label of at most 60 characters, and a 15, 60, 240, or 480 minute expiry." });
+    if (request.Latitude.HasValue != request.Longitude.HasValue ||
+        request.Latitude is { } lat && (!double.IsFinite(lat) || lat < -90 || lat > 90) ||
+        request.Longitude is { } lon && (!double.IsFinite(lon) || lon < -180 || lon > 180))
+        return Results.BadRequest(new { error = "Location coordinates must be both present, finite and valid." });
+
+    await store.UpdateAsync(state =>
+    {
+        var now = DateTimeOffset.UtcNow;
+        state.Presence = new OwnerPresence
+        {
+            Activity = activity,
+            PlaceLabel = label,
+            // Round before saving. Never retain an exact GPS fix or movement history.
+            ApproxLatitude = request.Latitude is { } latitude ? Math.Round(latitude, 2) : null,
+            ApproxLongitude = request.Longitude is { } longitude ? Math.Round(longitude, 2) : null,
+            ShareWithAi = request.ShareWithAi,
+            UpdatedAtUtc = now,
+            ExpiresAtUtc = now.AddMinutes(request.DurationMinutes)
+        };
+        return true;
+    }, ct);
+    return Results.Ok(new { message = "Presence updated until its selected expiry." });
+});
+
+app.MapDelete("/api/presence", async (JsonFileStore store, CancellationToken ct) =>
+{
+    await store.UpdateAsync(state => { state.Presence = null; return true; }, ct);
+    return Results.Ok(new { message = "Presence cleared. Location and activity context deleted." });
+});
+
+// Website availability monitoring is opt-in and restricted to public HTTPS
+// hosts explicitly listed in ARCHER_MONITOR_HOSTS. No AI, SMS or phone calls.
+app.MapGet("/api/operations", async (JsonFileStore store, CancellationToken ct) =>
+{
+    return Results.Ok(await store.ReadAsync(state => new
+    {
+        monitors = state.WebsiteMonitors,
+        incidents = state.WebsiteIncidents.Take(40).ToArray(),
+        channels = new { sms = "Not connected", phone = "Not connected" },
+        monitorIntervalMinutes = 5,
+        message = "This checks public HTTPS availability, not purchases, revenue, customer support, or payment processing. It only runs while Archer is open."
+    }, ct));
+});
+
+app.MapPost("/api/operations/monitors", async Task<IResult> (
+    CreateWebsiteMonitorRequest request, JsonFileStore store, CancellationToken ct) =>
+{
+    var name = request.Name?.Trim() ?? "";
+    if (name.Length is < 2 or > 80)
+        return Results.BadRequest(new { error = "Website name must be 2–80 characters." });
+    Uri url;
+    try { url = WebsiteMonitorWorker.ValidateMonitorUrl(request.Url?.Trim() ?? ""); }
+    catch (ArgumentException error) { return Results.BadRequest(new { error = error.Message }); }
+
+    var result = await store.UpdateAsync(state =>
+    {
+        if (state.WebsiteMonitors.Count >= 10) return "limit";
+        if (state.WebsiteMonitors.Any(m => m.Url.Equals(url.ToString(), StringComparison.OrdinalIgnoreCase)))
+            return "duplicate";
+        // Not enabled until the owner explicitly chooses Start monitoring.
+        state.WebsiteMonitors.Add(new WebsiteMonitor { Name = name, Url = url.ToString() });
+        return "created";
+    }, ct);
+    return result switch
+    {
+        "created" => Results.Ok(new { message = "Website added. Select Start monitoring to activate checks." }),
+        "duplicate" => Results.Conflict(new { error = "This website is already registered." }),
+        _ => Results.Conflict(new { error = "Archer supports up to ten website monitors." })
+    };
+});
+
+app.MapPost("/api/operations/monitors/{id:guid}/enabled", async Task<IResult> (
+    Guid id, SetWebsiteMonitorEnabledRequest request, JsonFileStore store, CancellationToken ct) =>
+{
+    // Re-validate environment approval when switching monitoring on.
+    var site = await store.ReadAsync(state => state.WebsiteMonitors.FirstOrDefault(x => x.Id == id), ct);
+    if (site is null) return Results.NotFound(new { error = "Website not found." });
+    if (request.Enabled)
+    {
+        try { WebsiteMonitorWorker.ValidateMonitorUrl(site.Url); }
+        catch (ArgumentException error) { return Results.BadRequest(new { error = error.Message }); }
+    }
+
+    await store.UpdateAsync(state =>
+    {
+        var monitor = state.WebsiteMonitors.First(x => x.Id == id);
+        monitor.Enabled = request.Enabled;
+        monitor.ConsecutiveFailures = 0;
+        monitor.Status = request.Enabled ? "Checking" : "Not monitored";
+        return true;
+    }, ct);
+    return Results.Ok(new
+    {
+        message = request.Enabled
+            ? "Public HTTPS checks authorized every five minutes while Archer is running."
+            : "Website monitoring stopped. No further checks will be started."
+    });
+});
+
+app.MapPost("/api/operations/incidents/{id:guid}/acknowledge", async Task<IResult> (
+    Guid id, JsonFileStore store, CancellationToken ct) =>
+{
+    var found = await store.UpdateAsync(state =>
+    {
+        var incident = state.WebsiteIncidents.FirstOrDefault(x => x.Id == id);
+        if (incident is null) return false;
+        incident.AcknowledgedAtUtc ??= DateTimeOffset.UtcNow;
+        return true;
+    }, ct);
+    return found ? Results.Ok(new { message = "Incident acknowledged." }) :
+        Results.NotFound(new { error = "Incident not found." });
+});
 
 // Free, read-only diagnostic: verifies actual repository access without using any AI tokens.
 app.MapGet("/api/github/check", async Task<IResult> (string repository, GitHubRepositoryReader reader, CancellationToken ct) =>
@@ -320,7 +465,7 @@ app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore
 
 app.MapFallbackToFile("index.html");
 
-Console.WriteLine("ARCHER Mission Control V0.5.1 — http://127.0.0.1:5087");
+Console.WriteLine("ARCHER Mission Control V0.6.0 — http://127.0.0.1:5087");
 app.Run("http://127.0.0.1:5087");
 
 static IResult MissingApiKey() => Results.BadRequest(new
