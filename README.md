@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 0.1.4 (local prototype)  
+**Version:** 0.2.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -152,3 +152,28 @@ don't search for GeoShift as if it were an established public product.
 Optional: point `ARCHER_KNOWLEDGE_FILE` to another local file. If it is a relative path, Archer resolves it from the project content root. The first 12,000 characters are included in API requests. Don't store API keys, secrets, or employer-confidential data in this file: **the context is sent to the OpenAI API when you run AI tasks**.
 
 This is the first small step toward longer-term memory, not a complete autonomous memory system. It does not automatically inspect private repositories, read all prior conversations, or independently verify the user's project details.
+
+## v0.2.0 — Opt-in automatic research execution
+
+Archer now has a local background task worker. For a mission with pending research/analysis tasks, click **Auto-run up to 3 tasks** to explicitly authorize up to three API task attempts. The worker advances the mission sequentially **without further clicks** while the local application process remains running.
+
+- Each authorization permits at most **three task attempts**, including unsuccessful ones.
+- A failed task stops automatic execution. There are no automatic paid retries.
+- Use **Pause automatic execution** to prevent additional tasks. The currently running API request may finish.
+- Archer stops after completing the mission, exhausting the authorized attempts, or encountering an error.
+- **Every app restart disarms all missions** and never initiates new paid calls without fresh authorization.
+- The UI polls for progress and keeps expanded report panels open during updates.
+- The current feature supports **only research and analysis**. No unrestricted web automation, email, SMS, phone calls, deployment, financial transactions, scheduled recurrence, or automatic creation of additional missions.
+
+**API costs:** This is an authorization limit in task attempts, **not** a hard dollar cap. Each attempt can incur model and web-search fees. Set billing limits/alerts on the OpenAI Platform and monitor actual usage.
+
+### Try it
+
+1. Stop Archer and pull the latest `main`.
+2. Build and run in Visual Studio. Verify `http://127.0.0.1:5087/api/config` reports `version: 0.2.0`.
+3. Keep your completed GeoShift revenue mission as history; create a new test mission and generate a plan.
+4. Click **Auto-run up to 3 tasks** once. Leave Archer running and watch the steps and deliverables update.
+5. To verify pausing, enable auto-run on another mission and press **Pause automatic execution** before the next task begins.
+6. Restart Archer and confirm auto-run is off until you explicitly re-enable it.
+
+Do not assume this is reliable unattended service yet. It only works while the local Archer process is running, and this update has not been compiled or live-tested in this tool environment.
