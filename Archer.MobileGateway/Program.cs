@@ -11,6 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 // GitHub write token, AI service, Twilio gateway, or owner location.
 builder.Services.AddSingleton<GatewayStore>();
 builder.Services.AddSingleton<DeviceTokenService>();
+builder.Services.AddSingleton<GatewayDeliverySimulator>();
 
 // HARD BIND to local loopback. Do not publish this service on the Internet.
 // An authenticated, TLS-terminated reverse proxy and security review are
@@ -94,7 +95,7 @@ app.MapGet("/health/live", () => Results.Ok(new
 {
     status = "ok",
     component = "Archer.MobileGateway",
-    version = "1.2.0",
+    version = "1.3.0",
     publicAccessEnabled = false,
     deliveryEnabled = false
 }));
@@ -223,6 +224,42 @@ app.MapPost("/internal/events", async Task<IResult> (
     return Results.Ok(new { accepted = incoming.Count, newlyInserted = inserted, sent = false });
 });
 
+// Explicitly requested SANDBOX routing. No worker or external provider
+// is called; it records only a dry-run policy decision in isolated state.
+app.MapPost("/internal/delivery/simulate", async Task<IResult> (
+    SimulateDeliveryRequest request, HttpContext ctx,
+    GatewayDeliverySimulator simulator, CancellationToken ct) =>
+{
+    if (!InternalKeyValid(ctx.Request, "X-Archer-Admin-Key",
+        "ARCHER_GATEWAY_ADMIN_KEY"))
+        return Results.StatusCode(403);
+    try { return Results.Ok(await simulator.SimulateAsync(request, ct)); }
+    catch (ArgumentException error)
+    {
+        return Results.BadRequest(new { error = error.Message });
+    }
+});
+
+app.MapGet("/internal/delivery/preview", async Task<IResult> (
+    HttpContext ctx, GatewayDeliverySimulator simulator,
+    CancellationToken ct) =>
+{
+    if (!InternalKeyValid(ctx.Request, "X-Archer-Admin-Key",
+        "ARCHER_GATEWAY_ADMIN_KEY"))
+        return Results.StatusCode(403);
+    return Results.Ok(await simulator.GetInternalSummaryAsync(ct));
+});
+
+app.MapGet("/v1/delivery-previews", async Task<IResult> (
+    HttpContext ctx, DeviceTokenService tokens,
+    GatewayDeliverySimulator simulator, CancellationToken ct) =>
+{
+    var device = await tokens.AuthenticateAsync(
+        ctx.Request.Headers.Authorization.ToString(), "inbox:read", ct);
+    if (device is null) return Results.Unauthorized();
+    return Results.Ok(await simulator.GetForDeviceAsync(device.Id, ct));
+});
+
 app.MapGet("/v1/inbox", async Task<IResult> (
     HttpContext ctx, DeviceTokenService tokens, GatewayStore store,
     CancellationToken ct) =>
@@ -285,5 +322,5 @@ app.MapPost("/v1/inbox/{id:guid}/acknowledge", async Task<IResult> (
         : Results.NotFound();
 });
 
-Console.WriteLine("Archer Mobile Gateway v1.2.0: LOCAL LOOPBACK ONLY on 127.0.0.1:5091");
+Console.WriteLine("Archer Mobile Gateway v1.3.0: LOCAL LOOPBACK ONLY on 127.0.0.1:5091");
 app.Run();
