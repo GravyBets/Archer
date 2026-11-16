@@ -20,6 +20,16 @@ builder.Services.AddHostedService<WebsiteMonitorWorker>();
 // Local inbox materializes source-backed events; no push, SMS or AI side effects.
 builder.Services.AddSingleton<OperatorInboxService>();
 builder.Services.AddHostedService<OperatorInboxWorker>();
+builder.Services.AddHttpClient("gateway-loopback", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(6);
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    AllowAutoRedirect = false,
+    UseCookies = false,
+    UseProxy = false
+});
+builder.Services.AddHostedService<LocalMobileGatewaySyncWorker>();
 builder.Services.AddHttpClient<TwilioGateway>(client =>
     client.Timeout = TimeSpan.FromSeconds(25));
 builder.Services.AddSingleton<CommunicationCoordinator>();
@@ -45,7 +55,7 @@ await app.Services.GetRequiredService<JsonFileStore>().RecoverInterruptedTasksAs
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "1.1.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "1.2.0" }));
 
 app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
 {
@@ -53,7 +63,7 @@ app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
     model = ai.Model,
     routing = ai.Routing,
     mode = "Local only · Guarded AI, approved code drafts, opt-in phone integrations",
-    version = "1.1.0"
+    version = "1.2.0"
 }));
 
 app.MapGet("/api/state", async (JsonFileStore store, CancellationToken ct) =>
@@ -794,7 +804,7 @@ app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore
 
 app.MapFallbackToFile("index.html");
 
-Console.WriteLine("ARCHER Mission Control V1.1.0 — http://127.0.0.1:5087");
+Console.WriteLine("ARCHER Mission Control V1.2.0 — http://127.0.0.1:5087");
 app.Run("http://127.0.0.1:5087");
 
 static IResult MissingApiKey() => Results.BadRequest(new
