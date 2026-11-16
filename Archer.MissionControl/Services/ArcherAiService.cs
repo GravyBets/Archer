@@ -243,9 +243,16 @@ public sealed class ArcherAiService(
         if (string.IsNullOrWhiteSpace(key))
             throw new InvalidOperationException("OPENAI_API_KEY is missing. Set it as a user environment variable before using Archer AI features.");
 
+        var serialized = JsonSerializer.Serialize(payload, JsonOptions);
+        // Every AI operation, including chat, plan and auto-run, passes the same
+        // durable local preflight budget check BEFORE touching the paid API.
+        var reserve = await usageLedger.ReserveAsync(model, operation, serialized, ct);
+        var measured = false;
+        try
+        {
         using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
-        request.Content = new StringContent(JsonSerializer.Serialize(payload, JsonOptions), Encoding.UTF8, "application/json");
+        request.Content = new StringContent(serialized, Encoding.UTF8, "application/json");
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         var raw = await response.Content.ReadAsStringAsync(ct);
         if (!response.IsSuccessStatusCode)
@@ -262,11 +269,19 @@ public sealed class ArcherAiService(
         // Record API-reported usage even for incomplete responses. A failed or
         // truncated request can still incur charges. Telemetry persistence must
         // never hide a successful report if its local disk write fails.
-        try { await usageLedger.RecordResponseAsync(root, model, operation, CancellationToken.None); }
-        catch (Exception loggingError)
+        if (root.TryGetProperty("usage", out var reportedUsage) &&
+            reportedUsage.ValueKind == JsonValueKind.Object)
         {
-            logger.LogWarning(loggingError,
-                "Could not write Archer's local usage ledger. Check free disk space and file permissions.");
+            try
+            {
+                await usageLedger.RecordResponseAsync(root, model, operation, reserve.Id, CancellationToken.None);
+                measured = true;
+            }
+            catch (Exception loggingError)
+            {
+                logger.LogWarning(loggingError,
+                    "Could not write Archer's local usage ledger. A conservative budget liability will remain.");
+            }
         }
         if (root.TryGetProperty("status", out var statusValue))
         {
@@ -303,5 +318,20 @@ public sealed class ArcherAiService(
         var result = text.ToString().Trim();
         if (result.Length == 0) throw new InvalidOperationException("The AI did not return any text. Try again with a simpler task.");
         return result;
+        }
+        finally
+        {
+            // A failed request with no measured usage might still incur a bill.
+            // Keep its original reservation as a conservative uncertain charge.
+            if (!measured)
+            {
+                try { await usageLedger.MarkUnobservedAsync(reserve.Id); }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex,
+                        "Could not reconcile unobserved AI cost. The pending reservation remains on disk.");
+                }
+            }
+        }
     }
 }
