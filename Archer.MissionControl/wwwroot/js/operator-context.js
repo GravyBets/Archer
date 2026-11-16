@@ -192,8 +192,119 @@
     finally { opsBusy = false; refreshOperations().catch(console.warn); }
   });
 
+  // No-charge business briefing. These are suggestions only, not sent messages.
+  let briefingText = '';
+  let briefingPrefsLoaded = false;
+  let briefingBusy = false;
+
+  function renderBriefing(data) {
+    briefingText = data.briefingText || '';
+    el('briefingBody').textContent = briefingText ||
+      'There is no recorded local activity to include yet.';
+    el('briefingGeneratedAt').textContent = 'As of ' +
+      (data.localDateTime || 'now') + ' ' + (data.timeZoneId || '');
+    el('briefingCopyButton').disabled = !briefingText;
+    el('briefingQuietStatus').textContent = data.quietHoursNow
+      ? 'Quiet hours active' : 'Outside quiet hours';
+
+    const alerts = data.alerts || [];
+    el('briefingAlertList').innerHTML = alerts.length
+      ? alerts.map(item => {
+          const priority = ['Critical', 'Attention', 'Information'].includes(item.priority)
+            ? item.priority : 'Information';
+          return '<div class="briefing-alert briefing-' + priority.toLowerCase() +
+            '"><div><strong>' + safe(priority) + ' · ' + safe(item.title) +
+            '</strong><p>' + safe(item.detail) + '</p>' +
+            '<small>Source: ' + safe(item.source) + '. ' + safe(item.reason) +
+            '</small></div><div class="briefing-alert-route">' +
+            safe(item.recommendedDelivery) +
+            '<small>PREVIEW ONLY</small></div></div>';
+        }).join('')
+      : '<p class="briefing-no-alerts">No active alerts from connected local sources. ' +
+        'This does not mean business revenue or payments were verified.</p>';
+
+    const usage = data.metrics?.usage || {};
+    const requests = usage.requestsLast24Hours ?? 0;
+    const sites = data.metrics?.websites?.enabled ?? 0;
+    el('briefingMetricNotes').textContent =
+      requests + ' tracked AI requests in the last 24h; ' +
+      sites + ' active HTTPS monitors. Revenue, customers and payment information are not connected.';
+  }
+
+  async function loadBriefing() {
+    if (briefingBusy || appState.busy) return;
+    const data = await api('/api/briefing');
+    renderBriefing(data);
+  }
+
+  async function loadBriefingPreferences() {
+    if (briefingPrefsLoaded) return;
+    const result = await api('/api/briefing/preferences');
+    const prefs = result.preferences || {};
+    el('briefingTimezone').value = prefs.timeZoneId || 'America/Chicago';
+    el('briefingHour').value = prefs.dailyHourLocal ?? 8;
+    el('briefingQuietStart').value = prefs.quietStartHourLocal ?? 22;
+    el('briefingQuietEnd').value = prefs.quietEndHourLocal ?? 7;
+    el('briefingCriticalOverride').checked = !!prefs.criticalOverrideQuietHours;
+    briefingPrefsLoaded = true;
+  }
+
+  el('briefingRefreshButton').addEventListener('click', async () => {
+    if (briefingBusy || appState.busy) return;
+    briefingBusy = true;
+    el('briefingRefreshButton').disabled = true;
+    try {
+      const data = await api('/api/briefing');
+      renderBriefing(data);
+      notice('Briefing refreshed from locally recorded data. Nothing was sent.');
+    } catch (error) {
+      notice('Briefing preview failed: ' + error.message, true);
+    } finally {
+      briefingBusy = false;
+      el('briefingRefreshButton').disabled = false;
+    }
+  });
+
+  el('briefingCopyButton').addEventListener('click', async () => {
+    if (!briefingText) return;
+    try {
+      await navigator.clipboard.writeText(briefingText);
+      notice('Draft briefing copied. No text message or call was sent.');
+    } catch (error) {
+      notice('Could not copy the briefing in this browser: ' + error.message, true);
+    }
+  });
+
+  el('briefingPreferencesForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    if (briefingBusy || appState.busy) return;
+    briefingBusy = true;
+    try {
+      const data = {
+        timeZoneId: el('briefingTimezone').value,
+        dailyHourLocal: Number(el('briefingHour').value),
+        quietStartHourLocal: Number(el('briefingQuietStart').value),
+        quietEndHourLocal: Number(el('briefingQuietEnd').value),
+        criticalOverrideQuietHours: el('briefingCriticalOverride').checked
+      };
+      const response = await api('/api/briefing/preferences', {
+        method: 'POST', body: JSON.stringify(data)
+      });
+      el('briefingPreferenceStatus').textContent =
+        'Preferences saved. No automatic messages or calls are enabled.';
+      notice(response.message);
+      renderBriefing(await api('/api/briefing'));
+    } catch (error) {
+      notice('Briefing settings were not saved: ' + error.message, true);
+    } finally { briefingBusy = false; }
+  });
+
   window.OperatorContext = {
-    refresh: async () => { await Promise.all([loadPresence(), refreshOperations()]); }
+    refresh: async () => {
+      await Promise.all([
+        loadPresence(), refreshOperations(), loadBriefing(), loadBriefingPreferences()
+      ]);
+    }
   };
   window.OperatorContext.refresh().catch(error =>
     console.warn('Archer operator context could not load:', error.message));
@@ -202,7 +313,9 @@
     if (document.hidden || appState.busy) return;
     if (!el('archerView').classList.contains('hidden'))
       loadPresence().catch(console.warn);
-    if (!el('operationsView').classList.contains('hidden'))
+    if (!el('operationsView').classList.contains('hidden')) {
       refreshOperations().catch(console.warn);
+      loadBriefing().catch(console.warn);
+    }
   }, 30000);
 })();
