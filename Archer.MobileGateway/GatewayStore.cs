@@ -173,7 +173,6 @@ public sealed class DeviceTokenService(GatewayStore store)
                 !scopes.Contains("conversation:read", StringComparer.Ordinal)))
             throw new ArgumentException("Supported scopes: inbox:read, inbox:ack (requires inbox:read), conversation:read, conversation:write (requires conversation:read).");
         return scopes;
-        return scopes;
     }
 
     private static string NewToken() =>
