@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 1.2.0 (local prototype)  
+**Version:** 1.3.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -688,3 +688,25 @@ unauthorized device attempts, missing admin/ingest key rejection, a one-time 256
 
 **When you're back at your home PC:** Pull once, rebuild/run MissionControl, check `/api/config` reports v1.2.0 and browse existing Inbox. You don't need to start or configure the mobile gateway yet; it is optional and disabled from remote access. When we're ready to test authenticated mobile interactions, we can run the new project locally and configure test keys on your personal PC.
 
+
+## v1.3.0 — Zero-cost notification-routing sandbox
+
+Archer.MobileGateway now supports a **dry-run notification planner** for safely testing how a future iPhone app would handle Archer's recorded business and mission alerts, BEFORE any real APNs push, SMS or phone calls are connected.
+
+While the gateway is running **locally** with a test device enrolled and optional local event sync, the locally authenticated administrator can call:
+
+- `POST http://127.0.0.1:5091/internal/delivery/simulate` with the private `X-Archer-Admin-Key` header and JSON `{"confirm":true,"maxEvents":10}`. This creates only simulation records in the gateway's local Data file.
+- `GET /internal/delivery/preview` with that admin header: inspect mock routes, stable deduplication keys and reasons. No credentials are returned.
+- `GET /v1/delivery-previews` with the enrolled device's short-lived `Authorization: Bearer <device token>` header: see **only** that device's mock route entries, without access to any other device.
+
+The explicit sandbox policy currently:
+
+- Suggests a noninterrupting **push-preview** for fresh attention or unverified urgent-review events.
+- Suggests a noninterrupting **digest-preview** for routine information or stale source events.
+- Suppresses an acknowledged or resolved source event from further proposed interruption.
+- Labels unverified website outages as requiring a real investigation **before** any future phone escalation.
+- Creates no more than one preview per source-event, device and policy revision, even if replayed. History is bounded to 200 previews.
+
+**Important:** every preview reports `actualNotificationsSent: 0`. No real message, phone call, Apple APNs push, chat turn, geographic tracking or provider fee is incurred. This isn't a reliable delivery queue yet and doesn't provide iPhone notifications. The simulator runs only on an explicit local admin test request; it is not scheduled. The 1.2.0 authentication boundaries remain intact.
+
+**Testing:** CI runs synthetic event ingestion, authorization rejection, explicit confirmation, duplicate prevention, receipt-free routing, preserved read/acknowledgment, device revocation and no external provider actions. See [the gateway security review](ARCHER_MOBILE_SECURITY_REVIEW.md) and [updated master to-do list](ARCHER_MOBILE_COMMUNICATION_ROADMAP.md). You can test this later on your personal home PC; no setup is needed at work.
