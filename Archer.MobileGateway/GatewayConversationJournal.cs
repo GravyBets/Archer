@@ -41,6 +41,37 @@ public sealed class GatewayConversationJournal(GatewayStore store)
         }, ct);
     }
 
+    /// <summary>
+    /// An additional, separately keyed LOCAL service-to-service preview.
+    /// Does not mark messages handled, import desktop history, charge AI,
+    /// send assistant responses, or grant an action to a mobile client.
+    /// </summary>
+    public async Task<object> BridgePreviewAsync(CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return await store.ReadAsync(state => (object)new
+        {
+            messages = state.ConversationMessages
+                .Where(x => x.Role == "owner" &&
+                    x.CreatedAtUtc >= now.AddDays(-RetentionDays) &&
+                    x.CreatedAtUtc <= now)
+                .OrderBy(x => x.CreatedAtUtc).ThenBy(x => x.Id)
+                .TakeLast(30)
+                .Select(x => new
+                {
+                    id = x.Id,
+                    deviceId = x.DeviceId,
+                    content = x.Content,
+                    createdAtUtc = x.CreatedAtUtc
+                }).ToArray(),
+            maxMessages = 30,
+            desktopHistorySynced = false,
+            aiReplyGenerated = false,
+            actionExecuted = false,
+            note = "Read-only local phone-draft preview; nothing has been sent to Archer's AI."
+        }, ct);
+    }
+
     public async Task<AppendResult> AppendAsync(
         GatewayDevice device, AppendConversationMessageRequest request, CancellationToken ct)
     {

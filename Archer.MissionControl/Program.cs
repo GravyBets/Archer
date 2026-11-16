@@ -30,6 +30,7 @@ builder.Services.AddHttpClient("gateway-loopback", client =>
     UseProxy = false
 });
 builder.Services.AddHostedService<LocalMobileGatewaySyncWorker>();
+builder.Services.AddSingleton<GatewayConversationBridge>();
 builder.Services.AddHttpClient<TwilioGateway>(client =>
     client.Timeout = TimeSpan.FromSeconds(25));
 builder.Services.AddSingleton<CommunicationCoordinator>();
@@ -55,7 +56,7 @@ await app.Services.GetRequiredService<JsonFileStore>().RecoverInterruptedTasksAs
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "1.6.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "1.7.0" }));
 
 app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
 {
@@ -63,7 +64,7 @@ app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
     model = ai.Model,
     routing = ai.Routing,
     mode = "Local only · Guarded AI, approved code drafts, opt-in phone integrations",
-    version = "1.6.0"
+    version = "1.7.0"
 }));
 
 app.MapGet("/api/state", async (JsonFileStore store, CancellationToken ct) =>
@@ -204,6 +205,12 @@ app.MapPost("/api/communications/test-call", async Task<IResult> (
 
 // Optional mobile-presence ingress is token-gated and disabled by default.
 // Never open the entire Archer local dashboard to the Internet or LAN.
+// Read-only, opt-in, LOCAL preview of phone-authored gateway drafts.
+// Never send these to a model without a separate user click on Send.
+app.MapGet("/api/mobile/conversation-preview", async (
+    GatewayConversationBridge bridge, CancellationToken ct) =>
+    Results.Ok(await bridge.PreviewAsync(ct)));
+
 app.MapGet("/api/mobile/capabilities", () => Results.Ok(new
 {
     enabled = MobilePresenceIngress.Enabled,
@@ -804,7 +811,7 @@ app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore
 
 app.MapFallbackToFile("index.html");
 
-Console.WriteLine("ARCHER Mission Control V1.6.0 — http://127.0.0.1:5087");
+Console.WriteLine("ARCHER Mission Control V1.7.0 — http://127.0.0.1:5087");
 app.Run("http://127.0.0.1:5087");
 
 static IResult MissingApiKey() => Results.BadRequest(new

@@ -31,6 +31,7 @@ jobs:
           node --check Archer.MissionControl/wwwroot/js/coding.js
           node --check Archer.MissionControl/wwwroot/js/communications.js
           node --check Archer.MissionControl/wwwroot/js/inbox.js
+          node --check Archer.MissionControl/wwwroot/js/mobile-drafts.js
       - name: Validate UI element wiring
         run: python3 tests/ValidateUi.py
       - name: Smoke test local configuration and usage endpoints
@@ -58,6 +59,8 @@ jobs:
           curl -fsS http://127.0.0.1:5087/api/usage > /tmp/archer-usage.json
           curl -fsS http://127.0.0.1:5087/api/communications > /tmp/archer-communications.json
           curl -fsS http://127.0.0.1:5087/api/mobile/capabilities > /tmp/archer-mobile.json
+          curl -fsS http://127.0.0.1:5087/api/mobile/conversation-preview > /tmp/archer-mobile-drafts-off.json
+          python3 -c 'import json; p=json.load(open("/tmp/archer-mobile-drafts-off.json")); assert not p["enabled"]; assert not p["connected"]; assert p["messages"]==[]; print("PASS: mobile desktop message bridge disabled by default")'
           CODE=$(curl -sS -o /tmp/archer-mobile-unauthorized.json -w '%{http_code}' \
             -H 'Content-Type: application/json' \
             -d '{"activity":"Working","placeLabel":"Store","durationMinutes":15,"shareWithAi":false}' \
@@ -131,7 +134,7 @@ jobs:
             -X POST http://127.0.0.1:5087/api/operations/monitors)
           test "$CODE" = "400"
           python3 -c 'import json; p=json.load(open("/tmp/archer-presence-set.json")); clear=json.load(open("/tmp/archer-presence-cleared.json")); ops=json.load(open("/tmp/archer-operations.json")); assert p["active"]; assert p["presence"]["approxLatitude"]==29.99; assert p["presence"]["approxLongitude"]==-95.12; assert not p["presence"]["shareWithAi"]; assert not clear["active"]; assert ops["channels"]["sms"]=="Not connected"; assert ops["monitors"]==[]; print("PASS: consented coarse presence, clear and safe monitoring defaults")'
-          python3 -c 'import json; c=json.load(open("/tmp/archer-config.json")); u=json.load(open("/tmp/archer-usage.json")); assert c["version"]=="1.6.0", c; assert c["routing"]["mode"]=="adaptive", c; assert u["month"]["requests"]==0, u; assert u["lifetime"]["estimatedCostUsd"]==0, u; print("PASS: Archer v1.6.0 health/config/usage endpoints")'
+          python3 -c 'import json; c=json.load(open("/tmp/archer-config.json")); u=json.load(open("/tmp/archer-usage.json")); assert c["version"]=="1.7.0", c; assert c["routing"]["mode"]=="adaptive", c; assert u["month"]["requests"]==0, u; assert u["lifetime"]["estimatedCostUsd"]==0, u; print("PASS: Archer v1.7.0 health/config/usage endpoints")'
           python3 tests/SmokeInbox.py /tmp/archer-inbox-ci-state/archer-state.json
 
       - name: Smoke-test isolated gateway security and inbox
@@ -139,6 +142,7 @@ jobs:
         run: |
           export ARCHER_GATEWAY_ADMIN_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
           export ARCHER_GATEWAY_INGEST_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
+          export ARCHER_GATEWAY_BRIDGE_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
           export ARCHER_GATEWAY_DATA_KEY_HEX="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
           export ARCHER_GATEWAY_DATA_DIR="/tmp/archer-gateway-ci-$$"
           mkdir -p "$ARCHER_GATEWAY_DATA_DIR"
@@ -158,6 +162,28 @@ jobs:
             exit 1
           fi
           python3 tests/SmokeMobileGateway.py "$ARCHER_GATEWAY_DATA_DIR/mobile-gateway-state.json"
+          # Start the local desktop separately while gateway is still alive.
+          # This verifies the two services agree on the dedicated bridge key.
+          export ARCHER_GATEWAY_CHAT_BRIDGE_ENABLED=true
+          export ARCHER_DATA_DIR="/tmp/archer-desktop-bridge-ci-$$"
+          mkdir -p "$ARCHER_DATA_DIR"
+          dotnet run --no-build --configuration Release --project Archer.MissionControl/Archer.MissionControl.csproj > /tmp/archer-desktop-bridge-smoke.log 2>&1 &
+          DESKTOP_PID=$!
+          trap 'kill $DESKTOP_PID $PID 2>/dev/null || true' EXIT
+          DESKTOP_READY=0
+          for i in $(seq 1 25); do
+            if curl -fsS http://127.0.0.1:5087/api/health > /tmp/archer-bridge-desktop-health.json; then
+              DESKTOP_READY=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$DESKTOP_READY" -ne 1 ]; then
+            cat /tmp/archer-desktop-bridge-smoke.log
+            exit 1
+          fi
+          curl -fsS http://127.0.0.1:5087/api/mobile/conversation-preview > /tmp/archer-bridge-live.json
+          python3 -c 'import json; p=json.load(open("/tmp/archer-bridge-live.json")); assert p["enabled"] and p["connected"], p; assert len(p["messages"])==1, p; assert p["messages"][0]["content"]=="CI_PHONE_DRAFT_READY_FOR_DESKTOP_REVIEW", p; assert p["aiRequestsMade"]==0 and p["automaticallySubmitted"]==False; print("PASS: authenticated gateway-to-desktop draft preview, no AI request or auto submit")'
 
       - name: Test encrypted gateway migration and tamper resistance
         shell: bash

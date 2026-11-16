@@ -409,3 +409,19 @@
 .inbox-actions{display:flex;flex-direction:column;gap:7px;min-width:145px}
 .inbox-actions .button{font-size:11px;padding:8px 11px}
 @media(max-width:700px){.inbox-card{flex-direction:column}.inbox-actions{flex-direction:row;flex-wrap:wrap;width:100%}.inbox-actions .button{flex:1 1 120px}.inbox-toolbar{padding:13px}.inbox-items{padding:8px}.inbox-toolbar #inboxTotals{text-align:left}}
+
+
+/* v1.7.0 — explicit, local-only mobile drafts preview (no AI auto-send) */
+.mobile-draft-card{margin-top:20px}
+.mobile-draft-content{padding:17px 22px}
+#mobileDraftNote{font-size:11px;line-height:1.6;color:#a5c0c9;margin:0 0 13px}
+.mobile-draft-actions{display:flex;align-items:center;gap:13px;flex-wrap:wrap;margin-bottom:14px}
+.mobile-draft-actions small{color:#88a4b7;font-size:10px;line-height:1.5;flex:1}
+.mobile-draft-list{display:flex;flex-direction:column;gap:10px;max-height:460px;overflow-y:auto}
+.mobile-draft-item{background:#0e1c2a;border:1px solid #314959;border-radius:9px;padding:14px}
+.mobile-draft-meta{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap}
+.mobile-draft-meta strong{color:#a6dfd3;font-size:11px}
+.mobile-draft-meta small{color:#7893a6;font-size:10px}
+.mobile-draft-text{color:#c3d7df;font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;margin:10px 0 12px}
+.mobile-draft-item .button{font-size:11px}
+@media(max-width:650px){.mobile-draft-content{padding:13px}.mobile-draft-actions .button{width:100%}.mobile-draft-item .button{width:100%}}
