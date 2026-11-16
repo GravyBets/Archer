@@ -12,14 +12,16 @@ namespace Archer.MobileGateway;
 public sealed class GatewayStore
 {
     private readonly string _path;
+    private readonly GatewayStateEncryption _encryption;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true
     };
 
-    public GatewayStore(IWebHostEnvironment env)
+    public GatewayStore(IWebHostEnvironment env, GatewayStateEncryption encryption)
     {
+        _encryption = encryption;
         var configured = Environment.GetEnvironmentVariable("ARCHER_GATEWAY_DATA_DIR");
         var directory = string.IsNullOrWhiteSpace(configured)
             ? Path.Combine(env.ContentRootPath, "Data")
@@ -50,16 +52,45 @@ public sealed class GatewayStore
 
     private async Task<GatewayState> LoadAsync(CancellationToken ct)
     {
+        // Never access or mutate the on-disk gateway state without an owner-
+        // configured encryption key. Health checks can run without one.
+        _encryption.RequireKey();
         if (!File.Exists(_path)) return new GatewayState();
+
         var source = await File.ReadAllTextAsync(_path, ct);
-        return JsonSerializer.Deserialize<GatewayState>(source, Json) ?? new GatewayState();
+        var (plainJson, legacy) = _encryption.DecryptOrIdentifyLegacy(source);
+        var state = JsonSerializer.Deserialize<GatewayState>(plainJson, Json) ??
+            throw new InvalidDataException("Gateway state could not be parsed. It will not be reset.");
+
+        if (legacy)
+        {
+            // v1.5 plaintext migration: encrypt and atomically replace the
+            // canonical file BEFORE returning any state data to an API.
+            // Existing file-system backups/snapshots may still contain
+            // plaintext: they must be handled by the owner separately.
+            await SaveAsync(state, ct);
+        }
+
+        return state;
     }
 
     private async Task SaveAsync(GatewayState state, CancellationToken ct)
     {
-        var temp = _path + ".tmp";
-        await File.WriteAllTextAsync(temp, JsonSerializer.Serialize(state, Json), ct);
-        File.Move(temp, _path, overwrite: true);
+        _encryption.RequireKey();
+        var plaintext = JsonSerializer.Serialize(state, Json);
+        var encrypted = _encryption.Encrypt(plaintext);
+        // A unique temp name avoids collision with an interrupted old write.
+        var temp = _path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            await File.WriteAllTextAsync(temp, encrypted, ct);
+            File.Move(temp, _path, overwrite: true);
+        }
+        finally
+        {
+            // A failed save leaves the previous encrypted state untouched.
+            if (File.Exists(temp)) File.Delete(temp);
+        }
     }
 }
 
