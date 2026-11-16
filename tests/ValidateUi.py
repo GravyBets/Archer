@@ -11,6 +11,7 @@ HOME_JS = (ROOT / "js" / "archer-home.js").read_text(encoding="utf-8")
 DEVELOPER_JS = (ROOT / "js" / "developer.js").read_text(encoding="utf-8")
 OPERATOR_JS = (ROOT / "js" / "operator-context.js").read_text(encoding="utf-8")
 SPEND_JS = (ROOT / "js" / "spending.js").read_text(encoding="utf-8")
+CODING_JS = (ROOT / "js" / "coding.js").read_text(encoding="utf-8")
 FIELD_JS = (ROOT / "js" / "orb-field.js").read_text(encoding="utf-8")
 CSS = (ROOT / "css" / "app.css").read_text(encoding="utf-8")
 
@@ -64,19 +65,25 @@ required = {
     "briefingQuietEnd", "briefingCriticalOverride", "briefingPreferenceStatus",
     "spendStatus", "spendCounted", "spendRemaining", "spendUncertain",
     "spendPaused", "spendMonthly", "spendPerRequest", "spendSettingsForm",
-    "spendSaveButton", "spendPauseIndicator"
+    "spendSaveButton", "spendPauseIndicator",
+    "codingHeading", "codingInstruction", "codingGenerateButton",
+    "codingStatus", "codingProposalPreview", "codingPublishStatus",
+    "codingPublishButton"
 }
 assert required.issubset(page.ids), f"Missing expected IDs: {required.difference(page.ids)}"
 
 # Only check literal calls. Dynamically generated IDs are intentionally excluded.
 literal_id_pattern = re.compile(r"(?:\$\(|\bel\()\s*'([A-Za-z][A-Za-z0-9-]+)'\s*\)")
-referred_ids = set(literal_id_pattern.findall(JS + "\n" + HOME_JS + "\n" + FIELD_JS + "\n" + DEVELOPER_JS + "\n" + OPERATOR_JS + "\n" + SPEND_JS))
+referred_ids = set(literal_id_pattern.findall(JS + "\n" + HOME_JS + "\n" + FIELD_JS + "\n" + DEVELOPER_JS + "\n" + OPERATOR_JS + "\n" + SPEND_JS + "\n" + CODING_JS))
 # Created dynamically in the mission-list empty state.
 dynamic_ids = {"starterMission"}
 missing = referred_ids.difference(page.ids).difference(dynamic_ids)
 assert not missing, f"JavaScript references missing DOM IDs: {missing}"
 
-assert page.scripts[-6:] == ["/js/app.js", "/js/archer-home.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js"]
+assert page.scripts[-7:] == ["/js/app.js", "/js/archer-home.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js", "/js/coding.js"]
+assert "/api/development/code-proposals" in CODING_JS
+assert "window.confirm(" in CODING_JS
+assert "publish" in CODING_JS
 assert "/api/spending" in SPEND_JS
 assert "/api/presence" in OPERATOR_JS
 assert "/api/operations" in OPERATOR_JS

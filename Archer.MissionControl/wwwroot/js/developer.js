@@ -203,5 +203,12 @@
     statusMessage('Review mission prepared. You decide whether to create and execute it.');
   });
 
+  window.ArcherDeveloper = {
+    getCodeSelection: () => ({
+      repository: inventory ? 'https://github.com/' + inventory.repository : '',
+      paths: selectedPaths()
+    })
+  };
+
   updateButtons();
 })();

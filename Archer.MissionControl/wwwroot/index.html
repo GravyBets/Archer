@@ -22,7 +22,7 @@
       </nav>
       <div class="sidebar-bottom">
         <div class="sidebar-status"><span class="pulse-dot"></span><span id="connectionLabel">Checking local server...</span></div>
-        <div class="version">V0.8.0 · LOCAL DEVELOPMENT</div>
+        <div class="version">V0.9.0 · LOCAL DEVELOPMENT</div>
       </div>
     </aside>
     <main class="content">
@@ -243,9 +243,32 @@
               </div>
             </section>
           </div>
+          <section class="panel code-agent-panel" aria-labelledby="codingHeading">
+            <div class="panel-header"><div>
+              <h2 id="codingHeading">Coding agent · review first</h2>
+              <p>Generate a bounded proposed change from one or two exact source files. The generation uses your AI budget.</p>
+            </div><span class="developer-readonly">DRAFT / OWNER REVIEW</span></div>
+            <div class="coding-agent-content">
+              <label for="codingInstruction">What should Archer change?
+                <textarea id="codingInstruction" rows="3" maxlength="1200"
+                  placeholder="E.g. Improve skipped placemark diagnostics in the selected converter, and add a focused regression test."></textarea>
+              </label>
+              <div class="coding-actions">
+                <button id="codingGenerateButton" class="button primary" type="button">Generate local code proposal</button>
+                <span id="codingStatus" role="status">Choose one or two source files above, then describe a small change.</span>
+              </div>
+              <div id="codingProposalPreview" class="coding-proposal-preview">
+                <p class="developer-empty">No generated code draft yet.</p>
+              </div>
+              <div class="coding-publish-controls">
+                <p id="codingPublishStatus">GitHub publishing requires separate read/write permission, an explicit local enable switch, and your confirmation. Archer never merges or deploys.</p>
+                <button id="codingPublishButton" class="button secondary" type="button" disabled>Approve and open draft PR</button>
+              </div>
+            </div>
+          </section>
           <p class="developer-footnote">Repository browsing and previews don't consume OpenAI API credits.
-            A review mission still requires you to generate its plan and run it explicitly.
-            Selected source excerpts are sent to OpenAI when you run that mission. Archer cannot yet edit GitHub, open a pull request, or run GeoShift builds from this page.</p>
+            Review missions and generated code drafts incur AI API charges only when you explicitly request them.
+            Selected source excerpts are sent to OpenAI when generating a code proposal. Publishing a branch and draft PR is separately gated and requires your approval. Archer still cannot merge, deploy or execute GeoShift builds.</p>
         </section>
         <section id="operationsView" class="view hidden" aria-labelledby="operationsHeading">
           <div class="hero"><div class="eyebrow">BUSINESS OPERATIONS <span class="eyebrow-line"></span></div>
@@ -340,7 +363,7 @@
           </div>
         </section>
         <section id="activityView" class="view hidden"><div class="hero"><div class="eyebrow">EXECUTION HISTORY <span class="eyebrow-line"></span></div><h1>Activity<span class="accent">.</span></h1><p>What Archer has actually done, with completed work stored on disk.</p></div><div class="panel"><div id="activityList" class="activity-list"></div></div></section>
-        <footer class="footer">ARCHER / V0.8 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
+        <footer class="footer">ARCHER / V0.9 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
       </div>
     </main>
   </div>
@@ -351,5 +374,6 @@
   <script src="/js/developer.js" defer></script>
   <script src="/js/operator-context.js" defer></script>
   <script src="/js/spending.js" defer></script>
+  <script src="/js/coding.js" defer></script>
 </body>
 </html>

@@ -9,6 +9,8 @@ public sealed class ArcherState
     public OwnerPresence? Presence { get; set; }
     public List<WebsiteMonitor> WebsiteMonitors { get; set; } = [];
     public List<WebsiteIncident> WebsiteIncidents { get; set; } = [];
+    // Reviewable coding drafts are local until explicitly approved for publication.
+    public List<CodeProposal> CodeProposals { get; set; } = [];
     // Notification routing preferences are preview-only until real delivery is explicitly configured.
     public BriefingPreferences BriefingPreferences { get; set; } = new();
 }
@@ -146,3 +148,30 @@ public sealed class BriefingPreferences
 public sealed record UpdateBriefingPreferencesRequest(
     string? TimeZoneId, int DailyHourLocal, int QuietStartHourLocal,
     int QuietEndHourLocal, bool CriticalOverrideQuietHours);
+
+public sealed class CodeProposal
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+    public string Repository { get; set; } = "";
+    public string BaseBranch { get; set; } = "";
+    public string Title { get; set; } = "";
+    public string Request { get; set; } = "";
+    public string Summary { get; set; } = "";
+    public string TestRecommendations { get; set; } = "";
+    public string Status { get; set; } = "Draft";
+    public string? PullRequestUrl { get; set; }
+    public string? BranchName { get; set; }
+    public List<CodeProposalFile> Files { get; set; } = [];
+}
+
+public sealed class CodeProposalFile
+{
+    public string Path { get; set; } = "";
+    public string ExpectedBlobSha { get; set; } = "";
+    public string OriginalContent { get; set; } = "";
+    public string ProposedContent { get; set; } = "";
+}
+
+public sealed record DraftCodeRequest(string? Repository, List<string>? Paths, string? Instruction);
+public sealed record PublishCodeRequest(bool Confirm);

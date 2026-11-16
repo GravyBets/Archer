@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 0.8.0 (local prototype)  
+**Version:** 0.9.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -524,3 +524,41 @@ Known models are explicitly priced using the local November 2026 price reference
 **Testing:** Pull from `main`, rebuild, verify `/api/config` version `0.8.0`, check the spending guard in Mission Control, modify/save limits, toggle Pause, and confirm AI work is blocked while paused. Unpause deliberately and test one cheap chat before enabling auto-run again. No prior mission data should be lost.
 
 **Remaining future controls:** Provider-side budget reconciliation, per-mission cost accounting, and payment-provider balance/alerts once those integrations are approved.
+
+## v0.9.0 — Owner-reviewed AI coding drafts and opt-in draft pull requests
+
+The **Developer** page now lets you select **one or two existing .cs/.razor files**, describe a narrow GeoShift change, and click **Generate local code proposal**. This performs one paid OpenAI code-model call *through Archer's v0.8 spending guard*. It returns strict structured full-file edits for the selected paths only, with a short summary and recommended tests. All proposed source is stored locally in Archer's ignored `Data/archer-state.json`. You can inspect the **original and proposed source for every file** before taking any further action. No code is run or published by generation alone.
+
+### Highly controlled GitHub publishing
+
+Archer can **optionally** open a **draft PR** on a separate `archer/draft-...` branch, only when *all* conditions are satisfied:
+
+1. You explicitly opt in by setting the Windows user environment variable `ARCHER_CODING_ENABLED=true`.
+2. You set `ARCHER_GITHUB_WRITE_REPOS=GravyBets/GeoShift` (or the exact approved owner/repository).
+3. You create a fine-grained GitHub token **restricted to that one repository** with **Contents: Read and write** and **Pull requests: Read and write** permissions, and set the token as `ARCHER_GITHUB_WRITE_TOKEN` in your Windows **user environment**, NEVER in the repository, a mission, or local knowledge file.
+4. You restart Visual Studio/Archer.
+5. You inspect the proposed source, click **Approve and open draft PR**, and separately confirm the exact repository and paths in the confirmation dialog.
+
+The publishing API checks the allowed repository and current GitHub blob SHAs **before** creating a branch, refuses unsupported paths and oversized edits, then creates an isolated branch and commits at most two pre-reviewed files serially. It opens a **draft** pull request (no auto-merge). Any failure disarms that publish attempt and requires manual GitHub inspection before retrying, because a branch might have been created.
+
+**Archer cannot merge, deploy, run arbitrary shell commands, modify workflow files, or make production changes through this feature.** It doesn't run GeoShift tests locally. Existing CI in the GeoShift repository *may* execute when a PR opens; you must independently inspect those checks and the code diff. A model-generated patch can still be wrong or insecure. Inspect every line before approving a merge.
+
+### Extra safety notes
+
+- PR publishing is **OFF by default**, even if Github read-only previews work.
+- Do not store GitHub write tokens or other credentials inside Git. They are read by Archer at runtime from a local environment variable and are not included in API results.
+- The existing localhost dashboard is unauthenticated. **Never expose port 5087 to your LAN or the internet**, or grant publishing tokens in a shared/untrusted workstation.
+- Explicitly generated code proposals involve **paid model usage and source disclosure to OpenAI**; browser previews and previously generated local proposals do not.
+- The default v0.8 local spending preflight continues to apply to code generation.
+- Maximum two files of 9,000 input characters each; generated files capped at 12,000 characters. Oversized/truncated files are rejected rather than guessed about.
+
+### Test
+
+1. Pull and rebuild; check `/api/config` reports `0.9.0`.
+2. In Developer, load the allowed GeoShift repo, select one or two small files, write a narrow improvement request.
+3. Ensure your spend allowance is sufficient and choose **Generate local code proposal**. Review the whole original/proposed content and recommended tests.
+4. Without setting publishing environment variables, confirm that the draft PR button is disabled and `GET /api/development/code-proposals` reports `publishingEnabled: false`.
+5. If and only if you want to test GitHub writes, configure the restricted token and explicit opt-in, regenerate or load the saved proposal, approve a draft PR, review the resulting GitHub branch/PR, and let GitHub CI run independently.
+6. Do not merge or deploy until you're happy with the generated changes and actual test results.
+
+The CI checks Archer's .NET build, JavaScript wiring, local startup, and that publishing is **disabled by default**. Actual paid code generation and token-based PR publishing require your Windows environment and explicit consent; the CI does not perform either.
