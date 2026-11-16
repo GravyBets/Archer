@@ -15,6 +15,7 @@ CODING_JS = (ROOT / "js" / "coding.js").read_text(encoding="utf-8")
 COMMUNICATIONS_JS = (ROOT / "js" / "communications.js").read_text(encoding="utf-8")
 INBOX_JS = (ROOT / "js" / "inbox.js").read_text(encoding="utf-8")
 MOBILE_DRAFTS_JS = (ROOT / "js" / "mobile-drafts.js").read_text(encoding="utf-8")
+MOBILE_SESSIONS_JS = (ROOT / "js" / "mobile-sessions.js").read_text(encoding="utf-8")
 FIELD_JS = (ROOT / "js" / "orb-field.js").read_text(encoding="utf-8")
 CSS = (ROOT / "css" / "app.css").read_text(encoding="utf-8")
 
@@ -80,19 +81,25 @@ required = {
     "mobileIngestStatus", "mobileIngestDescription",
     "inboxNavCount", "inboxTitle", "inboxFilter", "inboxTotals", "inboxItems", "inboxRefreshButton",
     "mobileDraftHeading", "mobileDraftConnection", "mobileDraftNote",
-    "mobileDraftRefresh", "mobileDraftItems", "mobileDraftShareReply"
+    "mobileDraftRefresh", "mobileDraftItems", "mobileDraftShareReply",
+    "mobileSessionHeading", "mobileSessionSelect", "mobileSessionRefresh",
+    "mobileSessionStatus", "mobileSessionMessages", "mobileSessionMore"
 }
 assert required.issubset(page.ids), f"Missing expected IDs: {required.difference(page.ids)}"
 
 # Only check literal calls. Dynamically generated IDs are intentionally excluded.
 literal_id_pattern = re.compile(r"(?:\$\(|\bel\()\s*'([A-Za-z][A-Za-z0-9-]+)'\s*\)")
-referred_ids = set(literal_id_pattern.findall(JS + "\n" + HOME_JS + "\n" + FIELD_JS + "\n" + DEVELOPER_JS + "\n" + OPERATOR_JS + "\n" + SPEND_JS + "\n" + CODING_JS + "\n" + COMMUNICATIONS_JS + "\n" + INBOX_JS + "\n" + MOBILE_DRAFTS_JS))
+referred_ids = set(literal_id_pattern.findall(JS + "\n" + HOME_JS + "\n" + FIELD_JS + "\n" + DEVELOPER_JS + "\n" + OPERATOR_JS + "\n" + SPEND_JS + "\n" + CODING_JS + "\n" + COMMUNICATIONS_JS + "\n" + INBOX_JS + "\n" + MOBILE_DRAFTS_JS + "\n" + MOBILE_SESSIONS_JS))
 # Created dynamically in the mission-list empty state.
 dynamic_ids = {"starterMission"}
 missing = referred_ids.difference(page.ids).difference(dynamic_ids)
 assert not missing, f"JavaScript references missing DOM IDs: {missing}"
 
-assert page.scripts[-10:] == ["/js/app.js", "/js/archer-home.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js", "/js/coding.js", "/js/communications.js", "/js/inbox.js", "/js/mobile-drafts.js"]
+assert page.scripts[-11:] == ["/js/app.js", "/js/archer-home.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js", "/js/coding.js", "/js/communications.js", "/js/inbox.js", "/js/mobile-drafts.js", "/js/mobile-sessions.js"]
+assert "/api/mobile/sessions" in MOBILE_SESSIONS_JS
+assert "/api/mobile/session-history" in MOBILE_SESSIONS_JS
+assert "textContent" in MOBILE_SESSIONS_JS
+assert "api('/api/chat'" not in MOBILE_SESSIONS_JS
 assert "/api/mobile/conversation-preview" in MOBILE_DRAFTS_JS
 assert "/api/mobile/reply-publish" in MOBILE_DRAFTS_JS
 assert "window.confirm(" in MOBILE_DRAFTS_JS
