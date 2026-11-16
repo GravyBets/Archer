@@ -80,7 +80,7 @@ required = {
     "mobileIngestStatus", "mobileIngestDescription",
     "inboxNavCount", "inboxTitle", "inboxFilter", "inboxTotals", "inboxItems", "inboxRefreshButton",
     "mobileDraftHeading", "mobileDraftConnection", "mobileDraftNote",
-    "mobileDraftRefresh", "mobileDraftItems"
+    "mobileDraftRefresh", "mobileDraftItems", "mobileDraftShareReply"
 }
 assert required.issubset(page.ids), f"Missing expected IDs: {required.difference(page.ids)}"
 
@@ -94,6 +94,10 @@ assert not missing, f"JavaScript references missing DOM IDs: {missing}"
 
 assert page.scripts[-10:] == ["/js/app.js", "/js/archer-home.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js", "/js/coding.js", "/js/communications.js", "/js/inbox.js", "/js/mobile-drafts.js"]
 assert "/api/mobile/conversation-preview" in MOBILE_DRAFTS_JS
+assert "/api/mobile/reply-publish" in MOBILE_DRAFTS_JS
+assert "window.confirm(" in MOBILE_DRAFTS_JS
+assert "window.ArcherMobileDrafts?.chatCompleted(mobileSource)" in JS
+assert "pendingShare" in MOBILE_DRAFTS_JS
 assert "composer.value = message.content" in MOBILE_DRAFTS_JS
 assert "api('/api/chat'" not in MOBILE_DRAFTS_JS
 assert 'api("/api/chat"' not in MOBILE_DRAFTS_JS
