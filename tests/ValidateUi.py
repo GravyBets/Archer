@@ -12,6 +12,7 @@ DEVELOPER_JS = (ROOT / "js" / "developer.js").read_text(encoding="utf-8")
 OPERATOR_JS = (ROOT / "js" / "operator-context.js").read_text(encoding="utf-8")
 SPEND_JS = (ROOT / "js" / "spending.js").read_text(encoding="utf-8")
 CODING_JS = (ROOT / "js" / "coding.js").read_text(encoding="utf-8")
+COMMUNICATIONS_JS = (ROOT / "js" / "communications.js").read_text(encoding="utf-8")
 FIELD_JS = (ROOT / "js" / "orb-field.js").read_text(encoding="utf-8")
 CSS = (ROOT / "css" / "app.css").read_text(encoding="utf-8")
 
@@ -68,19 +69,28 @@ required = {
     "spendSaveButton", "spendPauseIndicator",
     "codingHeading", "codingInstruction", "codingGenerateButton",
     "codingStatus", "codingProposalPreview", "codingPublishStatus",
-    "codingPublishButton"
+    "codingPublishButton",
+    "communicationHeading", "communicationsProviderStatus", "communicationsDestination",
+    "communicationsSmsTest", "communicationsCallTest", "communicationsTestStatus",
+    "communicationsPreferencesForm", "communicationsDailySms",
+    "communicationsUrgentCalls", "communicationsSaveButton",
+    "communicationsSaveStatus", "communicationsAttempts", "mobileHeading",
+    "mobileIngestStatus", "mobileIngestDescription"
 }
 assert required.issubset(page.ids), f"Missing expected IDs: {required.difference(page.ids)}"
 
 # Only check literal calls. Dynamically generated IDs are intentionally excluded.
 literal_id_pattern = re.compile(r"(?:\$\(|\bel\()\s*'([A-Za-z][A-Za-z0-9-]+)'\s*\)")
-referred_ids = set(literal_id_pattern.findall(JS + "\n" + HOME_JS + "\n" + FIELD_JS + "\n" + DEVELOPER_JS + "\n" + OPERATOR_JS + "\n" + SPEND_JS + "\n" + CODING_JS))
+referred_ids = set(literal_id_pattern.findall(JS + "\n" + HOME_JS + "\n" + FIELD_JS + "\n" + DEVELOPER_JS + "\n" + OPERATOR_JS + "\n" + SPEND_JS + "\n" + CODING_JS + "\n" + COMMUNICATIONS_JS))
 # Created dynamically in the mission-list empty state.
 dynamic_ids = {"starterMission"}
 missing = referred_ids.difference(page.ids).difference(dynamic_ids)
 assert not missing, f"JavaScript references missing DOM IDs: {missing}"
 
-assert page.scripts[-7:] == ["/js/app.js", "/js/archer-home.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js", "/js/coding.js"]
+assert page.scripts[-8:] == ["/js/app.js", "/js/archer-home.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js", "/js/coding.js", "/js/communications.js"]
+assert "/api/communications" in COMMUNICATIONS_JS
+assert "/api/mobile/capabilities" in COMMUNICATIONS_JS
+assert "window.confirm(" in COMMUNICATIONS_JS
 assert "/api/development/code-proposals" in CODING_JS
 assert "window.confirm(" in CODING_JS
 assert "publish" in CODING_JS
