@@ -64,6 +64,8 @@ assert repeated["shared"] is True
 assert req(GATEWAY + "/internal/conversation/bridge", headers=header)["messages"] == []
 
 audit = req(GATEWAY + "/internal/audit", headers={"X-Archer-Admin-Key": admin})
-assert sum(x["action"] == "conversation.assistant_reply_shared" for x in audit["entries"]) == 1
+# The gateway's preceding security smoke explicitly published one synthetic
+# assistant reply. This separate desktop test must add exactly one more.
+assert sum(x["action"] == "conversation.assistant_reply_shared" for x in audit["entries"]) == 2
 assert "Synthetic Archer reply" not in json.dumps(audit)
 print("PASS: owner-initiated desktop-to-mobile reply stored once; no auto AI, phone or push")
