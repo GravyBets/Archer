@@ -23,7 +23,7 @@
       </nav>
       <div class="sidebar-bottom">
         <div class="sidebar-status"><span class="pulse-dot"></span><span id="connectionLabel">Checking local server...</span></div>
-        <div class="version">V1.6.0 · LOCAL DEVELOPMENT</div>
+        <div class="version">V1.7.0 · LOCAL DEVELOPMENT</div>
       </div>
     </aside>
     <main class="content">
@@ -79,6 +79,24 @@
               <button type="button" class="voice-stop" id="voiceStopButton" data-allow-busy="true" disabled>Stop speaking</button>
               <span id="voiceSupportNote">Voice uses browser features; no phone connection is enabled.</span>
               <span id="voiceAccentStatus" role="status">British male voice availability depends on your installed browser voices.</span>
+            </div>
+          </section>
+          <section class="panel mobile-draft-card" aria-labelledby="mobileDraftHeading">
+            <div class="panel-header">
+              <div><h2 id="mobileDraftHeading">Mobile message drafts</h2>
+                <p>Optional local preview from your independently authenticated phone gateway</p></div>
+              <span id="mobileDraftConnection" class="developer-readonly">DISABLED</span>
+            </div>
+            <div class="mobile-draft-content">
+              <p id="mobileDraftNote" role="status">The mobile chat bridge is disabled by default.</p>
+              <div class="mobile-draft-actions">
+                <button type="button" class="button secondary" id="mobileDraftRefresh">Refresh drafts</button>
+                <small>Choosing a message fills the chat composer. It will not contact OpenAI until you press Send.</small>
+              </div>
+              <div id="mobileDraftItems" class="mobile-draft-list">
+                <p class="developer-empty">No mobile drafts have been imported.</p>
+              </div>
+              <p class="developer-footnote">This does not synchronize your desktop conversation history, answer from your phone, or send alerts. Both apps still run locally on your personal computer.</p>
             </div>
           </section>
           <section class="panel owner-presence-card" aria-labelledby="ownerPresenceHeading">
@@ -425,7 +443,7 @@
           </div>
         </section>
         <section id="activityView" class="view hidden"><div class="hero"><div class="eyebrow">EXECUTION HISTORY <span class="eyebrow-line"></span></div><h1>Activity<span class="accent">.</span></h1><p>What Archer has actually done, with completed work stored on disk.</p></div><div class="panel"><div id="activityList" class="activity-list"></div></div></section>
-        <footer class="footer">ARCHER / V1.6 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
+        <footer class="footer">ARCHER / V1.7 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
       </div>
     </main>
   </div>
@@ -439,5 +457,6 @@
   <script src="/js/coding.js" defer></script>
   <script src="/js/communications.js" defer></script>
   <script src="/js/inbox.js" defer></script>
+  <script src="/js/mobile-drafts.js" defer></script>
 </body>
 </html>
