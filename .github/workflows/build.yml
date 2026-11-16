@@ -54,6 +54,19 @@ jobs:
 
           curl -fsS http://127.0.0.1:5087/api/presence > /tmp/archer-presence-off.json
           curl -fsS http://127.0.0.1:5087/api/operations > /tmp/archer-operations.json
+          curl -fsS http://127.0.0.1:5087/api/briefing > /tmp/archer-briefing.json
+          curl -fsS http://127.0.0.1:5087/api/briefing/preferences > /tmp/archer-briefing-preferences.json
+          curl -fsS http://127.0.0.1:5087/api/briefing/preferences \
+            -H 'Content-Type: application/json' \
+            -d '{"timeZoneId":"America/Chicago","dailyHourLocal":9,"quietStartHourLocal":22,"quietEndHourLocal":7,"criticalOverrideQuietHours":false}' \
+            -X POST > /tmp/archer-briefing-preferences-saved.json
+          curl -fsS http://127.0.0.1:5087/api/briefing/preferences > /tmp/archer-briefing-preferences-after.json
+          CODE=$(curl -sS -o /tmp/archer-invalid-briefing.json -w '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -d '{"timeZoneId":"America/Unknown","dailyHourLocal":99,"quietStartHourLocal":22,"quietEndHourLocal":7,"criticalOverrideQuietHours":false}' \
+            -X POST http://127.0.0.1:5087/api/briefing/preferences)
+          test "$CODE" = "400"
+          python3 -c 'import json; b=json.load(open("/tmp/archer-briefing.json")); p=json.load(open("/tmp/archer-briefing-preferences-after.json")); assert b["deliveryStatus"]=="preview_only", b; assert "Revenue / payments / conversions: Not connected" in b["briefingText"]; assert not b["metrics"]["deliveryConnected"]; assert b["metrics"]["websites"]["enabled"]==0; assert p["preferences"]["dailyHourLocal"]==9; assert not p["deliveryEnabled"]; print("PASS: briefing metrics, unavailable revenue and preview-only policy")'
           curl -fsS http://127.0.0.1:5087/api/presence \
             -H 'Content-Type: application/json' \
             -d '{"activity":"Working","placeLabel":"Test place","durationMinutes":15,"shareWithAi":false,"latitude":29.987654,"longitude":-95.123456}' \
@@ -67,4 +80,4 @@ jobs:
             -X POST http://127.0.0.1:5087/api/operations/monitors)
           test "$CODE" = "400"
           python3 -c 'import json; p=json.load(open("/tmp/archer-presence-set.json")); clear=json.load(open("/tmp/archer-presence-cleared.json")); ops=json.load(open("/tmp/archer-operations.json")); assert p["active"]; assert p["presence"]["approxLatitude"]==29.99; assert p["presence"]["approxLongitude"]==-95.12; assert not p["presence"]["shareWithAi"]; assert not clear["active"]; assert ops["channels"]["sms"]=="Not connected"; assert ops["monitors"]==[]; print("PASS: consented coarse presence, clear and safe monitoring defaults")'
-          python3 -c 'import json; c=json.load(open("/tmp/archer-config.json")); u=json.load(open("/tmp/archer-usage.json")); assert c["version"]=="0.6.0", c; assert c["routing"]["mode"]=="adaptive", c; assert u["month"]["requests"]==0, u; assert u["lifetime"]["estimatedCostUsd"]==0, u; print("PASS: Archer v0.6.0 health/config/usage endpoints")'
+          python3 -c 'import json; c=json.load(open("/tmp/archer-config.json")); u=json.load(open("/tmp/archer-usage.json")); assert c["version"]=="0.7.0", c; assert c["routing"]["mode"]=="adaptive", c; assert u["month"]["requests"]==0, u; assert u["lifetime"]["estimatedCostUsd"]==0, u; print("PASS: Archer v0.7.0 health/config/usage endpoints")'
