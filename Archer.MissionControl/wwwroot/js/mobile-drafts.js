@@ -130,6 +130,7 @@
       pendingShare = null;
       selected = null;
       note.textContent = result.message;
+      window.ArcherMobileSessions?.refreshMessages();
       // Refresh after releasing the local action lock below.
     } catch (error) {
       // Keep the source so a timed-out local write can be safely retried:
