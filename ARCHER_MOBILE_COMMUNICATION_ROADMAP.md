@@ -1,7 +1,7 @@
 # Archer — Mobile, Messaging, Voice & Safe Business Operations Roadmap
 
 Working plan: 2026-11-16. Target: one Archer across Windows, iPhone, text, phone, and (if approved) CarPlay.
-Current baseline: Archer v1.2.0 is LOCALHOST-ONLY. It supports guarded AI, source review/code drafts, site checks, opt-in outbound SMS/one-way calls and manually selected coarse presence. Native iOS, real push, inbound voice/text conversation and cloud hosting DO NOT exist yet.
+Current baseline: Archer v1.3.0 is LOCALHOST-ONLY. It supports guarded AI, source review/code drafts, site checks, opt-in outbound SMS/one-way calls and manually selected coarse presence. Native iOS, real push, inbound voice/text conversation and cloud hosting DO NOT exist yet.
 
 ## Product decisions
 
@@ -40,8 +40,8 @@ DONE WHEN: independent security review/tests pass, remote endpoint is separate f
 - [ ] Connect verified GeoShift app errors, payments, subscription billing, deployments, security and customer support via explicitly authorised adapters.
 - [ ] Distinguish observed data from inference, stale checks, suspected outage and verified incident.
 - [x] Initial opt-in loopback-only source-event sync into mobile gateway, with idempotent source keys and no paid delivery (v1.2).
-- [ ] Create durable **remote delivery** outbox with idempotency, retry budget, receipt tracking, dead-letter state and owner override.
-- [ ] Provide sandbox notification tests that cannot accidentally spend money.
+- [ ] Create durable **remote delivery** outbox with idempotency, retry budget, receipt tracking, dead-letter state and owner override. The v1.3 simulator is **not** a production outbox.
+- [x] Add explicit, idempotent notification-route sandbox previews with zero real push/SMS/calls, including device-scoped preview API and CI (v1.3).
 - [ ] Test duplicate, recovery, reordering, reconnect, stale checks and shutdown cases.
 
 DONE WHEN: each issue has one durable actionable item, no duplicate paid alert, reviewable evidence and no unapproved action.
@@ -127,7 +127,7 @@ DONE WHEN: GeoShift converts real paying customers and Archer reports genuine bu
 
 ## Execution order
 
-1. **Completed:** v1.1 local source-backed inbox + CI and comprehensive plan; v1.2 separate loopback-only authenticated gateway prototype and security review, with NO production provider credentials.
+1. **Completed:** v1.1 local source-backed inbox; v1.2 loopback-only authenticated gateway and security review; v1.3 provider-free notification routing sandbox with deduplication, no production credentials or external access.
 2. **Next:** independent security architecture review and a separately authenticated **TLS-ready public gateway design**, provisioning, retention and APNs-device enrollment; no remote access until those gates pass.
 3. **Then:** shared conversation backend, push service (APNs) and native iOS MVP.
 4. **In parallel after security:** Twilio inbound SMS + ConversationRelay with signature checks and strict budget.
@@ -157,3 +157,7 @@ The roadmap is not permission to make unauthorized GitHub changes, send paid cal
 ### Implementation note — v1.2.0 (2026-11-16)
 
 The separate Archer.MobileGateway project is a **local API prototype**, not an internet-facing mobile application. It currently authenticates scoped devices, supports revoke/read/ack and accepts opt-in deduplicated local event sync. It **does not** expose chat, personal GPS, admin settings, OpenAI tools or Twilio calls. CI tests authentication, invalid keys, revocation, ingest validation and event replay. The full security analysis and remaining blockers are in [ARCHER_MOBILE_SECURITY_REVIEW.md](ARCHER_MOBILE_SECURITY_REVIEW.md).
+
+### Implementation note — v1.3.0 (2026-11-16)
+
+The standalone gateway now has an admin-key-protected `POST /internal/delivery/simulate` endpoint and `GET /internal/delivery/preview`, plus scoped `GET /v1/delivery-previews` for an enrolled test device. **All routes are still localhost-only.** Simulations choose a noninterrupting push-preview or digest-preview, or suppress already acknowledged/resolved items. An unverified website outage is marked as requiring further verification and **cannot directly initiate a call**. Stable event/device/policy keys prevent repeat mock routes. CI verifies this with zero provider requests. This is intentionally not APNs, an actual SMS/call, a worker, a billing event or a remotely accessible app.
