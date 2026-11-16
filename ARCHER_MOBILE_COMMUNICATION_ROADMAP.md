@@ -1,7 +1,7 @@
 # Archer — Mobile, Messaging, Voice & Safe Business Operations Roadmap
 
 Working plan: 2026-11-16. Target: one Archer across Windows, iPhone, text, phone, and (if approved) CarPlay.
-Current baseline: Archer v1.5.0 is LOCALHOST-ONLY. It supports guarded AI, source review/code drafts, site checks, opt-in outbound SMS/one-way calls and manually selected coarse presence. Native iOS, real push, inbound voice/text conversation and cloud hosting DO NOT exist yet.
+Current baseline: Archer v1.6.0 is LOCALHOST-ONLY. It supports guarded AI, source review/code drafts, site checks, opt-in outbound SMS/one-way calls and manually selected coarse presence. Native iOS, real push, inbound voice/text conversation and cloud hosting DO NOT exist yet.
 
 ## Product decisions
 
@@ -28,7 +28,8 @@ Current baseline: Archer v1.5.0 is LOCALHOST-ONLY. It supports guarded AI, sourc
 - [ ] Secure **remote** pairing, owner identity/login, production refresh/rotation protocol, device audit export, stolen-device recovery and physical-device keychain integration.
 - [x] Local gateway enforces loopback, restrictive Host/Origin, scoped read/ack tokens and layered global/per-device rate limits (v1.4).
 - [ ] Production HTTPS, trusted ingress, secure secret management, outbound caps, input validation review and per-identity distributed rate limits.
-- [ ] Provision encrypted backups and complete a restore drill; add operational health and cost alerts.
+- [x] AES-256-GCM authenticated encryption for the entire local mobile gateway state (inbox, conversation journal, device hashes and audit); migration and wrong/missing key protection in CI (v1.6).
+- [ ] Provision encrypted off-host backups, secure key backup/rotation, successful restore drill and operational health/cost alerts; local encryption alone does NOT satisfy production security.
 - [x] Add isolated gateway CI rejecting unauthenticated access, enforcing device scopes, revocation and bounded inbox payloads; gateway has no mission/call/code/GPS endpoint.
 - [ ] Independent penetration test, HTTPS/reverse proxy, mobile client threat review and production audit.
 
@@ -130,7 +131,7 @@ DONE WHEN: GeoShift converts real paying customers and Archer reports genuine bu
 
 ## Execution order
 
-1. **Completed:** v1.1 inbox; v1.2 isolated gateway; v1.3 notification sandbox; v1.4 device security; v1.5 local-only cross-device message journal (not AI/phone/desktop sync).
+1. **Completed:** v1.1 inbox; v1.2 isolated gateway; v1.3 notification sandbox; v1.4 device security; v1.5 local conversation journal; v1.6 authenticated local gateway state encryption (all still localhost-only).
 2. **Next:** independent security architecture review and a separately authenticated **TLS-ready public gateway design**, provisioning, retention and APNs-device enrollment; no remote access until those gates pass.
 3. **Then:** shared conversation backend, push service (APNs) and native iOS MVP.
 4. **In parallel after security:** Twilio inbound SMS + ConversationRelay with signature checks and strict budget.
@@ -175,4 +176,12 @@ The standalone gateway now has an admin-key-protected `POST /internal/delivery/s
 
 ### v1.5.0 local conversation storage (NOT live Archer chat)
 
-A device may be enrolled with `conversation:read` or both `conversation:read` and `conversation:write`. A write scope without read is denied. The gateway can now save owner-authored messages from those explicitly enabled local devices, share them across other conversation-read-enabled devices, reject idempotency-key conflicts, cap message length, and clear history via local admin authorization. Messages are never passed to an AI model or Twilio, and are not mirrored from the Windows app. The prototype stores only up to 200 messages and displays the last 7 days, unencrypted in the gateway's Git-ignored local state; never use real private chat until encryption, identity and retention features are reviewed.
+A device may be enrolled with `conversation:read` or both `conversation:read` and `conversation:write`. A write scope without read is denied. The gateway can now save owner-authored messages from those explicitly enabled local devices, share them across other conversation-read-enabled devices, reject idempotency-key conflicts, cap message length, and clear history via local admin authorization. Messages are never passed to an AI model or Twilio, and are not mirrored from the Windows app. The v1.5 prototype stored up to 200 messages and displayed the last seven days. v1.6 now encrypts the entire local gateway state with a separately configured key, but the remote-identity, transport security and retention requirements remain incomplete.
+
+### v1.6.0 local gateway state encryption
+
+- The entire Git-ignored local gateway state is now AES-256-GCM encrypted before disk writes. There is **no default encryption key**; set `ARCHER_GATEWAY_DATA_KEY_HEX` to a securely generated, independently backed-up, private 64-character hex string.
+- First read of a recognizable v1.5 plaintext state performs in-place encrypted migration BEFORE returning data. Incorrect/missing key, tampering or unsupported format causes a hard failure rather than resetting or overwriting state.
+- Missing key means liveness can be inspected, but `GET /health/ready` reports not ready and every state operation is denied. Encryption does not make plain HTTP safe for public access.
+- CI verifies migration, recovery with the original key, wrong-key denial, missing-key denial, tamper detection and absence of plaintext in the persisted gateway file.
+- **Remaining:** independent encrypted backups, legacy plaintext snapshot cleanup, documented key rotation, secret manager, identity, HTTPS, a secure desktop conversation bridge, APNs and an iPhone client.
