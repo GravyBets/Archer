@@ -67,6 +67,8 @@ public sealed class GatewayState
 {
     public List<GatewayDevice> Devices { get; set; } = [];
     public List<GatewayEvent> Events { get; set; } = [];
+    // Readable notification routing SIMULATIONS. No provider messages or push tokens.
+    public List<GatewayDeliveryPreview> DeliveryPreviews { get; set; } = [];
 }
 
 public sealed class GatewayDevice
@@ -164,3 +166,19 @@ public sealed class DeviceTokenService(GatewayStore store)
                     bytes, Convert.FromHexString(device.TokenHashHex))), ct);
     }
 }
+
+public sealed class GatewayDeliveryPreview
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid EventId { get; set; }
+    public Guid DeviceId { get; set; }
+    public string IdempotencyKey { get; set; } = "";
+    public string Channel { get; set; } = "push-preview";
+    public string State { get; set; } = "Simulated";
+    public string Reason { get; set; } = "";
+    public bool InterruptOwner { get; set; }
+    public bool RequiresIncidentVerification { get; set; }
+    public DateTimeOffset SimulatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public sealed record SimulateDeliveryRequest(bool Confirm, int MaxEvents = 10);

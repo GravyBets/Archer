@@ -1,4 +1,4 @@
-# Archer mobile gateway — security and threat review (v1.2.0)
+# Archer mobile gateway — security and threat review (v1.3.0)
 
 **Review date:** 2026-11-16. This is an engineering threat model, NOT an independent penetration test or approval for internet exposure.
 
@@ -47,6 +47,11 @@ Scoped mobile-facing (still loopback only):
 - GET /v1/inbox — needs unexpired, unrevoked Bearer token with inbox:read.
 - POST /v1/inbox/{id}/read and /acknowledge — needs inbox:ack.
 
+Sandbox-only (all endpoints remain loopback-only):
+- POST /internal/delivery/simulate — requires X-Archer-Admin-Key AND explicit confirm=true; creates durable, deduplicated **mock** routing records, zero pushes/SMS/calls.
+- GET /internal/delivery/preview — requires X-Archer-Admin-Key to inspect mock routing history.
+- GET /v1/delivery-previews — requires an active device token with inbox:read; shows only that device's dry-run entries, never provider receipts.
+
 Generated bearer is only returned on enrollment and SHA-256 of high entropy token is persisted; comparison uses fixed-time hash comparison. Five concurrently active devices maximum. No login, self-service enrollment, refresh token, device push token or public signup. A native iOS app is not created yet. Device acknowledgment updates only the gateway copy (not the original desktop mission/incident).
 
 ## Threat matrix and mitigations
@@ -68,6 +73,12 @@ Generated bearer is only returned on enrollment and SHA-256 of high entropy toke
 | Untrusted local software | Admin/ingest secrets; hashed device bearer; loopback only | OS account isolation, hardened host, secure provisioning and system-level attack resistance |
 | Persistence corruption | Serialized writes with temporary atomic replacement, 200-event bound | Encrypted backups, restore tests, database migration/versioning, crash consistency |
 | Changes while driving | Gateway contains no approval/deployment/business mutation endpoints | Native app driving-mode UX, spoken confirmation limits, safe deferral |
+
+## Notification policy sandbox — added in v1.3.0
+
+The simulator creates noninterrupting push-preview/digest-preview suggestions from currently recorded source events, then persists their result under an event/device/policy idempotency key. Resolved and acknowledged sources are suppressed. Historical or stale source information becomes digest-only. An unverified website incident is never automatically escalated to a telephone call.
+
+No preview is delivered to an Apple device; no APNs device token, push server, message queue, Twilio account, OpenAI request or cost-bearing integration is invoked. The simulator does not have a real retry policy, provider receipt or actual notification delivery status. It cannot be mistaken for a completed production outbox.
 
 ## Local-only opt-in setup
 
@@ -102,4 +113,4 @@ Production deployment stays BLOCKED until all these gates pass.
 - Kestrel explicit endpoint binding: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/endpoints?view=aspnetcore-10.0
 - Kestrel proxy/forwarding security: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/security-considerations
 
-This document inventories the current source at v1.2.0; revisit it when endpoints or authorization logic change.
+This document inventories the current source at v1.3.0; revisit it when endpoints or authorization logic change.
