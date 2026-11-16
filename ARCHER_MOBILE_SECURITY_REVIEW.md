@@ -1,4 +1,4 @@
-# Archer mobile gateway — security and threat review (v1.9.0)
+# Archer mobile gateway — security and threat review (v1.10.0)
 
 **Review date:** 2026-11-16. This is an engineering threat model, NOT an independent penetration test or approval for internet exposure.
 
@@ -139,6 +139,15 @@ No preview is delivered to an Apple device; no APNs device token, push server, m
 - Device read scopes currently allow reading **all sessions of the one local owner**. This is intentional for one owner but not suitable for shared accounts or business teams. Additional user/device access controls, encrypted off-host backup, limits for concurrent sync, tenant-level permission checks and an audit/export/deletion policy remain required for future remote hosting.
 - CI uses synthetic local session creation, paginated catch-up, replay conflicts, archive refusal, restart persistence and encrypted migration. No push/SMS/phone, model request or public listener.
 
+
+## v1.10.0 local desktop session-browser boundaries
+
+- The standalone gateway exposes **GET /internal/conversation/sessions** and **GET /internal/conversation/history** to the local desktop only. They require the dedicated 40+ character bridge secret; mobile tokens, admin tokens and event-ingest credentials cannot substitute. Bounded history pages are at most 20 messages.
+- MissionControl adds **GET /api/mobile/sessions** and **GET /api/mobile/session-history**, disabled by default unless the owner explicitly enables the same local chat bridge. The desktop HTTP client has a fixed localhost destination, rejects redirects and proxies, caps upstream response size at 128KB and validates session IDs, message ordering and role names.
+- Browser UI uses textContent, never HTML injection, to show untrusted phone-authored messages; it cannot call the AI or publish/approve anything. Reply publishing retains the separate explicit confirmation.
+- This UI **exposes opted-in mobile journal contents to the existing unauthenticated localhost desktop dashboard**. Do NOT use a shared, employer, remotely controlled or public-facing computer. Future security work must authenticate and authorize the desktop endpoint itself and add HTTPS/owner identity for remote devices.
+- Cursors and visible pages are not full message-delivery receipts: history is capped and has seven-day retention. Additional privacy, encrypted backups, account separation and long-term sync rules are required before production.
+
 ## Local-only opt-in setup
 
 Prerequisites: .NET 10 SDK, separate optional process. Values must be cryptographically random and never committed to Git.
@@ -172,4 +181,4 @@ Production deployment stays BLOCKED until all these gates pass.
 - Kestrel explicit endpoint binding: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/endpoints?view=aspnetcore-10.0
 - Kestrel proxy/forwarding security: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/security-considerations
 
-This document inventories the current source at v1.9.0; revisit it when endpoints or authorization logic change.
+This document inventories the current source at v1.10.0; revisit it when endpoints or authorization logic change.

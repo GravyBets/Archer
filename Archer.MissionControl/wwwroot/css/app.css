@@ -425,3 +425,24 @@
 .mobile-draft-text{color:#c3d7df;font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;margin:10px 0 12px}
 .mobile-draft-item .button{font-size:11px}
 @media(max-width:650px){.mobile-draft-content{padding:13px}.mobile-draft-actions .button{width:100%}.mobile-draft-item .button{width:100%}}
+
+
+/* v1.10.0 — encrypted gateway session browser, read-only */
+.mobile-session-browser{margin-top:21px;border-top:1px solid #2c4454;padding-top:17px}
+.mobile-session-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:13px}
+.mobile-session-head h3{font-size:12px;color:#cce4ec;font-weight:700;margin:0}
+.mobile-session-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.mobile-session-toolbar label{color:#a8bcc9;font-size:11px}
+.mobile-session-toolbar select{min-width:165px;flex:1;background:#0c1828;border:1px solid #395064;color:#cadfe6;border-radius:7px;font-size:12px;padding:9px}
+.mobile-session-toolbar .button{font-size:11px}
+#mobileSessionStatus{font-size:11px;color:#89a7b7;margin:8px 0 12px;line-height:1.6}
+.mobile-session-messages{display:flex;flex-direction:column;gap:10px;max-height:390px;overflow:auto;padding:4px 0 10px}
+.mobile-session-message{max-width:95%;border:1px solid #304756;border-radius:9px;background:#0d1929;padding:12px 15px}
+.mobile-session-owner{align-self:flex-end;background:#153038;border-color:#32605b}
+.mobile-session-assistant{align-self:flex-start}
+.mobile-session-meta{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}
+.mobile-session-meta strong{font-size:11px;color:#afd9d4}
+.mobile-session-meta small{font-size:10px;color:#839eab}
+.mobile-session-message-text{font-size:12px;color:#c6dae2;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0 0}
+#mobileSessionMore{font-size:11px;margin-top:10px}
+@media(max-width:650px){.mobile-session-toolbar select{width:100%;flex-basis:100%}.mobile-session-toolbar .button{flex:1}.mobile-session-message{max-width:100%}}

@@ -46,6 +46,33 @@ draft = preview["messages"][0]
 assert draft["content"] == "CI_PHONE_DRAFT_READY_FOR_DESKTOP_REVIEW"
 data = {"gatewayMessageId": draft["id"], "question": draft["content"]}
 
+# Both desktop and gateway session inspection require the separate bridge key.
+req(GATEWAY + "/internal/conversation/sessions", expected=403)
+req(GATEWAY + "/internal/conversation/history", expected=403)
+catalog = req(DESKTOP + "/api/mobile/sessions")
+assert catalog["enabled"] and catalog["connected"], catalog
+assert len(catalog["sessions"]) == 1, catalog
+main_id = catalog["defaultSessionId"]
+history_path = (DESKTOP + "/api/mobile/session-history?sessionId=" +
+                main_id + "&after=0&limit=20")
+direct_history = req(GATEWAY + "/internal/conversation/history?sessionId=" +
+    main_id + "&after=0&limit=20", headers=header)
+assert len(direct_history["messages"]) == 1
+# Earlier synthetic tests delete older records but preserve server cursor
+# high-water marks. A retained first message is NOT necessarily sequence 1.
+first_sequence = direct_history["messages"][0]["sequence"]
+assert first_sequence >= 1
+before = req(history_path)
+assert before["enabled"] and before["connected"], before
+assert len(before["messages"]) == 1, before
+assert before["messages"][0]["content"] == draft["content"]
+assert before["messages"][0]["role"] == "owner"
+assert before["nextAfter"] == before["messages"][0]["sequence"]
+assert before["highWatermark"] == before["nextAfter"]
+req(DESKTOP + "/api/mobile/session-history?sessionId=" + main_id +
+    "&after=-1", expected=400)
+
+
 # No arbitrary question or guessed source ID can publish a reply.
 wrong = dict(data)
 wrong["question"] = "Unrelated desktop text"
@@ -62,6 +89,21 @@ assert "No push" in shared["message"]
 repeated = req(DESKTOP + "/api/mobile/reply-publish", "POST", data)
 assert repeated["shared"] is True
 assert req(GATEWAY + "/internal/conversation/bridge", headers=header)["messages"] == []
+
+after = req(history_path)
+assert after["connected"] and after["enabled"], after
+assert len(after["messages"]) == 2, after
+assert [x["sequence"] for x in after["messages"]] == [first_sequence, first_sequence + 1], after
+assert after["messages"][1]["role"] == "assistant"
+assert after["messages"][1]["replyToMessageId"] == draft["id"]
+assert "Synthetic Archer reply" in after["messages"][1]["content"]
+assert after["highWatermark"] == first_sequence + 1 and not after["hasMore"]
+cursor_path = (DESKTOP + "/api/mobile/session-history?sessionId=" + main_id +
+               "&after=" + str(first_sequence) + "&limit=1")
+only_reply = req(cursor_path)
+assert len(only_reply["messages"]) == 1
+assert only_reply["messages"][0]["sequence"] == first_sequence + 1
+assert not only_reply["hasMore"]
 
 audit = req(GATEWAY + "/internal/audit", headers={"X-Archer-Admin-Key": admin})
 # The gateway's preceding security smoke explicitly published one synthetic
