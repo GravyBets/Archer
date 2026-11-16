@@ -11,8 +11,18 @@ function setBusy(value) {
   appState.busy = value;
   document.querySelectorAll('button').forEach(button => {
     if (button.closest('.nav') || button.id === 'cancelMission' || button.dataset.allowBusy === 'true') return;
-    button.disabled = value;
+    if (value) {
+      // Preserve browser-feature-disabled controls (e.g. unsupported microphones).
+      button.dataset.wasDisabled = button.disabled ? 'true' : 'false';
+      button.disabled = true;
+    } else if (button.dataset.wasDisabled !== undefined) {
+      button.disabled = button.dataset.wasDisabled === 'true';
+      delete button.dataset.wasDisabled;
+    }
   });
+  // Some mission buttons are recreated during a refresh while busy. Rebuild
+  // them after completion so they are not left artificially disabled.
+  if (!value) render();
 }
 function notice(message, isError = false) {
   const target = $('notice');
