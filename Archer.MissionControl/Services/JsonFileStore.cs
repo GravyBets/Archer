@@ -48,6 +48,10 @@ public sealed class JsonFileStore
 
     public Task RecoverInterruptedTasksAsync() => UpdateAsync(state =>
     {
+        // Expired context must never survive an Archer restart.
+        if (state.Presence is { } presence && presence.ExpiresAtUtc <= DateTimeOffset.UtcNow)
+            state.Presence = null;
+
         foreach (var mission in state.Missions)
         {
             // Never resume paid API requests automatically after an app restart.

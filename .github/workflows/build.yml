@@ -22,6 +22,7 @@ jobs:
           node --check Archer.MissionControl/wwwroot/js/archer-home.js
           node --check Archer.MissionControl/wwwroot/js/orb-field.js
           node --check Archer.MissionControl/wwwroot/js/developer.js
+          node --check Archer.MissionControl/wwwroot/js/operator-context.js
       - name: Validate UI element wiring
         run: python3 tests/ValidateUi.py
       - name: Smoke test local configuration and usage endpoints
@@ -50,4 +51,20 @@ jobs:
             -G --data-urlencode 'url=https://github.com/NotAllowlisted/Repo' \
             http://127.0.0.1:5087/api/development/repository)
           test "$CODE" = "400"
-          python3 -c 'import json; c=json.load(open("/tmp/archer-config.json")); u=json.load(open("/tmp/archer-usage.json")); assert c["version"]=="0.5.1", c; assert c["routing"]["mode"]=="adaptive", c; assert u["month"]["requests"]==0, u; assert u["lifetime"]["estimatedCostUsd"]==0, u; print("PASS: Archer v0.5.1 health/config/usage endpoints")'
+
+          curl -fsS http://127.0.0.1:5087/api/presence > /tmp/archer-presence-off.json
+          curl -fsS http://127.0.0.1:5087/api/operations > /tmp/archer-operations.json
+          curl -fsS http://127.0.0.1:5087/api/presence \
+            -H 'Content-Type: application/json' \
+            -d '{"activity":"Working","placeLabel":"Test place","durationMinutes":15,"shareWithAi":false,"latitude":29.987654,"longitude":-95.123456}' \
+            -X POST > /tmp/archer-presence-save.json
+          curl -fsS http://127.0.0.1:5087/api/presence > /tmp/archer-presence-set.json
+          curl -fsS http://127.0.0.1:5087/api/presence -X DELETE > /tmp/archer-presence-clear.json
+          curl -fsS http://127.0.0.1:5087/api/presence > /tmp/archer-presence-cleared.json
+          CODE=$(curl -sS -o /tmp/archer-blocked-monitor.json -w '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -d '{"name":"Unsafe","url":"https://localhost/"}' \
+            -X POST http://127.0.0.1:5087/api/operations/monitors)
+          test "$CODE" = "400"
+          python3 -c 'import json; p=json.load(open("/tmp/archer-presence-set.json")); clear=json.load(open("/tmp/archer-presence-cleared.json")); ops=json.load(open("/tmp/archer-operations.json")); assert p["active"]; assert p["presence"]["approxLatitude"]==29.99; assert p["presence"]["approxLongitude"]==-95.12; assert not p["presence"]["shareWithAi"]; assert not clear["active"]; assert ops["channels"]["sms"]=="Not connected"; assert ops["monitors"]==[]; print("PASS: consented coarse presence, clear and safe monitoring defaults")'
+          python3 -c 'import json; c=json.load(open("/tmp/archer-config.json")); u=json.load(open("/tmp/archer-usage.json")); assert c["version"]=="0.6.0", c; assert c["routing"]["mode"]=="adaptive", c; assert u["month"]["requests"]==0, u; assert u["lifetime"]["estimatedCostUsd"]==0, u; print("PASS: Archer v0.6.0 health/config/usage endpoints")'

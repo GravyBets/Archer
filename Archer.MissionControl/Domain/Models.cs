@@ -5,6 +5,10 @@ public sealed class ArcherState
     public List<Mission> Missions { get; set; } = [];
     public List<ActivityEntry> Activity { get; set; } = [];
     public List<ConversationEntry> Conversation { get; set; } = [];
+    // A single, optional presence snapshot; no location/activity history.
+    public OwnerPresence? Presence { get; set; }
+    public List<WebsiteMonitor> WebsiteMonitors { get; set; } = [];
+    public List<WebsiteIncident> WebsiteIncidents { get; set; } = [];
 }
 
 public sealed class Mission
@@ -81,3 +85,47 @@ public sealed record SetAutoRunRequest(bool Enabled);
 
 // Explicit source selections for read-only Developer Workspace previews.
 public sealed record ReadSourceFilesRequest(string? Repository, List<string>? Paths);
+
+public sealed class OwnerPresence
+{
+    public string Activity { get; set; } = "Available";
+    public string PlaceLabel { get; set; } = "";
+    // One-time, approximate location only (~1 km, no route history).
+    public double? ApproxLatitude { get; set; }
+    public double? ApproxLongitude { get; set; }
+    public bool ShareWithAi { get; set; }
+    public DateTimeOffset UpdatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset ExpiresAtUtc { get; set; } = DateTimeOffset.UtcNow.AddHours(1);
+}
+
+public sealed record UpdatePresenceRequest(
+    string? Activity, string? PlaceLabel, int DurationMinutes, bool ShareWithAi,
+    double? Latitude, double? Longitude);
+
+public sealed class WebsiteMonitor
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = "";
+    public string Url { get; set; } = "";
+    public bool Enabled { get; set; } = false;
+    public string Status { get; set; } = "Not monitored";
+    public int ConsecutiveFailures { get; set; }
+    public int? LastHttpStatus { get; set; }
+    public long? LastLatencyMs { get; set; }
+    public string? LastError { get; set; }
+    public DateTimeOffset? LastCheckedAtUtc { get; set; }
+}
+
+public sealed class WebsiteIncident
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid WebsiteMonitorId { get; set; }
+    public string WebsiteName { get; set; } = "";
+    public string Kind { get; set; } = "Outage";
+    public string Message { get; set; } = "";
+    public DateTimeOffset OccurredAtUtc { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? AcknowledgedAtUtc { get; set; }
+}
+
+public sealed record CreateWebsiteMonitorRequest(string? Name, string? Url);
+public sealed record SetWebsiteMonitorEnabledRequest(bool Enabled);

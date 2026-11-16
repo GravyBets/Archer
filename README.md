@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 0.5.1 (local prototype)  
+**Version:** 0.6.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -9,6 +9,8 @@ This is a **real starting codebase**, not a screenshot or a mockup. It includes:
 - Animated **Archer** landing page as the default interface, with text conversation and optional browser voice
 - Mission Control dashboard with mission creation and tracking
 - **Developer Workspace** with allowlisted GitHub source inventory, selected-file previews, and review-mission drafts
+- Opt-in **Operations** page for public HTTPS site monitoring and local outage/recovery records
+- Expiring, user-declared **Presence** context with optional one-time approximate browser location
 - Local **Attention** view showing failed tasks; approvals are clearly marked as not yet integrated
 - AI-generated bounded mission plans (3–5 research/analysis tasks)
 - Local main-dashboard AI usage analytics (token counts, observed web searches, estimated costs)
@@ -416,3 +418,54 @@ The automated checks cover the .NET build, JavaScript syntax and DOM references,
 - This release does **not** enable SMS, telephone calls, always-on listening, or unapproved outbound communications.
 
 Test: pull, rebuild, check `/api/config` version 0.5.1; ask Archer a casual question, inspect reply length/tone, open the voice picker, and listen to a short reply. Actual voice quality depends on browser/OS and needs a Windows test.
+
+## v0.6.0 — Presence and Operations foundation
+
+This builds the **first secure-ish local prototype** of Archer as an operations manager, while keeping actual phone/SMS delivery and iPhone background location firmly **not connected**.
+
+### Presence: Archer can adapt to what YOU tell him
+
+The home page now has a **Your context** card. Choose **Available, Driving, At work, Shopping, Busy, or Other**; optionally enter a general place description; select 15 minutes, one hour, four hours, or eight hours; then Save.
+
+- Nothing is collected until you take action. All context **expires automatically** and can be deleted immediately via **Clear**.
+- **Share location once** requests browser geolocation permission once, rounds coordinates to two decimal places before saving (roughly neighbourhood-scale, accuracy varies), and never performs background tracking or stores routes.
+- Coordinates are only attached when you also click **Save context**. Archer never infers that you're driving, working, or shopping from coordinates.
+- Context remains in Archer's ignored local `Data/archer-state.json`. Expired data is cleared during startup recovery or periodic housekeeping when the app is running. No timeline/history is created.
+- **Let Archer use this context in conversations** is unchecked by default. Only when checked and context is still active does the AI request include activity, place label and optional coarse coordinates. Without this checkbox, Archer's chat does not receive these details. The local Archer server still stores them temporarily.
+- Browser location identifies the **device running that browser**, not an independently connected iPhone. Because Archer binds to `127.0.0.1`, visiting it from your phone is not currently supported. Future opt-in background phone awareness needs an authenticated native mobile companion or a supported mobile integration.
+- This is **not automatic driving detection**, activity recognition, geofencing, calendar access or passive location tracking.
+
+### Operations: explicit public website health checks
+
+The new **Operations** page can register up to ten approved public HTTPS websites. They are added in the **stopped** state and only polled once you press **Start monitoring**.
+
+**Before adding a site**, set the Windows user environment variable `ARCHER_MONITOR_HOSTS` to the exact comma-separated public DNS hostnames you approve, such as `yourdomain.com,api.yourdomain.com`. Restart Visual Studio/Archer after changing it. Archer will reject anything not on that explicit allowlist; hosts must use HTTPS on port 443 without credentials, query strings or fragments.
+
+- Website checks run every five minutes **only while the Archer server is running**.
+- The worker uses HTTPS GET with response headers only, no cookies, no proxy and no redirect following. It blocks obviously private/reserved address resolutions. Never monitor internal/work systems using this prototype.
+- After **three consecutive failed checks** it records a local outage incident. A recovery is also recorded when the site responds again.
+- Incidents can be manually **acknowledged** from Operations; an acknowledged event stays visible in the bounded local incident history.
+- There are **no automatic webhooks, texts, calls, emails, payment actions, or AI calls** triggered by monitoring. A failed website check isn't evidence of a real business outage. Archer should verify before escalating.
+- Operations checks only reachability. It cannot see sales, subscriptions, refunds, customer complaints or conversion quality. Those require explicit future integrations with payment processors, analytics, support and production telemetry.
+- An enabled monitor remains enabled across app restarts, but no checks happen while Archer is shut down. Unlike research auto-run, monitoring itself makes no paid AI requests. Network requests to each approved site do occur when the process runs.
+
+### Planned mobile and notification architecture
+
+- Native iPhone companion (or authenticated supported integration), foreground user-permitted activity/location, optionally background modes only with granular consent and a visible on/off switch.
+- Presence TTL, no historical GPS route logging, data-minimisation, account authentication and a way to revoke any sharing.
+- Business telemetry adapters with source timestamps and evidence for alerts.
+- Notification priority, quiet hours, verified phone number, SMS and outbound voice provider, explicit opt-in, spending caps, rate limiting and delivery logs.
+- **Normal:** daily brief by text once the business integrations are trustworthy.
+- **Urgent:** text/call according to approved escalation criteria, with duplicate suppression and false-alert protection.
+- Production business automation must run on an authenticated, monitored host rather than a browser on a personal computer.
+
+### Verify when you pull
+
+1. Stop Archer, **Git → Pull**, rebuild, start and verify `/api/config` reports `0.6.0`.
+2. On Home, set a context such as **Driving** with a short expiry and leave **Share with AI** off. Confirm the status changes and that Clear removes it. Only if you want, test one-time approximate location via browser permission.
+3. Optionally check **Share with AI**, ask Archer "What did I tell you I'm doing?", and verify he uses the current, consented context without claiming to track your phone. Uncheck/clear to stop sharing.
+4. On Operations, see the empty registry and the honest **Not connected** status for SMS and phone.
+5. Optionally set `ARCHER_MONITOR_HOSTS` to a website you own, add its HTTPS URL, and explicitly start monitoring. Observe a timestamp after a check. Never add local, private, employer or unapproved sites.
+6. Verify Mission Control, Developer Workspace, cost analytics, chat and voice still behave as before.
+
+CI covers .NET compilation, JS/DOM wiring, local API health, coordinate rounding and clearing, and rejection of unapproved monitoring hosts. It does not prove real SMS/calling, native iOS background support, successful monitoring against your production site or accurate business-revenue data.

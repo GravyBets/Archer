@@ -16,12 +16,13 @@
         <button class="nav-link active" data-view="archer"><span class="nav-icon">◉</span> Archer</button>
         <button class="nav-link" data-view="missions"><span class="nav-icon">▦</span> Mission Control</button>
         <button class="nav-link" data-view="developer"><span class="nav-icon">⌘</span> Developer</button>
+        <button class="nav-link" data-view="operations"><span class="nav-icon">◈</span> Operations</button>
         <button class="nav-link" data-view="attention"><span class="nav-icon">◇</span> Attention <span id="attentionNavCount" class="attention-nav-count hidden">0</span></button>
         <button class="nav-link" data-view="activity"><span class="nav-icon">◷</span> Activity</button>
       </nav>
       <div class="sidebar-bottom">
         <div class="sidebar-status"><span class="pulse-dot"></span><span id="connectionLabel">Checking local server...</span></div>
-        <div class="version">V0.5.1 · LOCAL DEVELOPMENT</div>
+        <div class="version">V0.6.0 · LOCAL DEVELOPMENT</div>
       </div>
     </aside>
     <main class="content">
@@ -77,6 +78,45 @@
               <button type="button" class="voice-stop" id="voiceStopButton" data-allow-busy="true" disabled>Stop speaking</button>
               <span id="voiceSupportNote">Voice uses browser features; no phone connection is enabled.</span>
               <span id="voiceAccentStatus" role="status">British male voice availability depends on your installed browser voices.</span>
+            </div>
+          </section>
+          <section class="panel owner-presence-card" aria-labelledby="ownerPresenceHeading">
+            <div class="panel-header"><div><h2 id="ownerPresenceHeading">Your context</h2>
+              <p>Optional. Let Archer know what you're doing, without continuous tracking.</p></div>
+              <span class="developer-readonly">PRIVATE / EXPIRING</span></div>
+            <div class="owner-presence-content">
+              <p id="ownerPresenceStatus" role="status">Nothing shared right now.</p>
+              <div class="owner-presence-fields">
+                <label>Activity
+                  <select id="ownerPresenceActivity">
+                    <option value="Available">Available</option>
+                    <option value="Driving">Driving</option>
+                    <option value="Working">At work</option>
+                    <option value="Shopping">Shopping</option>
+                    <option value="Busy">Busy</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </label>
+                <label>General place (optional)
+                  <input id="ownerPresencePlace" type="text" maxlength="60" placeholder="At work, grocery store, heading home…" autocomplete="off" />
+                </label>
+                <label>Expires after
+                  <select id="ownerPresenceDuration">
+                    <option value="15">15 minutes</option>
+                    <option value="60" selected>1 hour</option>
+                    <option value="240">4 hours</option>
+                    <option value="480">8 hours</option>
+                  </select>
+                </label>
+              </div>
+              <div class="owner-presence-actions">
+                <label class="voice-toggle"><input id="ownerPresenceShareAi" type="checkbox" /> Let Archer use this context in conversations</label>
+                <button id="ownerPresenceLocationButton" type="button" class="button secondary">Share location once</button>
+                <button id="ownerPresenceSaveButton" type="button" class="button primary">Save context</button>
+                <button id="ownerPresenceClearButton" type="button" class="button secondary">Clear</button>
+              </div>
+              <p id="ownerPresenceLocationStatus" class="owner-presence-privacy">No GPS location shared. Clicking Share location once asks this browser for permission. Any saved coordinates are rounded to approximately 1 km, never tracked continuously.</p>
+              <p class="owner-presence-privacy">Your context stays in Archer's local Data folder. It expires automatically, with no location history. Sharing it with the AI requires checking the box above and then sending a chat.</p>
             </div>
           </section>
         </section>
@@ -185,7 +225,37 @@
             A review mission still requires you to generate its plan and run it explicitly.
             Selected source excerpts are sent to OpenAI when you run that mission. Archer cannot yet edit GitHub, open a pull request, or run GeoShift builds from this page.</p>
         </section>
-        <section id="attentionView" class="view hidden" aria-labelledby="attentionTitle">
+        <section id="operationsView" class="view hidden" aria-labelledby="operationsHeading">
+          <div class="hero"><div class="eyebrow">BUSINESS OPERATIONS <span class="eyebrow-line"></span></div>
+            <h1 id="operationsHeading">Operations<span class="accent">.</span></h1>
+            <p>Read-only monitoring of approved public websites. Archer cannot see customer purchases, revenue or support tickets without separate integrations.</p>
+          </div>
+          <section class="panel">
+            <div class="panel-header"><div><h2>Website monitors</h2><p>Every five minutes while the Archer app is running</p></div>
+              <span id="operationsStatus" class="count">No websites</span></div>
+            <form id="operationsAddForm" class="operations-add-form">
+              <label>Website name <input id="operationsSiteName" required maxlength="80" placeholder="GeoShift" /></label>
+              <label>Public HTTPS URL <input id="operationsSiteUrl" required type="url" placeholder="https://yourdomain.com/health" /></label>
+              <button type="submit" class="button primary">Add website</button>
+            </form>
+            <p class="operations-hint">Security: first approve the exact public hostname using the Windows environment variable <code>ARCHER_MONITOR_HOSTS</code>. New monitors stay off until you press Start monitoring. Redirects aren't followed; no credentials are sent.</p>
+            <div id="operationsMonitorList" class="operations-site-list"><div class="developer-empty">No websites registered.</div></div>
+          </section>
+          <section class="panel operations-incidents-panel">
+            <div class="panel-header"><div><h2>Availability incidents</h2><p>Three consecutive failed checks trigger a local incident. Recovery is also recorded.</p></div>
+              <span id="operationsIncidentCount" class="count">0</span></div>
+            <div id="operationsIncidentList" class="operations-incident-list"><div class="developer-empty">No website incidents recorded.</div></div>
+          </section>
+          <section class="panel operations-communications">
+            <div class="panel-header"><div><h2>Future notifications</h2><p>What Archer will eventually send to you</p></div></div>
+            <div class="operations-channel-grid">
+              <div><strong>Daily text briefing</strong><span>Not connected — needs a delivery provider, consent, schedule and trusted business metrics</span></div>
+              <div><strong>Urgent phone calls</strong><span>Not connected — requires verified number, escalation rules, quiet hours and retries</span></div>
+            </div>
+          </section>
+          <p class="developer-footnote">Website checks are not proof that your business is healthy. Payment failures, revenue, customer support and deployments need separate authorized integrations. This local version cannot send texts or place calls.</p>
+        </section>
+                <section id="attentionView" class="view hidden" aria-labelledby="attentionTitle">
           <div class="hero"><div class="eyebrow">OPERATOR OVERSIGHT <span class="eyebrow-line"></span></div><h1 id="attentionTitle">Attention<span class="accent">.</span></h1><p>Local mission failures and the approval boundaries we're building toward.</p></div>
           <div class="attention-grid">
             <section class="panel"><div class="panel-header"><div><h2>Mission issues</h2><p>Actual failed tasks recorded in this local instance</p></div><span id="attentionIssueCount" class="count">0</span></div><div class="attention-list" id="attentionFailures"></div></section>
@@ -197,7 +267,7 @@
           </div>
         </section>
         <section id="activityView" class="view hidden"><div class="hero"><div class="eyebrow">EXECUTION HISTORY <span class="eyebrow-line"></span></div><h1>Activity<span class="accent">.</span></h1><p>What Archer has actually done, with completed work stored on disk.</p></div><div class="panel"><div id="activityList" class="activity-list"></div></div></section>
-        <footer class="footer">ARCHER / V0.5.1 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
+        <footer class="footer">ARCHER / V0.6 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
       </div>
     </main>
   </div>
@@ -206,5 +276,6 @@
   <script src="/js/archer-home.js" defer></script>
   <script src="/js/orb-field.js" defer></script>
   <script src="/js/developer.js" defer></script>
+  <script src="/js/operator-context.js" defer></script>
 </body>
 </html>

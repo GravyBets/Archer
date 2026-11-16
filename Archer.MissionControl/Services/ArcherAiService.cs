@@ -200,6 +200,20 @@ public sealed class ArcherAiService(
             $"- {m.Title} ({m.Status}): {m.Objective} — {m.Tasks.Count(t => t.Status == "Completed")}/{m.Tasks.Count} tasks done"));
         var conversation = string.Join("\n", state.Conversation.TakeLast(8).Select(c =>
             $"{c.Role}: {c.Content[..Math.Min(c.Content.Length, 1500)]}"));
+        // Private owner presence is never sent to the AI unless explicitly opted in.
+        var personalPresence = state.Presence is { ShareWithAi: true } presence &&
+            presence.ExpiresAtUtc > DateTimeOffset.UtcNow
+            ? $"Owner reports: {presence.Activity}. General place: {presence.PlaceLabel}. " +
+              $"Optional one-time approximate coordinate: {presence.ApproxLatitude}, {presence.ApproxLongitude}. " +
+              $"Context expires at {presence.ExpiresAtUtc:O}. " +
+              "Treat this as user-declared and possibly stale; do not infer driving, work, shopping or precise whereabouts from coordinates."
+            : "Owner has not opted in to sharing activity or location with the AI.";
+
+        var websiteHealth = string.Join("\n", state.WebsiteMonitors.Take(10).Select(m =>
+            $"- {m.Name}: {(m.Enabled ? m.Status : "not monitored")}, " +
+            $"last checked: {(m.LastCheckedAtUtc.HasValue ? m.LastCheckedAtUtc.Value.ToString("O") : "never")}; " +
+            $"last HTTP status: {(m.LastHttpStatus?.ToString() ?? "none")}"));
+        var unacknowledged = state.WebsiteIncidents.Count(x => x.AcknowledgedAtUtc is null);
         var payload = new
         {
             model = choice.Model, store = false, reasoning = new { effort = choice.ReasoningEffort }, max_output_tokens = 2600,
@@ -215,7 +229,10 @@ public sealed class ArcherAiService(
                 "You can be decisive in recommendations, but label uncertainty and do not invent progress, metrics, actions, messages, or conversations. " +
                 "Never claim to have changed code, deployed, sent a text, or made a call unless an actual tool completed it. " +
                 "Do not imply that missions or tasks were created unless an actual tool created them."),
-            input = $"MISSION CONTEXT:\n{missions}\nRECENT CONVERSATION:\n{conversation}\nuser: {message}\nassistant:"
+            input = $"MISSION CONTEXT:\n{missions}\nOWNER PRESENCE (opt-in only):\n{personalPresence}\n" +
+                $"LOCAL WEBSITE AVAILABILITY (not revenue or customer telemetry):\n{websiteHealth}\n" +
+                $"Unacknowledged availability incidents: {unacknowledged}. No SMS or phone integrations are connected.\n" +
+                $"RECENT CONVERSATION:\n{conversation}\nuser: {message}\nassistant:"
         };
         return CompleteAsync(payload, choice.Model, "chat", ct);
     }
