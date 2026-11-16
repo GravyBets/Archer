@@ -363,8 +363,9 @@ app.MapPost("/v1/inbox/{id:guid}/read", async Task<IResult> (
     Guid id, HttpContext ctx, DeviceTokenService tokens,
     GatewayStore store, CancellationToken ct) =>
 {
-    if (await tokens.AuthenticateAsync(
-        ctx.Request.Headers.Authorization.ToString(), "inbox:ack", ct) is null)
+    var device = await tokens.AuthenticateAsync(
+        ctx.Request.Headers.Authorization.ToString(), "inbox:ack", ct);
+    if (device is null)
         return Results.Unauthorized();
     var found = await store.UpdateAsync(state =>
     {
@@ -373,7 +374,7 @@ app.MapPost("/v1/inbox/{id:guid}/read", async Task<IResult> (
         if (item.ReadAtUtc is null)
         {
             item.ReadAtUtc = DateTimeOffset.UtcNow;
-            GatewayAudit.Add(state, "inbox.read", eventId: item.Id);
+            GatewayAudit.Add(state, "inbox.read", device.Id, item.Id);
         }
         return true;
     }, ct);
@@ -384,8 +385,9 @@ app.MapPost("/v1/inbox/{id:guid}/acknowledge", async Task<IResult> (
     Guid id, HttpContext ctx, DeviceTokenService tokens,
     GatewayStore store, CancellationToken ct) =>
 {
-    if (await tokens.AuthenticateAsync(
-        ctx.Request.Headers.Authorization.ToString(), "inbox:ack", ct) is null)
+    var device = await tokens.AuthenticateAsync(
+        ctx.Request.Headers.Authorization.ToString(), "inbox:ack", ct);
+    if (device is null)
         return Results.Unauthorized();
     var found = await store.UpdateAsync(state =>
     {
@@ -395,7 +397,7 @@ app.MapPost("/v1/inbox/{id:guid}/acknowledge", async Task<IResult> (
         if (item.AcknowledgedAtUtc is null)
         {
             item.AcknowledgedAtUtc = DateTimeOffset.UtcNow;
-            GatewayAudit.Add(state, "inbox.acknowledged", eventId: item.Id);
+            GatewayAudit.Add(state, "inbox.acknowledged", device.Id, item.Id);
         }
         return true;
     }, ct);
