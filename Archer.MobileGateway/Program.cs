@@ -35,6 +35,25 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
                 AutoReplenishment = true
             }));
+
+    // Per-device limiter is additional to the global 90/minute loopback-IP
+    // limiter. Partition by the SHA-256 digest of the Authorization header,
+    // never by the raw bearer itself or a value written to logs.
+    options.AddPolicy("mobile-device", context =>
+    {
+        var auth = context.Request.Headers.Authorization.ToString();
+        var digest = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(auth)));
+        return RateLimitPartition.GetFixedWindowLimiter(
+            "mobile:" + digest,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            });
+    });
 });
 
 var app = builder.Build();
@@ -48,7 +67,10 @@ app.Use(async (context, next) =>
     // requests are not. No cookies, CORS or session sharing are enabled.
     if (!IPAddress.IsLoopback(context.Connection.RemoteIpAddress ??
                               IPAddress.None) ||
-        context.Request.Headers.ContainsKey("Origin"))
+        context.Request.Headers.ContainsKey("Origin") ||
+        context.Request.Host.Port != 5091 ||
+        (context.Request.Host.Host != "127.0.0.1" &&
+         context.Request.Host.Host != "localhost"))
     {
         context.Response.StatusCode = StatusCodes.Status403Forbidden;
         return;
@@ -311,7 +333,7 @@ app.MapGet("/v1/delivery-previews", async Task<IResult> (
         ctx.Request.Headers.Authorization.ToString(), "inbox:read", ct);
     if (device is null) return Results.Unauthorized();
     return Results.Ok(await simulator.GetForDeviceAsync(device.Id, ct));
-});
+}).RequireRateLimiting("mobile-device");
 
 app.MapGet("/v1/inbox", async Task<IResult> (
     HttpContext ctx, DeviceTokenService tokens, GatewayStore store,
@@ -335,7 +357,7 @@ app.MapGet("/v1/inbox", async Task<IResult> (
                 resolvedAtUtc = x.ResolvedAtUtc
             }).ToArray(), ct);
     return Results.Ok(new { items, count = items.Length, deliveryEnabled = false });
-});
+}).RequireRateLimiting("mobile-device");
 
 app.MapPost("/v1/inbox/{id:guid}/read", async Task<IResult> (
     Guid id, HttpContext ctx, DeviceTokenService tokens,
@@ -356,7 +378,7 @@ app.MapPost("/v1/inbox/{id:guid}/read", async Task<IResult> (
         return true;
     }, ct);
     return found ? Results.Ok(new { read = true }) : Results.NotFound();
-});
+}).RequireRateLimiting("mobile-device");
 
 app.MapPost("/v1/inbox/{id:guid}/acknowledge", async Task<IResult> (
     Guid id, HttpContext ctx, DeviceTokenService tokens,
@@ -381,7 +403,7 @@ app.MapPost("/v1/inbox/{id:guid}/acknowledge", async Task<IResult> (
         ? Results.Ok(new { acknowledged = true,
             note = "Only the gateway inbox was acknowledged; source missions and incident status were not changed." })
         : Results.NotFound();
-});
+}).RequireRateLimiting("mobile-device");
 
 Console.WriteLine("Archer Mobile Gateway v1.4.0: LOCAL LOOPBACK ONLY on 127.0.0.1:5091");
 app.Run();
