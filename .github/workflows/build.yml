@@ -23,6 +23,7 @@ jobs:
           node --check Archer.MissionControl/wwwroot/js/orb-field.js
           node --check Archer.MissionControl/wwwroot/js/developer.js
           node --check Archer.MissionControl/wwwroot/js/operator-context.js
+          node --check Archer.MissionControl/wwwroot/js/spending.js
       - name: Validate UI element wiring
         run: python3 tests/ValidateUi.py
       - name: Smoke test local configuration and usage endpoints
@@ -46,6 +47,18 @@ jobs:
           curl -fsS http://127.0.0.1:5087/ > /tmp/archer-root.html
           curl -fsS http://127.0.0.1:5087/api/config > /tmp/archer-config.json
           curl -fsS http://127.0.0.1:5087/api/usage > /tmp/archer-usage.json
+          curl -fsS http://127.0.0.1:5087/api/spending > /tmp/archer-spend-initial.json
+          curl -fsS http://127.0.0.1:5087/api/spending/settings \
+            -H 'Content-Type: application/json' \
+            -d '{"monthlyBudgetUsd":7,"perRequestCapUsd":0.5,"paused":true}' \
+            -X POST > /tmp/archer-spend-save.json
+          curl -fsS http://127.0.0.1:5087/api/spending > /tmp/archer-spend-paused.json
+          CODE=$(curl -sS -o /tmp/archer-spend-invalid.json -w '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -d '{"monthlyBudgetUsd":1,"perRequestCapUsd":5,"paused":false}' \
+            -X POST http://127.0.0.1:5087/api/spending/settings)
+          test "$CODE" = "400"
+          python3 -c 'import json; a=json.load(open("/tmp/archer-spend-initial.json")); b=json.load(open("/tmp/archer-spend-paused.json")); assert a["settings"]["monthlyBudgetUsd"]==10; assert not a["settings"]["paused"]; assert b["settings"]["monthlyBudgetUsd"]==7; assert b["settings"]["perRequestCapUsd"]==0.5; assert b["settings"]["paused"]; print("PASS: spending budget defaults, pause and validation")'
           # Reject unapproved repositories before making any GitHub API request.
           CODE=$(curl -sS -o /tmp/archer-developer-rejected.json -w '%{http_code}' \
             -G --data-urlencode 'url=https://github.com/NotAllowlisted/Repo' \
@@ -80,4 +93,4 @@ jobs:
             -X POST http://127.0.0.1:5087/api/operations/monitors)
           test "$CODE" = "400"
           python3 -c 'import json; p=json.load(open("/tmp/archer-presence-set.json")); clear=json.load(open("/tmp/archer-presence-cleared.json")); ops=json.load(open("/tmp/archer-operations.json")); assert p["active"]; assert p["presence"]["approxLatitude"]==29.99; assert p["presence"]["approxLongitude"]==-95.12; assert not p["presence"]["shareWithAi"]; assert not clear["active"]; assert ops["channels"]["sms"]=="Not connected"; assert ops["monitors"]==[]; print("PASS: consented coarse presence, clear and safe monitoring defaults")'
-          python3 -c 'import json; c=json.load(open("/tmp/archer-config.json")); u=json.load(open("/tmp/archer-usage.json")); assert c["version"]=="0.7.0", c; assert c["routing"]["mode"]=="adaptive", c; assert u["month"]["requests"]==0, u; assert u["lifetime"]["estimatedCostUsd"]==0, u; print("PASS: Archer v0.7.0 health/config/usage endpoints")'
+          python3 -c 'import json; c=json.load(open("/tmp/archer-config.json")); u=json.load(open("/tmp/archer-usage.json")); assert c["version"]=="0.8.0", c; assert c["routing"]["mode"]=="adaptive", c; assert u["month"]["requests"]==0, u; assert u["lifetime"]["estimatedCostUsd"]==0, u; print("PASS: Archer v0.8.0 health/config/usage endpoints")'

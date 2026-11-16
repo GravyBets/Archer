@@ -51,6 +51,7 @@ async function refresh() {
   if (appState.selectedMissionId && !missions.some(m => m.id === appState.selectedMissionId)) appState.selectedMissionId = missions[0]?.id ?? null;
   render();
   renderUsage(usage, config.routing);
+  window.SpendingDashboard?.refresh();
 }
 
 function formatUsd(value) {

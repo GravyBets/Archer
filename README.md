@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 0.7.0 (local prototype)  
+**Version:** 0.8.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -508,3 +508,19 @@ Archer can now turn **actual local records** into a concise, no-cost business-op
 6. Confirm Archer's missions, usage/cost metrics, personal presence settings and developer workspace still work.
 
 **Still not implemented:** background hosting, actual daily scheduled delivery, SMS provider, outbound phone calling, phone verification, production monitoring, payment/revenue integrations or autonomous corrective actions. Later integrations must apply authenticated delivery consent, event deduplication, abuse/cost controls, real-world observability checks and phone quiet hours. The current implementation intentionally remains localhost-only.
+
+## v0.8.0 — Local AI spending safeguards
+
+Archer now has a conservative, persistent preflight allowance for **all Archer-controlled paid OpenAI requests**, including chat, planning, research and bounded mission auto-run.
+
+**Default controls:** $10 per UTC calendar month, $1 maximum preflight reservation for one request, and a **Pause all paid AI requests** switch on Mission Control below usage analytics. These settings are editable in Mission Control and persisted in ignored `Data/archer-usage.json`. API routes: `GET /api/spending`, `POST /api/spending/settings`. The spending page displays known estimated spending, uncertain charges after unsuccessful/unmetered requests, and costs reserved by in-flight requests.
+
+The guard reserves a conservative allowance *before* sending an API request. Observed token/tool usage replaces the reservation when available. If a request fails without reported usage, it conservatively counts its reservation as **uncertain spend** rather than assuming it was free. Reservations remaining after a crash stay held until reconciled; they are never silently cleared. The next UTC month starts a fresh monthly budget.
+
+**Not a guaranteed hard cost cap.** Provider price schedules, unexpected input expansions, tool pricing, unmetered failed requests, paid requests by other software, and billing lag can exceed local estimates. Set an actual platform-level API project budget/alert and ensure the account has billing controls outside Archer too. Pausing prevents new Archer requests; it does not necessarily cancel requests already in flight.
+
+Known models are explicitly priced using the local November 2026 price reference; unknown model prices stop new requests rather than being estimated as $0. To change the model, use the existing Archer model environment settings.
+
+**Testing:** Pull from `main`, rebuild, verify `/api/config` version `0.8.0`, check the spending guard in Mission Control, modify/save limits, toggle Pause, and confirm AI work is blocked while paused. Unpause deliberately and test one cheap chat before enabling auto-run again. No prior mission data should be lost.
+
+**Remaining future controls:** Provider-side budget reconciliation, per-mission cost accounting, and payment-provider balance/alerts once those integrations are approved.
