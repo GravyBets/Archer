@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 0.5.0 (local prototype)  
+**Version:** 0.5.1 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -405,3 +405,14 @@ This release adds a **read-only Developer** page that gives you direct, explicit
 Use `GET /api/development/repository?url=https%3A%2F%2Fgithub.com%2FGravyBets%2FGeoShift` for a raw source file inventory, and `POST /api/development/preview` with JSON `{"repository":"https://github.com/GravyBets/GeoShift","paths":["GeoShift.Core/Services/KmlCsvConverter.cs"]}` for a source preview.
 
 The automated checks cover the .NET build, JavaScript syntax and DOM references, application startup, and rejection of non-allowlisted repositories. They don't prove private GitHub access or source correctness, which require a live test.
+
+## v0.5.1 — More conversational Archer and British voice preference
+
+- Archer's chat instructions now favor **normal human conversation**: direct, warm, concise (usually 30–100 words for ordinary exchanges), with no forced bullet-point essays or exaggerated British stereotypes. Detailed technical answers remain available when needed.
+- Browser speech synthesis now **prefers installed British English voices**, prioritizing voices whose names suggest natural/masculine delivery (such as Ryan or George). You can select a different browser voice from the dropdown. Archer **does not guarantee a male or natural-sounding voice** if your OS/browser doesn't expose one.
+- The voice selector and read-aloud preference are saved in the browser's local storage. No audio recordings are retained.
+- Voice read-aloud remains **opt-in**. Click **Read last reply** for an on-demand preview; if no compatible voice is installed, the UI says so.
+- This implementation uses the existing built-in browser TTS, not the soon-deprecated OpenAI Speech API. A genuinely branded natural British voice will require a future realtime speech integration and live audition.
+- This release does **not** enable SMS, telephone calls, always-on listening, or unapproved outbound communications.
+
+Test: pull, rebuild, check `/api/config` version 0.5.1; ask Archer a casual question, inspect reply length/tone, open the voice picker, and listen to a short reply. Actual voice quality depends on browser/OS and needs a Windows test.
