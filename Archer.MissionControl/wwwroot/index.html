@@ -22,7 +22,7 @@
       </nav>
       <div class="sidebar-bottom">
         <div class="sidebar-status"><span class="pulse-dot"></span><span id="connectionLabel">Checking local server...</span></div>
-        <div class="version">V0.7.0 · LOCAL DEVELOPMENT</div>
+        <div class="version">V0.8.0 · LOCAL DEVELOPMENT</div>
       </div>
     </aside>
     <main class="content">
@@ -157,6 +157,28 @@
               </div>
             </div>
             <p class="usage-disclaimer" id="usageDisclaimer">Estimates only, not a billing statement. Usage begins when tracking is installed; no historical backfill.</p>
+            <div class="spend-guard">
+              <div class="spend-guard-top">
+                <div><h3>Spending safeguards</h3><p id="spendStatus" role="status">Checking local API budget…</p></div>
+                <span id="spendPauseIndicator" class="developer-readonly">ACTIVE</span>
+              </div>
+              <div class="spend-guard-metrics">
+                <div><span>COUNTED THIS MONTH</span><strong id="spendCounted">$0.0000</strong></div>
+                <div><span>REMAINING ALLOWANCE</span><strong id="spendRemaining">$10.0000</strong></div>
+                <div><span>UNCERTAIN / IN-FLIGHT</span><strong id="spendUncertain">$0.0000</strong></div>
+              </div>
+              <form id="spendSettingsForm" class="spend-guard-form">
+                <label>Monthly budget (USD)
+                  <input id="spendMonthly" type="number" min="1" max="250" step=".5" value="10" required />
+                </label>
+                <label>Maximum reservation per request (USD)
+                  <input id="spendPerRequest" type="number" min=".05" max="5" step=".05" value="1" required />
+                </label>
+                <label class="voice-toggle"><input id="spendPaused" type="checkbox" /> Pause all paid Archer AI requests</label>
+                <button type="submit" class="button primary" id="spendSaveButton">Save limits</button>
+              </form>
+              <p class="spend-guard-note">Guardrails apply to Archer chat, planning, research and automated tasks. They count estimated costs and reserve capacity before requests. Not an OpenAI billing cap; rate changes and third-party clients aren't controlled. Stopping an active call isn't guaranteed.</p>
+            </div>
           </section>
           <div class="main-grid">
             <section class="panel missions-panel"><div class="panel-header"><div><h2>Missions</h2><p>Your current objectives</p></div><span id="missionCount" class="count">0</span></div><div id="missionList" class="mission-list"></div></section>
@@ -318,7 +340,7 @@
           </div>
         </section>
         <section id="activityView" class="view hidden"><div class="hero"><div class="eyebrow">EXECUTION HISTORY <span class="eyebrow-line"></span></div><h1>Activity<span class="accent">.</span></h1><p>What Archer has actually done, with completed work stored on disk.</p></div><div class="panel"><div id="activityList" class="activity-list"></div></div></section>
-        <footer class="footer">ARCHER / V0.7 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
+        <footer class="footer">ARCHER / V0.8 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
       </div>
     </main>
   </div>
@@ -328,5 +350,6 @@
   <script src="/js/orb-field.js" defer></script>
   <script src="/js/developer.js" defer></script>
   <script src="/js/operator-context.js" defer></script>
+  <script src="/js/spending.js" defer></script>
 </body>
 </html>
