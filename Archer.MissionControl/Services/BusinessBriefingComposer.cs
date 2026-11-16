@@ -162,7 +162,7 @@ public sealed class BusinessBriefingComposer(JsonFileStore store, ApiUsageLedger
         }
         else
             body.AppendLine("No current alerts from connected local sources.");
-        body.Append("DRAFT ONLY. SMS and calling are not connected. Archer must be running for website checks.");
+        body.Append("PREVIEW ONLY. This preview is not sent. Separately opted-in Twilio delivery may be active while Archer runs.");
 
         return new BriefingPreview(now,
             local.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture),
