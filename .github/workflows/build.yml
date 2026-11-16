@@ -163,6 +163,26 @@ jobs:
             exit 1
           fi
           python3 tests/SmokeMobileGateway.py "$ARCHER_GATEWAY_DATA_DIR/mobile-gateway-state.json"
+          # Restart only the isolated TEST process between synthetic suites.
+          # The 90/min gateway limiter remains enabled; a new process resets
+          # the prior suite's test-only throttle without waiting or bypassing it.
+          # The encrypted state, device tokens and messages must survive restart.
+          kill "$PID"
+          wait "$PID" 2>/dev/null || true
+          dotnet run --no-build --configuration Release --project Archer.MobileGateway/Archer.MobileGateway.csproj > /tmp/archer-gateway-restarted.log 2>&1 &
+          PID=$!
+          GATEWAY_READY=0
+          for i in $(seq 1 25); do
+            if curl -fsS http://127.0.0.1:5091/health/live > /tmp/archer-gateway-restarted-health.json; then
+              GATEWAY_READY=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$GATEWAY_READY" -ne 1 ]; then
+            cat /tmp/archer-gateway-restarted.log
+            exit 1
+          fi
           # Start the local desktop separately while gateway is still alive.
           # This verifies the two services agree on the dedicated bridge key.
           export ARCHER_GATEWAY_CHAT_BRIDGE_ENABLED=true
