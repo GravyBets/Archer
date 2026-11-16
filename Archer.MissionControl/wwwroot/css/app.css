@@ -216,3 +216,43 @@
 @media(prefers-reduced-motion:reduce){
   .orb-particle-field{opacity:.72}
 }
+
+
+/* Archer v0.5 — Developer Workspace: read-only, evidence-led source inspection. */
+.developer-repository{margin-bottom:20px}
+.developer-repo-header{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:20px 23px;border-bottom:1px solid var(--border)}
+.developer-repo-header h2{font-size:16px;margin:0 0 4px}
+.developer-repo-header p{font-size:11px;color:#8196a9;margin:0}
+.developer-readonly{border:1px solid #30615d;background:#153032;border-radius:50px;color:#75d9cc;font-size:10px;letter-spacing:1px;font-weight:800;padding:6px 12px}
+.developer-repo-controls{padding:16px 23px 12px}
+.developer-repo-controls label,.developer-filter label{display:block;color:#91a6bd;font-size:11px;font-weight:700;margin:0 0 7px}
+.developer-repo-row{display:flex;align-items:center;gap:10px}
+.developer-repo-row input,.developer-filter input{border:1px solid #31455c;background:#0a1524;border-radius:8px;color:#dbe8f3;padding:11px 12px;min-width:0;outline-offset:2px}
+.developer-repo-row input{flex:1}
+.developer-repo-status{color:#8cadbf;padding:0 23px 13px;font-size:11px}
+.developer-status-error{color:#f0a5aa}
+.developer-repo-metadata{display:flex;gap:20px;padding:10px 23px;background:#0d1827;border-top:1px solid var(--border);font-size:11px;color:#8098ae}
+.developer-repo-metadata strong,.developer-repo-metadata code{color:#bfd4e0}
+.developer-workspace{display:grid;grid-template-columns:minmax(280px,.85fr) minmax(400px,1.55fr);gap:20px;align-items:start}
+.developer-filter{padding:14px 16px 9px}
+.developer-filter input{width:100%}
+.developer-file-list{max-height:570px;overflow:auto;min-height:160px;padding:4px 10px}
+.developer-file-choice{display:flex;align-items:center;gap:11px;padding:11px 10px;border-radius:7px;border:1px solid transparent;cursor:pointer;font-size:11px}
+.developer-file-choice:hover{border-color:#30495b;background:#152439}
+.developer-file-choice input{flex:0 0 16px;width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+.developer-file-name{min-width:0;overflow-wrap:anywhere;color:#c6d9ea;flex:1}
+.developer-file-size{color:#748da4;white-space:nowrap;font-size:10px}
+.developer-file-actions{display:flex;justify-content:flex-end;gap:9px;flex-wrap:wrap;padding:14px 16px;border-top:1px solid var(--border)}
+.developer-source-list{max-height:680px;min-height:400px;overflow:auto;padding:14px}
+.developer-empty{color:#88a0b6;text-align:center;padding:60px 18px;font-size:12px}
+.developer-empty h3{color:#d4e6f2;margin:8px 0}
+.developer-empty p{margin:0}
+.developer-code-file{border:1px solid #2b4055;background:#0a1522;border-radius:9px;margin-bottom:14px;overflow:hidden}
+.developer-code-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 15px;background:#15253a;font-size:11px}
+.developer-code-heading strong{color:#d7e8ef;overflow-wrap:anywhere}
+.developer-code-heading a{color:#62dbcf;white-space:nowrap}
+.developer-code-text{font-family:Consolas,Monaco,'Courier New',monospace;font-size:11px;line-height:1.65;tab-size:4;white-space:pre;overflow:auto;padding:16px;margin:0;color:#aebfd1}
+.developer-truncation{margin:0;padding:8px 14px;color:#f2c487;background:#312825;font-size:11px}
+.developer-footnote{color:#8198ac;font-size:11px;line-height:1.75;margin:18px 0}
+@media(max-width:1080px){.developer-workspace{grid-template-columns:1fr}.developer-file-list{max-height:335px}.developer-source-list{min-height:230px;max-height:550px}}
+@media(max-width:650px){.developer-repo-header{align-items:flex-start;flex-direction:column}.developer-repo-row{flex-direction:column;align-items:stretch}.developer-repo-row input{width:100%}.developer-repo-metadata{flex-wrap:wrap;gap:8px 16px}.developer-file-actions .button{flex:1}.developer-code-heading{flex-wrap:wrap}}
