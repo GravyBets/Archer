@@ -386,3 +386,26 @@
 .communications-attempt small{font-size:10px;color:#87a2b3;white-space:nowrap}
 .communications-mobile{margin-top:20px}
 @media(max-width:650px){.communications-content{padding:14px}.communications-test-actions>.button{width:100%}.communications-attempt{flex-direction:column;align-items:flex-start}}
+
+
+/* v1.1.0 — source-backed local operator inbox (no external delivery) */
+.inbox-nav-count{margin-left:auto;border-radius:20px;background:#234247;color:#a9e9df;font-size:10px;padding:1px 8px}
+.inbox-toolbar{padding:15px 19px;display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--border)}
+.inbox-toolbar label{display:flex;gap:10px;align-items:center;color:#a7bdc9;font-size:11px}
+.inbox-toolbar select{background:#0c1828;border:1px solid #395065;border-radius:7px;color:#cfe0e8;font-size:12px;padding:9px 12px}
+#inboxTotals{color:#9baebd;font-size:11px;flex:1;text-align:right}
+.inbox-items{min-height:180px;max-height:800px;overflow:auto;padding:12px 18px}
+.inbox-card{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;padding:18px;margin:8px 0;background:#101d2d;border:1px solid #2d4255;border-radius:10px}
+.inbox-card.inbox-unread{border-color:#3b7c7b;background:#102534}
+.inbox-card.inbox-urgent{border-left:3px solid #e6ad72}
+.inbox-details{min-width:0;flex:1}
+.inbox-details h3{color:#d6e8ef;font-size:13px;margin:9px 0 6px;overflow-wrap:anywhere}
+.inbox-details p{color:#a1b7c8;font-size:11px;line-height:1.6;margin:0;overflow-wrap:anywhere}
+.inbox-meta{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.inbox-meta>span{font-size:10px;color:#94b5bb}
+.inbox-meta .inbox-priority{font-weight:750;color:#ecce9e}
+.inbox-meta time{font-size:10px;color:#7792a6}
+.inbox-flags{display:block;margin-top:9px;color:#77c9b6;font-size:10px}
+.inbox-actions{display:flex;flex-direction:column;gap:7px;min-width:145px}
+.inbox-actions .button{font-size:11px;padding:8px 11px}
+@media(max-width:700px){.inbox-card{flex-direction:column}.inbox-actions{flex-direction:row;flex-wrap:wrap;width:100%}.inbox-actions .button{flex:1 1 120px}.inbox-toolbar{padding:13px}.inbox-items{padding:8px}.inbox-toolbar #inboxTotals{text-align:left}}
