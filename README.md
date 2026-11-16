@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 1.9.0 (local prototype)  
+**Version:** 1.10.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -858,3 +858,18 @@ The standalone Archer.MobileGateway now supports multiple **local single-owner c
 **Important limitations:** all sessions belong to the **same local owner**, and a device with `conversation:read` can read every local session. Cursors may skip older records discarded by the seven-day/200-message journal retention; they are not proof of complete delivery. There is no cloud identity, Internet access, device push, genuine shared AI context, multiuser tenancy, native iPhone app or long-term export/backup yet.
 
 GitHub Actions runs a new separate synthetic session test for device permissions, session isolation, pagination, duplicates across sessions, archiving, encrypted restart and cursor preservation. Existing gateway, desktop bridge, and encryption migration tests also run. Test the interface at home after one Git → Pull; you still don't need to install anything on your work PC.
+
+## v1.10.0 — Read-only encrypted mobile session history in desktop Archer
+
+The Archer home page now includes a **Shared local conversation history** panel. This offers a useful view of the v1.9 session engine without writing API requests manually:
+
+- Select the **Main conversation** or any other currently saved local session from the dropdown. Archived conversations remain visible with an archived label.
+- Read actual owner-authored and explicitly shared Archer replies in order, with a timestamp and server-generated sequence number. The UI uses safe text rendering and cannot execute message content.
+- Click **Load next messages** to request the next page using the server's `nextAfter` cursor; or click **Refresh history** to reload the selected session.
+- When you separately and explicitly **Share last reply with mobile**, the selected history can refresh to show the saved answer. No additional model call or push is triggered.
+- The browser requires the SAME v1.7 private, opt-in local bridge flag `ARCHER_GATEWAY_CHAT_BRIDGE_ENABLED=true` and separate `ARCHER_GATEWAY_BRIDGE_KEY`. Everything is disabled by default. No configuration needed until you intentionally test on your own home computer.
+- Under the hood, gateway `GET /internal/conversation/sessions` and `GET /internal/conversation/history` are limited to the separately authenticated localhost bridge; desktop proxies `GET /api/mobile/sessions` and `GET /api/mobile/session-history` expose only bounded, read-only data.
+
+**Security limitation:** Mobile journal messages become readable in your local desktop dashboard **only after** enabling this bridge. The old MissionControl dashboard itself has no remote-user login, so do not run it on a shared/employer computer or publish/port-forward either process. The browser is NOT an iPhone app, true shared AI session memory, live message delivery or public HTTPS account service.
+
+CI verifies both .NET applications, JavaScript syntax and element wiring, an opt-in two-process session preview showing a source message then a manually shared answer, and denial of unauthenticated bridge calls. The entire upgrade adds no hosting or provider charges.
