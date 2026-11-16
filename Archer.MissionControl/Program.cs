@@ -4,6 +4,9 @@ using Archer.MissionControl.Services;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<JsonFileStore>();
 builder.Services.AddHostedService<MissionAutoRunner>();
+builder.Services.AddHttpClient("github-reader", client => client.Timeout = TimeSpan.FromSeconds(90));
+builder.Services.AddSingleton<GitHubRepositoryReader>(service =>
+    new GitHubRepositoryReader(service.GetRequiredService<IHttpClientFactory>().CreateClient("github-reader")));
 builder.Services.AddHttpClient<ArcherAiService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(240);
@@ -18,18 +21,37 @@ await app.Services.GetRequiredService<JsonFileStore>().RecoverInterruptedTasksAs
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "0.2.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "0.2.1" }));
 
 app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
 {
     configured = ai.IsConfigured,
     model = ai.Model,
     mode = "Local only · Research and analysis only",
-    version = "0.2.0"
+    version = "0.2.1"
 }));
 
 app.MapGet("/api/state", async (JsonFileStore store, CancellationToken ct) =>
     Results.Ok(await store.ReadAsync(state => state, ct)));
+
+// Free, read-only diagnostic: verifies actual repository access without using any AI tokens.
+app.MapGet("/api/github/check", async Task<IResult> (string repository, GitHubRepositoryReader reader, CancellationToken ct) =>
+{
+    try
+    {
+        var snapshot = await reader.TryReadMissionRepositoryAsync(repository, ct);
+        if (snapshot is null)
+            return Results.BadRequest(new { error = "Provide a GitHub repository URL, such as https://github.com/GravyBets/GeoShift." });
+        var files = snapshot.Split('\n')
+            .Where(line => line.StartsWith("--- FILE ", StringComparison.Ordinal))
+            .Select(line => line["--- FILE ".Length..].Replace(" ---", "").Trim())
+            .ToArray();
+        return Results.Ok(new { repository, status = "readable", filesRead = files.Length, files });
+    }
+    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+    catch (Exception error) { return Results.Problem(title: "GitHub source could not be read", detail: error.Message, statusCode: 502); }
+});
+
 
 app.MapPost("/api/missions", async Task<IResult> (CreateMissionRequest request, JsonFileStore store, CancellationToken ct) =>
 {
@@ -257,7 +279,7 @@ app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore
 
 app.MapFallbackToFile("index.html");
 
-Console.WriteLine("ARCHER Mission Control V0.2.0 — http://127.0.0.1:5087");
+Console.WriteLine("ARCHER Mission Control V0.2.1 — http://127.0.0.1:5087");
 app.Run("http://127.0.0.1:5087");
 
 static IResult MissingApiKey() => Results.BadRequest(new
