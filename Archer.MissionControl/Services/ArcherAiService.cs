@@ -106,7 +106,7 @@ public sealed class ArcherAiService(HttpClient http, IWebHostEnvironment environ
         catch (JsonException)
         {
             // Never pass an unfinished JSON object to the state store, or show the raw payload to the user.
-            throw new InvalidOperationException("Archer received an invalid or truncated mission plan; no tasks were saved. Confirm /api/config shows v0.1.2, then retry once. If it repeats, check model and output-token limits.");
+            throw new InvalidOperationException("Archer received an invalid or truncated mission plan; no tasks were saved. Confirm /api/config shows v0.1.4, then retry once. If it repeats, check model and output-token limits.");
         }
     }
 
