@@ -9,13 +9,14 @@ This is a **real starting codebase**, not a screenshot or a mockup. It includes:
 - Mission Control dashboard with mission creation and tracking
 - AI-generated bounded mission plans (3–5 research/analysis tasks)
 - Run **one** or **up to three** tasks sequentially, saving their reports
+- Opt-in local **auto-run up to three tasks** in the background, stopping on errors or restart
 - Built-in public web research through the OpenAI Responses API `web_search` tool
 - Conversational assistant with recent chat and mission context
 - Persistent missions, tasks, activity history, chats, and research reports (local JSON file)
 - Error tracking, task retries, and recovery from interrupted runs
 - Local-only HTTP server bound to `127.0.0.1` (not exposed to the internet)
 
-**Not included yet:** SMS, phone calls, scheduled background autonomy, tools that modify files or GitHub, financial operations, multi-user authentication, commercial reliability, or hard API spending enforcement. The UI makes no claims that these are implemented.
+**Not included yet:** SMS, phone calls, recurring scheduled execution, reliable always-on cloud autonomy, tools that modify files or GitHub, financial operations, multi-user authentication, commercial reliability, or hard API spending enforcement. The UI makes no claims that these are implemented.
 
 ## Run on your Windows development PC
 
@@ -45,7 +46,7 @@ try {
 
 Close and reopen Visual Studio before running Archer. To run without Visual Studio, use `dotnet run --project Archer.MissionControl/Archer.MissionControl.csproj`.
 
-> **Costs:** Responses API usage is billed separately from a ChatGPT subscription. Each plan, task, and chat request may cost money; a research task can also incur web-search tool charges. Archer limits task *count per click* but does **not** yet implement a hard cost cap. Start with a low billing alert/budget and monitor usage.
+> **Costs:** Responses API usage is billed separately from a ChatGPT subscription. Each plan, task, and chat request may cost money; a research task can also incur web-search tool charges. Archer limits task *count per click or explicit auto-run authorization* but does **not** yet implement a hard cost cap. Start with a low billing alert/budget and monitor usage.
 
 ## Data and privacy
 
@@ -62,6 +63,7 @@ Archer.MissionControl/
   Program.cs                 HTTP endpoints, bounded task execution
   Domain/Models.cs           Missions, tasks, artifacts, activity, chat
   Services/JsonFileStore.cs  Persistent single-user local state
+  Services/MissionAutoRunner.cs  Opt-in bounded background research
   Services/ArcherAiService.cs  OpenAI Responses API integration
   wwwroot/index.html         Mission Control dashboard
   wwwroot/css/app.css        Dashboard theme
@@ -75,6 +77,7 @@ Archer.MissionControl/
 - [x] Implement local mission state, task history, and report artifacts
 - [x] Connect a configurable AI service over the Responses API
 - [x] Bound research/analysis actions to 1–3 tasks per run
+- [x] Opt-in local background execution of up to three tasks
 - [ ] Build + test on Windows with .NET 10 SDK
 - [ ] Real cost metering / per-mission spending ceiling
 - [ ] SQLite or PostgreSQL data persistence and migrations
