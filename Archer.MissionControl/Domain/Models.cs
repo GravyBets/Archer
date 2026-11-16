@@ -13,6 +13,8 @@ public sealed class ArcherState
     public List<CodeProposal> CodeProposals { get; set; } = [];
     public CommunicationPreferences CommunicationPreferences { get; set; } = new();
     public List<CommunicationAttempt> CommunicationAttempts { get; set; } = [];
+    // Persistent source-grounded local inbox. Not phone notifications or an APNs delivery queue.
+    public List<OperatorNotification> Notifications { get; set; } = [];
     // Notification routing preferences are preview-only until real delivery is explicitly configured.
     public BriefingPreferences BriefingPreferences { get; set; } = new();
 }
@@ -201,3 +203,20 @@ public sealed record UpdateCommunicationPreferencesRequest(
 public sealed record ConfirmCommunicationRequest(bool Confirm);
 public sealed record MobilePresenceRequest(
     string? Activity, string? PlaceLabel, int DurationMinutes, bool ShareWithAi);
+
+public sealed class OperatorNotification
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    // Stable dedup key comes from Archer-owned incident/task IDs, not user content.
+    public string SourceKey { get; set; } = "";
+    public string Category { get; set; } = "Mission";
+    public string Priority { get; set; } = "Attention";
+    public string Title { get; set; } = "";
+    public string Summary { get; set; } = "";
+    public DateTimeOffset OccurredAtUtc { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? ReadAtUtc { get; set; }
+    public DateTimeOffset? AcknowledgedAtUtc { get; set; }
+    public DateTimeOffset? ResolvedAtUtc { get; set; }
+    public Guid? MissionId { get; set; }
+    public Guid? WebsiteMonitorId { get; set; }
+}
