@@ -50,4 +50,4 @@ jobs:
             -G --data-urlencode 'url=https://github.com/NotAllowlisted/Repo' \
             http://127.0.0.1:5087/api/development/repository)
           test "$CODE" = "400"
-          python3 -c 'import json; c=json.load(open("/tmp/archer-config.json")); u=json.load(open("/tmp/archer-usage.json")); assert c["version"]=="0.5.0", c; assert c["routing"]["mode"]=="adaptive", c; assert u["month"]["requests"]==0, u; assert u["lifetime"]["estimatedCostUsd"]==0, u; print("PASS: Archer v0.5.0 health/config/usage endpoints")'
+          python3 -c 'import json; c=json.load(open("/tmp/archer-config.json")); u=json.load(open("/tmp/archer-usage.json")); assert c["version"]=="0.5.1", c; assert c["routing"]["mode"]=="adaptive", c; assert u["month"]["requests"]==0, u; assert u["lifetime"]["estimatedCostUsd"]==0, u; print("PASS: Archer v0.5.1 health/config/usage endpoints")'
