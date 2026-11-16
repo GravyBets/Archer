@@ -84,18 +84,50 @@ public sealed class ArcherAiService(HttpClient http)
 
     public Task<string> ExecuteTaskAsync(Mission mission, MissionTask task, CancellationToken ct)
     {
-        // Only public research and analysis are enabled in V0.1; no user systems are accessible.
+        // Research requests can spend tokens on web search and reasoning BEFORE producing
+        // a visible report. Keep the task and tool-call budgets bounded, but allow room
+        // for both the search and the final response.
         var useWeb = task.Kind == "research";
-        var prior = string.Join("\n\n", mission.Artifacts.TakeLast(3).Select(a =>
-            $"Previous task: {a.Title}\n{a.Content[..Math.Min(a.Content.Length, 6500)]}"));
-        object payload;
-        var instructions = SafetyInstructions + "\nComplete the assigned task. Give a substantial, specific deliverable with assumptions, next steps, and verifiable source URLs for external facts. If no trustworthy evidence is found, say so. Distinguish estimates from verified facts.";
-        var input = $"MISSION: {mission.Title}\nOBJECTIVE: {mission.Objective}\nPLAN: {mission.Summary}\nCURRENT TASK: {task.Title}\nTASK DETAILS: {task.Description}\nPREVIOUS FINDINGS:\n{prior}\nReturn your completed work in a clear, useful report.";
+        var prior = string.Join("\n\n", mission.Artifacts.TakeLast(2).Select(a =>
+            $"Previous task: {a.Title}\n{a.Content[..Math.Min(a.Content.Length, 3500)]}"));
+
+        var instructions = SafetyInstructions +
+            "\nComplete ONLY the assigned task. Deliver a focused report of approximately 450-750 words: findings, evidence, uncertainties, and three practical next steps. " +
+            "Prioritize useful specifics over exhaustive coverage. Distinguish estimates from verified facts. Never invent citations. " +
+            (useWeb
+                ? "Use up to three targeted web searches, cite 3-6 real source URLs when available, and clearly identify anything you could not verify."
+                : "Analyze the provided context. Do not claim you searched the web or verified external facts unless that evidence is present in the supplied material.");
+
+        var input = $"MISSION: {mission.Title}\nOBJECTIVE: {mission.Objective}\nPLAN: {mission.Summary}\nCURRENT TASK: {task.Title}\nTASK DETAILS: {task.Description}\nPREVIOUS FINDINGS:\n{prior}\nReturn the completed report.";
+
         if (useWeb)
-            payload = new { model = Model, store = false, max_output_tokens = 2200, instructions, input, tools = new[] { new { type = "web_search" } } };
+        {
+            var payload = new
+            {
+                model = Model,
+                store = false,
+                reasoning = new { effort = "low" },
+                max_output_tokens = 6500,
+                max_tool_calls = 3,
+                instructions,
+                input,
+                tools = new[] { new { type = "web_search" } }
+            };
+            return CompleteAsync(payload, ct);
+        }
         else
-            payload = new { model = Model, store = false, max_output_tokens = 2200, instructions, input };
-        return CompleteAsync(payload, ct);
+        {
+            var payload = new
+            {
+                model = Model,
+                store = false,
+                reasoning = new { effort = "low" },
+                max_output_tokens = 4000,
+                instructions,
+                input
+            };
+            return CompleteAsync(payload, ct);
+        }
     }
 
     public Task<string> ChatAsync(string message, ArcherState state, CancellationToken ct)
@@ -106,8 +138,8 @@ public sealed class ArcherAiService(HttpClient http)
             $"{c.Role}: {c.Content[..Math.Min(c.Content.Length, 1500)]}"));
         var payload = new
         {
-            model = Model, store = false, max_output_tokens = 1300,
-            instructions = SafetyInstructions + "\nYou are speaking directly to your owner. Be conversational, concise, and useful. Do not imply that new missions or tasks were created unless you actually created them through a tool.",
+            model = Model, store = false, reasoning = new { effort = "low" }, max_output_tokens = 2600,
+            instructions = SafetyInstructions + "\nYou are speaking directly to your owner. Be conversational, concise (usually under 400 words), and useful. Do not imply that new missions or tasks were created unless you actually created them through a tool.",
             input = $"MISSION CONTEXT:\n{missions}\nRECENT CONVERSATION:\n{conversation}\nuser: {message}\nassistant:"
         };
         return CompleteAsync(payload, ct);
@@ -144,8 +176,8 @@ public sealed class ArcherAiService(HttpClient http)
                     details.TryGetProperty("reason", out var reasonValue)
                         ? reasonValue.GetString() : null;
                 throw new InvalidOperationException(reason == "max_output_tokens"
-                    ? "OpenAI ran out of output tokens (including internal reasoning) before finishing. No incomplete plan was saved. Try a shorter objective or lower reasoning effort."
-                    : "OpenAI returned an incomplete response. No plan was saved. Please retry.");
+                    ? "OpenAI reached the output-token limit (which includes reasoning). No partial result was saved. Narrow the task or retry once; retries use additional API credits."
+                    : "OpenAI returned an incomplete response. No partial result was saved. Please retry once.");
             }
             if (status != "completed")
                 throw new InvalidOperationException("OpenAI could not complete the request (status: " + status + "). Please retry.");
