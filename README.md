@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 1.7.0 (local prototype)  
+**Version:** 1.8.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -816,3 +816,30 @@ Both Archer.MissionControl and Archer.MobileGateway must run on the **same perso
 GitHub Actions tests the default-off desktop endpoint, missing/wrong bridge key refusal, explicit gateway read-only access, synthetic phone message visibility, and a real two-process loopback handshake where desktop Archer receives a test draft with **zero AI requests** and no automatic submission. Static UI checks verify the draft button does not call the chat API.
 
 **Future blockers:** authenticated production identity, HTTPS and separate public-facing ingress, key management/rotation, secure device provisioning, encrypted backups, full cross-channel sessions and response sync, APNs, iOS app and real British two-way voice. Do not expose either localhost service to the internet.
+
+
+## v1.8.0 — Owner-confirmed Archer replies back to the encrypted mobile journal
+
+This is the first **controlled two-direction message exchange** between a locally enrolled test device and desktop Archer. It remains a **loopback-only prototype**, not a live iPhone app or continuously synchronized AI conversation.
+
+1. With the separately keyed phone-draft bridge enabled on your personal HOME computer, an authorized test device saves an owner-authored draft in the encrypted MobileGateway journal.
+2. Open Archer home → **Mobile message drafts**, select **Use in chat composer**, and review it. This only copies text, without an AI request.
+3. Leave the original draft unchanged and press the ordinary **Send** button. Only this existing action contacts OpenAI and is governed by Archer's spending safeguards.
+4. Once Archer replies, choose **Share last reply with mobile** and approve the confirmation. This makes a **second separate** local request; it does NOT make another AI model call.
+5. Desktop checks that the most recent persisted user/assistant chat pair matches your selected draft. The local gateway confirms the exact owner draft still exists before saving one linked assistant reply. The gateway journal now exposes assistant replies with a replyToMessageId reference to the original owner message.
+6. The sharing operation is idempotent: an identical retry returns success without a duplicate entry, while a different reply to an already-answered question is refused. Enrolled test devices with conversation:read permission can read the shared message.
+
+### Safety, limitations and privacy
+
+- Gateway reply publication uses the same independent 40+ character ARCHER_GATEWAY_BRIDGE_KEY, not a mobile-device bearer token. Publishing requires an exact, already-saved desktop chat response. No arbitrary browser-provided assistant text is accepted.
+- Explicit confirmation is required before sharing replies. Nothing is silently exported from general desktop chat, and other private conversations are not copied.
+- Only the **last desktop user/assistant pair** is eligible. Sending another desktop message first invalidates the previous share; this intentionally fails closed instead of copying the wrong answer.
+- Desktop replies over 4,000 characters are not eligible for this prototype. There is no automatic transcript import, conversation session context merging, background mobile AI replies, internet access, APNs, two-way phone calls, CarPlay or cloud hosting.
+- The gateway stores data encrypted with its owner-managed AES-GCM key. Authorized test devices with conversation:read may view owner messages and the linked assistant reply. This is still a single-user local development design and NOT production cloud authentication.
+- Retry the **Share** button after an ambiguous local connection failure; retries do not contact the AI again. Do not port-forward either localhost service or use the employer/work PC.
+
+### Validation
+
+GitHub CI tests denied mobile-bearer publishing, wrong/missing service key, mismatched original messages, one reply per draft, replay conflicts, local encrypted journal reading, and a synthetic desktop→gateway integration that never calls OpenAI or Twilio. Browser visuals and personal Windows setup remain to be tested after a pull.
+
+See the [master roadmap](ARCHER_MOBILE_COMMUNICATION_ROADMAP.md) and [security review](ARCHER_MOBILE_SECURITY_REVIEW.md) for production identity, full conversation sync, key management, push notifications, iPhone app and British voice still to do.
