@@ -77,6 +77,17 @@ public sealed class WebsiteMonitorWorker(
         {
             try
             {
+                // Expire location/activity context even if the user hasn't opened the UI.
+                var expired = await store.ReadAsync(state =>
+                    state.Presence is { } p && p.ExpiresAtUtc <= DateTimeOffset.UtcNow, ct);
+                if (expired)
+                    await store.UpdateAsync(state =>
+                    {
+                        if (state.Presence is { } p && p.ExpiresAtUtc <= DateTimeOffset.UtcNow)
+                            state.Presence = null;
+                        return true;
+                    }, ct);
+
                 var monitors = await store.ReadAsync(state =>
                     state.WebsiteMonitors.Where(x => x.Enabled)
                         .Select(x => (x.Id, x.Url)).ToArray(), ct);
