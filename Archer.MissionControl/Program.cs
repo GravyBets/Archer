@@ -56,7 +56,7 @@ await app.Services.GetRequiredService<JsonFileStore>().RecoverInterruptedTasksAs
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "1.9.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "1.10.0" }));
 
 app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
 {
@@ -64,7 +64,7 @@ app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
     model = ai.Model,
     routing = ai.Routing,
     mode = "Local only · Guarded AI, approved code drafts, opt-in phone integrations",
-    version = "1.9.0"
+    version = "1.10.0"
 }));
 
 app.MapGet("/api/state", async (JsonFileStore store, CancellationToken ct) =>
@@ -210,6 +210,24 @@ app.MapPost("/api/communications/test-call", async Task<IResult> (
 app.MapGet("/api/mobile/conversation-preview", async (
     GatewayConversationBridge bridge, CancellationToken ct) =>
     Results.Ok(await bridge.PreviewAsync(ct)));
+
+// Explicitly opted-in read-only session inspection. Neither route invokes
+// the model or changes the encrypted gateway state.
+app.MapGet("/api/mobile/sessions", async (
+    GatewayConversationBridge bridge, CancellationToken ct) =>
+    Results.Ok(await bridge.SessionsAsync(ct)));
+
+app.MapGet("/api/mobile/session-history", async Task<IResult> (
+    Guid? sessionId, long? after, int? limit,
+    GatewayConversationBridge bridge, CancellationToken ct) =>
+{
+    if (sessionId is null)
+        return Results.BadRequest(new { error = "Choose a valid local conversation session." });
+    try { return Results.Ok(await bridge.SessionHistoryAsync(sessionId.Value,
+            after ?? 0, limit ?? 20, ct)); }
+    catch (ArgumentException error) { return Results.BadRequest(new { error = error.Message }); }
+});
+
 
 // Explicit owner action AFTER desktop Archer has already generated/saved a
 // response. Never runs an AI model; only syncs the most recent matching pair
@@ -823,7 +841,7 @@ app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore
 
 app.MapFallbackToFile("index.html");
 
-Console.WriteLine("ARCHER Mission Control V1.9.0 — http://127.0.0.1:5087");
+Console.WriteLine("ARCHER Mission Control V1.10.0 — http://127.0.0.1:5087");
 app.Run("http://127.0.0.1:5087");
 
 static IResult MissingApiKey() => Results.BadRequest(new
