@@ -22,7 +22,7 @@
       </nav>
       <div class="sidebar-bottom">
         <div class="sidebar-status"><span class="pulse-dot"></span><span id="connectionLabel">Checking local server...</span></div>
-        <div class="version">V0.6.0 · LOCAL DEVELOPMENT</div>
+        <div class="version">V0.7.0 · LOCAL DEVELOPMENT</div>
       </div>
     </aside>
     <main class="content">
@@ -230,6 +230,57 @@
             <h1 id="operationsHeading">Operations<span class="accent">.</span></h1>
             <p>Read-only monitoring of approved public websites. Archer cannot see customer purchases, revenue or support tickets without separate integrations.</p>
           </div>
+          <section class="panel operations-briefing" aria-labelledby="briefingHeading">
+            <div class="panel-header">
+              <div><h2 id="briefingHeading">Daily briefing preview</h2>
+                <p>Real local metrics, no AI request or message delivery</p></div>
+              <button type="button" class="button secondary" id="briefingRefreshButton">Refresh briefing</button>
+            </div>
+            <div class="briefing-content">
+              <div class="briefing-summary">
+                <span class="developer-readonly">DRAFT ONLY · NOT SENT</span>
+                <span id="briefingGeneratedAt">Not generated yet</span>
+                <button type="button" class="voice-stop" id="briefingCopyButton" disabled>Copy briefing</button>
+              </div>
+              <pre id="briefingBody" class="briefing-body">Loading locally measured mission, website and API usage data…</pre>
+              <p id="briefingMetricNotes" class="briefing-footnote">Revenue, payments and conversion metrics require future authorized integrations.</p>
+              <div class="briefing-alerts-heading"><h3>Suggested alerts</h3>
+                <span id="briefingQuietStatus" class="count">Checking hours</span></div>
+              <div id="briefingAlertList" class="briefing-alert-list">
+                <p class="developer-empty">No alert previews loaded.</p>
+              </div>
+              <p class="briefing-footnote">Suggestions only. Archer cannot send SMS, make calls or bypass your quiet hours. Outage checks should be verified before urgent escalation.</p>
+            </div>
+            <form id="briefingPreferencesForm" class="briefing-preferences">
+              <div><h3>Future delivery preferences</h3>
+                <p>Set your intended daily update and quiet hours now. These settings control previews only.</p></div>
+              <div class="briefing-fields">
+                <label>Timezone
+                  <select id="briefingTimezone">
+                    <option value="America/Chicago">Central</option>
+                    <option value="America/New_York">Eastern</option>
+                    <option value="America/Denver">Mountain</option>
+                    <option value="America/Los_Angeles">Pacific</option>
+                    <option value="America/Phoenix">Arizona</option>
+                    <option value="UTC">UTC</option>
+                  </select></label>
+                <label>Daily briefing hour
+                  <input type="number" min="0" max="23" id="briefingHour" value="8" required /></label>
+                <label>Quiet from
+                  <input type="number" min="0" max="23" id="briefingQuietStart" value="22" required /></label>
+                <label>Quiet until
+                  <input type="number" min="0" max="23" id="briefingQuietEnd" value="7" required /></label>
+              </div>
+              <label class="voice-toggle briefing-override">
+                <input type="checkbox" id="briefingCriticalOverride" />
+                Suggest urgent calls during quiet hours after a verified outage (future feature)
+              </label>
+              <div class="briefing-save-row">
+                <span id="briefingPreferenceStatus" role="status">Times use a 24-hour clock. Equal quiet hours disable the quiet window.</span>
+                <button class="button primary" type="submit">Save preferences</button>
+              </div>
+            </form>
+          </section>
           <section class="panel">
             <div class="panel-header"><div><h2>Website monitors</h2><p>Every five minutes while the Archer app is running</p></div>
               <span id="operationsStatus" class="count">No websites</span></div>
@@ -267,7 +318,7 @@
           </div>
         </section>
         <section id="activityView" class="view hidden"><div class="hero"><div class="eyebrow">EXECUTION HISTORY <span class="eyebrow-line"></span></div><h1>Activity<span class="accent">.</span></h1><p>What Archer has actually done, with completed work stored on disk.</p></div><div class="panel"><div id="activityList" class="activity-list"></div></div></section>
-        <footer class="footer">ARCHER / V0.6 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
+        <footer class="footer">ARCHER / V0.7 <span>·</span> RESEARCH + ANALYSIS ONLY <span>·</span> NO EXTERNAL ACCOUNT ACTIONS</footer>
       </div>
     </main>
   </div>
