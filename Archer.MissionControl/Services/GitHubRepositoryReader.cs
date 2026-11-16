@@ -127,7 +127,7 @@ public sealed class GitHubRepositoryReader(HttpClient http)
         var requested = selection.Success
             ? selection.Groups["files"].Value.Split(',',
                 StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            : [];
+            : Array.Empty<string>();
         if (requested.Length > 6 || (selection.Success && requested.Length == 0))
             throw new InvalidOperationException("A code-review mission can select 1–6 files.");
 
