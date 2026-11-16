@@ -16,6 +16,10 @@ jobs:
         run: dotnet restore Archer.MissionControl/Archer.MissionControl.csproj
       - name: Build
         run: dotnet build Archer.MissionControl/Archer.MissionControl.csproj --configuration Release --no-restore
+      - name: Restore standalone mobile gateway
+        run: dotnet restore Archer.MobileGateway/Archer.MobileGateway.csproj
+      - name: Build standalone mobile gateway
+        run: dotnet build Archer.MobileGateway/Archer.MobileGateway.csproj --configuration Release --no-restore
       - name: Check dashboard and presence JavaScript
         run: |
           node --check Archer.MissionControl/wwwroot/js/app.js
@@ -127,5 +131,29 @@ jobs:
             -X POST http://127.0.0.1:5087/api/operations/monitors)
           test "$CODE" = "400"
           python3 -c 'import json; p=json.load(open("/tmp/archer-presence-set.json")); clear=json.load(open("/tmp/archer-presence-cleared.json")); ops=json.load(open("/tmp/archer-operations.json")); assert p["active"]; assert p["presence"]["approxLatitude"]==29.99; assert p["presence"]["approxLongitude"]==-95.12; assert not p["presence"]["shareWithAi"]; assert not clear["active"]; assert ops["channels"]["sms"]=="Not connected"; assert ops["monitors"]==[]; print("PASS: consented coarse presence, clear and safe monitoring defaults")'
-          python3 -c 'import json; c=json.load(open("/tmp/archer-config.json")); u=json.load(open("/tmp/archer-usage.json")); assert c["version"]=="1.1.0", c; assert c["routing"]["mode"]=="adaptive", c; assert u["month"]["requests"]==0, u; assert u["lifetime"]["estimatedCostUsd"]==0, u; print("PASS: Archer v1.1.0 health/config/usage endpoints")'
+          python3 -c 'import json; c=json.load(open("/tmp/archer-config.json")); u=json.load(open("/tmp/archer-usage.json")); assert c["version"]=="1.2.0", c; assert c["routing"]["mode"]=="adaptive", c; assert u["month"]["requests"]==0, u; assert u["lifetime"]["estimatedCostUsd"]==0, u; print("PASS: Archer v1.2.0 health/config/usage endpoints")'
           python3 tests/SmokeInbox.py /tmp/archer-inbox-ci-state/archer-state.json
+
+      - name: Smoke-test isolated gateway security and inbox
+        shell: bash
+        run: |
+          export ARCHER_GATEWAY_ADMIN_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
+          export ARCHER_GATEWAY_INGEST_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
+          export ARCHER_GATEWAY_DATA_DIR="/tmp/archer-gateway-ci-$$"
+          mkdir -p "$ARCHER_GATEWAY_DATA_DIR"
+          dotnet run --no-build --configuration Release --project Archer.MobileGateway/Archer.MobileGateway.csproj > /tmp/archer-gateway-smoke.log 2>&1 &
+          PID=$!
+          trap 'kill $PID 2>/dev/null || true' EXIT
+          READY=0
+          for i in $(seq 1 25); do
+            if curl -fsS http://127.0.0.1:5091/health/live > /tmp/archer-gateway-health.json; then
+              READY=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$READY" -ne 1 ]; then
+            cat /tmp/archer-gateway-smoke.log
+            exit 1
+          fi
+          python3 tests/SmokeMobileGateway.py "$ARCHER_GATEWAY_DATA_DIR/mobile-gateway-state.json"

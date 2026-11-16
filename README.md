@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 1.1.0 (local prototype)  
+**Version:** 1.2.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -638,3 +638,53 @@ See **[ARCHER_MOBILE_COMMUNICATION_ROADMAP.md](ARCHER_MOBILE_COMMUNICATION_ROADM
 5. See the new mobile/communication roadmap file for the upcoming P0 security architecture work. **Do not expose localhost or configure background iPhone tracking** to test this version.
 
 Automated CI validates .NET compilation, all JavaScript files, expected UI element IDs and a synthetic-source API smoke: stable deduplication, read/ack, recovery and no new Twilio attempts. A Windows visual review and a separate production security review are still required.
+
+## v1.2.0 — Isolated mobile gateway prototype (local only)
+
+**This is the first security step toward an iPhone companion, not a remotely accessible app.**
+Archer now has two separate .NET 10 applications:
+
+- **Archer.MissionControl** (existing UI and trusted operations) continues to bind to `http://127.0.0.1:5087`. It remains unauthenticated and **must not be exposed** to the LAN or internet.
+- **Archer.MobileGateway** (new, separately runnable service) explicitly binds to `http://127.0.0.1:5091`. It has its **own data folder** and cannot reach MissionControl administration, chat, OpenAI, GitHub-writing tools, Twilio, phone numbers or location. It exposes only local health, locally authenticated enrollment/revocation/ingestion, and a scoped read/ack notification inbox.
+
+Read the [full security and route inventory](ARCHER_MOBILE_SECURITY_REVIEW.md) and the [master mobile/voice roadmap](ARCHER_MOBILE_COMMUNICATION_ROADMAP.md) before enabling any gateway integration.
+
+### Device access (test setup on YOUR personal Windows PC only)
+
+Install .NET 10 SDK, then configure unique, cryptographically random **Windows user environment** secrets, **not in GitHub, code, screenshots or chat**:
+
+- `ARCHER_GATEWAY_ADMIN_KEY`: separate 40+ character random provisioning key, used only for `/internal/devices` operations.
+- `ARCHER_GATEWAY_INGEST_KEY`: another independent 40+ character random local event-ingest key. Never reuse the admin key.
+- `ARCHER_GATEWAY_DATA_DIR`: optional separate writable location for the gateway's private state file (default `Archer.MobileGateway/Data`, excluded from Git).
+
+Launch **Archer.MobileGateway** from Visual Studio. The isolated health endpoint is `GET http://127.0.0.1:5091/health/live`. It explicitly reports `publicAccessEnabled: false`.
+
+You can use the local API with a test client to enroll a short-lived device:
+- `POST /internal/devices/enroll` with header `X-Archer-Admin-Key` and JSON `{"label":"Personal iPhone test","lifetimeDays":1}` (1–7 days maximum).
+- The response gives a **single random bearer token once**. Store it securely, never in a URL or clipboard history. The gateway stores its SHA-256 hash only. Maximum five active test devices.
+- Use `Authorization: Bearer <token>` with `GET /v1/inbox`, or `POST /v1/inbox/{id}/read` and `/acknowledge`. These endpoints cannot start missions, deploy, pay, call or edit GitHub.
+- `POST /internal/devices/{id}/revoke` with the admin header invalidates access immediately. Listing `GET /internal/devices` shows metadata, **never tokens or hashes**.
+- The gateway rate limits requests and rejects cross-site browser origins and unauthorized ingress.
+
+### Optional local source-event sync (off by default)
+
+To make Archer's existing source-backed Inbox available through this second local API process, run both applications on the **same personal PC**. Set the **same** `ARCHER_GATEWAY_INGEST_KEY` in both processes and explicitly enable `ARCHER_GATEWAY_SYNC_ENABLED=true` in MissionControl's Windows environment. Restart the apps. The sync worker posts **only** source-backed notification ID, category, priority, short title/summary, occurrence and resolution timestamps to the fixed `127.0.0.1:5091` endpoint every minute. It never sends full chat transcripts, detailed mission artifacts, owner location, phone numbers, payment information, model keys or code proposals.
+
+The gateway stores up to 200 events. Replaying the same source event is idempotent: existing read/ack state survives and a resolved event cannot be reopened by a stale snapshot. **Acknowledging the gateway copy currently does NOT acknowledge the MissionControl original**—that reconciliation needs another authenticated integration. No API model requests or Twilio charges occur from syncing.
+
+If no secrets are configured, the gateway can still run for local health checks but **no device can enroll and no events can be ingested**. If you never enable sync, no extra data leaves MissionControl. If the gateway is stopped, Archer continues normally.
+
+### What is deliberately NOT ready
+
+- No public HTTPS endpoint, remote iPhone access, APNs push, app, realtime voice, CarPlay, remote chat, verified Apple device identity, or cloud deployment.
+- No secret rotation/refresh flow, encrypted database, independent external security audit, production backups, cross-system acknowledge reconciliation, notification outbox or provider receipts.
+- The gateway's bearer and shared keys are suitable only for **local development**. Do not port-forward it or place any reverse proxy in front of it until the P0 authentication, TLS and network isolation work is complete.
+- Using two processes is deliberate: an iPhone app must never receive access to the desktop administrative API or unrestricted OpenAI/GitHub/Twilio credentials.
+
+### Validation
+
+CI builds both .NET 10 projects and uses generated **synthetic CI-only keys** to test:
+unauthorized device attempts, missing admin/ingest key rejection, a one-time 256-bit device token, permitted read and acknowledgement, event deduplication, recovery without loss of acknowledgement, revocation, malformed events and persistence without raw tokens. The tests make no OpenAI API calls, GitHub writes, calls or SMS.
+
+**When you're back at your home PC:** Pull once, rebuild/run MissionControl, check `/api/config` reports v1.2.0 and browse existing Inbox. You don't need to start or configure the mobile gateway yet; it is optional and disabled from remote access. When we're ready to test authenticated mobile interactions, we can run the new project locally and configure test keys on your personal PC.
+
