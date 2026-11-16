@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 1.6.0 (local prototype)  
+**Version:** 1.7.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -789,3 +789,30 @@ GitHub Actions tests both .NET 10 builds, the existing Archer endpoints, the mob
 - All existing device revocation, rate limits, and no-charge/no-delivery behavior remain unchanged.
 
 See [ARCHER_MOBILE_SECURITY_REVIEW.md](ARCHER_MOBILE_SECURITY_REVIEW.md) and [ARCHER_MOBILE_COMMUNICATION_ROADMAP.md](ARCHER_MOBILE_COMMUNICATION_ROADMAP.md) for remaining identity, authenticated desktop sync, backup, iPhone and cloud milestones.
+
+## v1.7.0 — Opt-in read-only desktop / phone-draft bridge (LOCAL ONLY)
+
+Archer's local desktop app can now **preview** owner-authored messages saved in the encrypted local MobileGateway journal. This is an early integration test toward one conversation across future devices; it is **NOT** real shared AI chat, remote iPhone connectivity or two-way telephone conversation.
+
+### Setup (only on your PERSONAL home PC, never at work)
+
+Both Archer.MissionControl and Archer.MobileGateway must run on the **same personal computer**, each on its existing loopback-only port. The gateway must first have its own AES-256-GCM data key configured, and any test device must already be enrolled with explicit conversation permissions (see v1.5–v1.6 documentation).
+
+1. Generate and store a **separate, cryptographically random secret of 40+ characters** for ARCHER_GATEWAY_BRIDGE_KEY. Set the same value in the private user/process environment for **both** local services. **Do not reuse** ARCHER_GATEWAY_ADMIN_KEY, ARCHER_GATEWAY_INGEST_KEY, your GitHub token, Twilio password or the AES data key. Never print, commit, upload or share secrets.
+2. Only when you want drafts to appear in desktop Archer, explicitly set **ARCHER_GATEWAY_CHAT_BRIDGE_ENABLED=true** for the MissionControl process. Without both values, the feature is disabled.
+3. Restart both processes so environment settings take effect; open the normal **Archer home** and find **Mobile message drafts**. It shows up to 30 owner-authored phone test drafts from the gateway, if any.
+4. Click **Use in chat composer** on a draft. This **only fills the existing text box**. Read or edit it before manually clicking **Send**. If you click Send, the usual Archer model is called subject to your existing spending safeguards.
+5. Disable the flag at any time and restart desktop Archer to stop fetching gateway drafts. The original gateway journal is unchanged.
+
+### Independent, narrowly permissioned route
+
+- Gateway **GET /internal/conversation/bridge** requires header X-Archer-Bridge-Key with the dedicated secret and stays bound to 127.0.0.1:5091. It accepts neither device bearer tokens nor administrator/ingest keys as substitutes.
+- Desktop **GET /api/mobile/conversation-preview** returns disabled status without making any network call until the owner explicitly enables the integration. When active it calls only the fixed localhost gateway address with a proxy-free and redirect-free client. A bounded response is parsed into validated message previews; no browser response includes the bridge key.
+- No new listener, port forwarding, reverse proxy, cloud payment, GPS, background phone monitoring, Twilio SMS/call or OpenAI model operation is introduced by simply viewing a draft. The desktop's existing chat history is **not** exported or synchronized to the gateway. Assistant replies are **not** automatically written back.
+- An authenticated gateway draft is still **untrusted text**, not an instruction to execute. The operator must explicitly choose and send any draft before AI processing, and the gateway cannot merge, deploy, call contacts or manage payment accounts through this bridge.
+
+### Verification
+
+GitHub Actions tests the default-off desktop endpoint, missing/wrong bridge key refusal, explicit gateway read-only access, synthetic phone message visibility, and a real two-process loopback handshake where desktop Archer receives a test draft with **zero AI requests** and no automatic submission. Static UI checks verify the draft button does not call the chat API.
+
+**Future blockers:** authenticated production identity, HTTPS and separate public-facing ingress, key management/rotation, secure device provisioning, encrypted backups, full cross-channel sessions and response sync, APNs, iOS app and real British two-way voice. Do not expose either localhost service to the internet.
