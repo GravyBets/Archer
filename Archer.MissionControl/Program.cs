@@ -24,6 +24,10 @@ builder.Services.AddHttpClient<ArcherAiService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(240);
 });
+builder.Services.AddHttpClient<GitHubDraftPrPublisher>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(45);
+});
 
 var app = builder.Build();
 
@@ -34,15 +38,15 @@ await app.Services.GetRequiredService<JsonFileStore>().RecoverInterruptedTasksAs
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "0.8.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "0.9.0" }));
 
 app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
 {
     configured = ai.IsConfigured,
     model = ai.Model,
     routing = ai.Routing,
-    mode = "Local only · Research and analysis only",
-    version = "0.8.0"
+    mode = "Local only · Research, analysis, and owner-approved code draft PRs",
+    version = "0.9.0"
 }));
 
 app.MapGet("/api/state", async (JsonFileStore store, CancellationToken ct) =>
@@ -296,6 +300,144 @@ app.MapGet("/api/development/repository", async Task<IResult> (
     }
 });
 
+
+// Code-generation phase: ONLY makes a local reviewable draft. Never writes to GitHub.
+app.MapGet("/api/development/code-proposals", async (JsonFileStore store, GitHubDraftPrPublisher publisher,
+    CancellationToken ct) =>
+{
+    var proposals = await store.ReadAsync(state => state.CodeProposals
+        .OrderByDescending(x => x.CreatedAtUtc).Take(8).ToArray(), ct);
+    return Results.Ok(new
+    {
+        proposals,
+        publishingEnabled = publisher.IsEnabled,
+        note = "Generated source is untrusted until reviewed. Drafts cannot merge or deploy."
+    });
+});
+
+app.MapPost("/api/development/code-proposals", async Task<IResult> (
+    DraftCodeRequest request, GitHubRepositoryReader reader, ArcherAiService ai,
+    JsonFileStore store, CancellationToken ct) =>
+{
+    if (!ai.IsConfigured) return MissingApiKey();
+    var repo = request.Repository?.Trim() ?? "";
+    var paths = request.Paths ?? [];
+    var instruction = request.Instruction?.Trim() ?? "";
+    if (paths.Count is < 1 or > 2 || paths.Distinct(StringComparer.Ordinal).Count() != paths.Count ||
+        paths.Any(p => !(p.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
+                         p.EndsWith(".razor", StringComparison.OrdinalIgnoreCase))) ||
+        instruction.Length is < 15 or > 1200)
+        return Results.BadRequest(new { error = "Select one or two existing .cs/.razor files and give an instruction of 15–1200 characters." });
+
+    try
+    {
+        var preview = await reader.PreviewFilesAsync(repo, paths, ct);
+        if (preview.Partial || preview.Files.Count != paths.Count ||
+            preview.Files.Any(x => x.Content.Length > 9000))
+            return Results.BadRequest(new { error = "Source is truncated or too large to edit safely. Choose smaller files." });
+
+        var inventory = await reader.ListReviewableFilesAsync(repo, ct);
+        var originals = inventory.Files.ToDictionary(x => x.Path, StringComparer.Ordinal);
+        var generated = await ai.GenerateCodeDraftAsync(inventory.Repository, instruction,
+            preview.Files, ct);
+        var previewByPath = preview.Files.ToDictionary(x => x.Path, StringComparer.Ordinal);
+        var changes = generated.Files.Select(x => new CodeProposalFile
+        {
+            Path = x.Path,
+            OriginalContent = previewByPath[x.Path].Content,
+            ExpectedBlobSha = originals[x.Path].Sha,
+            ProposedContent = x.Content
+        }).Where(x => !string.Equals(x.OriginalContent, x.ProposedContent, StringComparison.Ordinal))
+            .ToList();
+        if (changes.Count == 0)
+            return Results.BadRequest(new { error = "Archer proposed no file changes. Nothing was saved." });
+
+        var draft = new CodeProposal
+        {
+            Repository = inventory.Repository,
+            BaseBranch = inventory.Branch,
+            Request = instruction,
+            Title = generated.Title,
+            Summary = generated.Summary,
+            TestRecommendations = generated.TestRecommendations,
+            Files = changes
+        };
+        await store.UpdateAsync(state =>
+        {
+            state.CodeProposals.Insert(0, draft);
+            if (state.CodeProposals.Count > 8)
+                state.CodeProposals.RemoveRange(8, state.CodeProposals.Count - 8);
+            return true;
+        }, ct);
+        return Results.Ok(new
+        {
+            message = "Local code proposal saved. Review every file before approving a draft PR.",
+            proposal = draft
+        });
+    }
+    catch (ArgumentException error) { return Results.BadRequest(new { error = error.Message }); }
+    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+    catch (Exception error)
+    {
+        return Results.Problem(title: "Could not prepare the code proposal",
+            detail: error.Message, statusCode: 502);
+    }
+});
+
+// Explicit human approval is required before writing a branch or creating a draft PR.
+app.MapPost("/api/development/code-proposals/{id:guid}/publish", async Task<IResult> (
+    Guid id, PublishCodeRequest request, JsonFileStore store,
+    GitHubDraftPrPublisher publisher, CancellationToken ct) =>
+{
+    if (!request.Confirm)
+        return Results.BadRequest(new { error = "Explicit approval of publishing a draft PR is required." });
+    if (!publisher.IsEnabled)
+        return Results.BadRequest(new
+        {
+            error = "Draft PR publishing is disabled. Configure ARCHER_CODING_ENABLED and a repo-scoped write token."
+        });
+
+    var proposal = await store.UpdateAsync<CodeProposal?>(state =>
+    {
+        var draft = state.CodeProposals.FirstOrDefault(x => x.Id == id && x.Status == "Draft");
+        if (draft is null) return null;
+        draft.Status = "Publishing";
+        return draft;
+    }, ct);
+    if (proposal is null)
+        return Results.Conflict(new { error = "Proposal not found or already published/attempted." });
+
+    try
+    {
+        var (url, branch) = await publisher.PublishAsync(proposal, ct);
+        await store.UpdateAsync(state =>
+        {
+            var draft = state.CodeProposals.First(x => x.Id == id);
+            draft.Status = "Draft PR";
+            draft.PullRequestUrl = url;
+            draft.BranchName = branch;
+            return true;
+        }, CancellationToken.None);
+        return Results.Ok(new
+        {
+            pullRequestUrl = url,
+            branch,
+            message = "Draft PR opened. You still need to review tests and approve any merge separately."
+        });
+    }
+    catch (Exception error)
+    {
+        await store.UpdateAsync(state =>
+        {
+            var draft = state.CodeProposals.First(x => x.Id == id);
+            draft.Status = "Publish failed";
+            return true;
+        }, CancellationToken.None);
+        return Results.Problem(title: "GitHub draft PR could not be published",
+            detail: error.Message, statusCode: 502);
+    }
+});
+
 app.MapPost("/api/development/preview", async Task<IResult> (
     ReadSourceFilesRequest request, GitHubRepositoryReader reader, CancellationToken ct) =>
 {
@@ -539,7 +681,7 @@ app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore
 
 app.MapFallbackToFile("index.html");
 
-Console.WriteLine("ARCHER Mission Control V0.8.0 — http://127.0.0.1:5087");
+Console.WriteLine("ARCHER Mission Control V0.9.0 — http://127.0.0.1:5087");
 app.Run("http://127.0.0.1:5087");
 
 static IResult MissingApiKey() => Results.BadRequest(new
