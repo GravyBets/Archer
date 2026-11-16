@@ -52,7 +52,9 @@ assert required.issubset(page.ids), f"Missing expected IDs: {required.difference
 # Only check literal calls. Dynamically generated IDs are intentionally excluded.
 literal_id_pattern = re.compile(r"(?:\$\(|\bel\()\s*'([A-Za-z][A-Za-z0-9-]+)'\s*\)")
 referred_ids = set(literal_id_pattern.findall(JS + "\n" + HOME_JS))
-missing = referred_ids.difference(page.ids)
+# Created dynamically in the mission-list empty state.
+dynamic_ids = {"starterMission"}
+missing = referred_ids.difference(page.ids).difference(dynamic_ids)
 assert not missing, f"JavaScript references missing DOM IDs: {missing}"
 
 assert page.scripts[-2:] == ["/js/app.js", "/js/archer-home.js"]
