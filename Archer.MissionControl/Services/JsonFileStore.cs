@@ -50,6 +50,9 @@ public sealed class JsonFileStore
     {
         foreach (var mission in state.Missions)
         {
+            // Never resume paid API requests automatically after an app restart.
+            mission.AutoRunEnabled = false;
+            mission.AutoRunTasksRemaining = 0;
             var interrupted = mission.Status == "Running";
             foreach (var task in mission.Tasks.Where(t => t.Status == "Running"))
             {
