@@ -119,7 +119,7 @@ app.MapGet("/health/live", () => Results.Ok(new
 {
     status = "ok",
     component = "Archer.MobileGateway",
-    version = "1.8.0",
+    version = "1.9.0",
     publicAccessEnabled = false,
     deliveryEnabled = false
 }));
@@ -465,16 +465,72 @@ app.MapPost("/internal/conversation/reply", async Task<IResult> (
     }
 });
 
-// Local, opt-in shared text JOURNAL only. No AI response, real chat sync,
-// streaming speech or phone notification is performed from these routes.
-app.MapGet("/v1/conversation/messages", async Task<IResult> (
+// Single-owner local conversation sessions. Session titles/creation are
+// device-scoped, not general Archer administrative permissions.
+app.MapGet("/v1/conversation/sessions", async Task<IResult> (
     HttpContext ctx, DeviceTokenService tokens,
     GatewayConversationJournal journal, CancellationToken ct) =>
 {
     if (await tokens.AuthenticateAsync(
         ctx.Request.Headers.Authorization.ToString(), "conversation:read", ct) is null)
         return Results.Unauthorized();
-    return Results.Ok(await journal.ListAsync(ct));
+    return Results.Ok(await journal.ListSessionsAsync(ct));
+}).RequireRateLimiting("mobile-device");
+
+app.MapPost("/v1/conversation/sessions", async Task<IResult> (
+    CreateGatewaySessionRequest request, HttpContext ctx,
+    DeviceTokenService tokens, GatewayConversationJournal journal,
+    CancellationToken ct) =>
+{
+    var device = await tokens.AuthenticateAsync(
+        ctx.Request.Headers.Authorization.ToString(), "conversation:write", ct);
+    if (device is null) return Results.Unauthorized();
+    try
+    {
+        var result = await journal.CreateSessionAsync(device, request, ct);
+        return result.Outcome switch
+        {
+            "unauthorized" => Results.Unauthorized(),
+            "limit" => Results.Conflict(new { error = "The local session limit has been reached." }),
+            _ => Results.Ok(new { id = result.Id, localOnly = true })
+        };
+    }
+    catch (ArgumentException error) { return Results.BadRequest(new { error = error.Message }); }
+}).RequireRateLimiting("mobile-device");
+
+app.MapPost("/v1/conversation/sessions/{id:guid}/archive", async Task<IResult> (
+    Guid id, HttpContext ctx, DeviceTokenService tokens,
+    GatewayConversationJournal journal, CancellationToken ct) =>
+{
+    var device = await tokens.AuthenticateAsync(
+        ctx.Request.Headers.Authorization.ToString(), "conversation:write", ct);
+    if (device is null) return Results.Unauthorized();
+    var result = await journal.ArchiveSessionAsync(device, id, ct);
+    return result switch
+    {
+        "unauthorized" => Results.Unauthorized(),
+        "invalid" => Results.BadRequest(new { error = "The Main conversation cannot be archived." }),
+        "not_found" => Results.NotFound(),
+        _ => Results.Ok(new { archived = true })
+    };
+}).RequireRateLimiting("mobile-device");
+
+// Local, opt-in shared text JOURNAL only. No AI response, real chat sync,
+// streaming speech or phone notification is performed from these routes.
+app.MapGet("/v1/conversation/messages", async Task<IResult> (
+    Guid? sessionId, long? after, int? limit, HttpContext ctx,
+    DeviceTokenService tokens, GatewayConversationJournal journal,
+    CancellationToken ct) =>
+{
+    if (await tokens.AuthenticateAsync(
+        ctx.Request.Headers.Authorization.ToString(), "conversation:read", ct) is null)
+        return Results.Unauthorized();
+    try
+    {
+        var result = await journal.SyncAsync(sessionId, after ?? 0, limit ?? 100, ct);
+        return result is null ? Results.NotFound() : Results.Ok(result);
+    }
+    catch (ArgumentException error) { return Results.BadRequest(new { error = error.Message }); }
 }).RequireRateLimiting("mobile-device");
 
 app.MapPost("/v1/conversation/messages", async Task<IResult> (
@@ -491,7 +547,8 @@ app.MapPost("/v1/conversation/messages", async Task<IResult> (
         return result.Outcome switch
         {
             "unauthorized" => Results.Unauthorized(),
-            "conflict" => Results.Conflict(result),
+            "not_found" => Results.NotFound(result),
+            "archived" or "conflict" => Results.Conflict(result),
             _ => Results.Ok(result)
         };
     }
@@ -517,5 +574,5 @@ app.MapDelete("/internal/conversation", async Task<IResult> (
     });
 });
 
-Console.WriteLine("Archer Mobile Gateway v1.8.0: LOCAL LOOPBACK ONLY on 127.0.0.1:5091");
+Console.WriteLine("Archer Mobile Gateway v1.9.0: LOCAL LOOPBACK ONLY on 127.0.0.1:5091");
 app.Run();
