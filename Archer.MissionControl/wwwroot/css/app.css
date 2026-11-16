@@ -345,3 +345,25 @@
 .spend-guard-note{margin:14px 0 0}
 .spend-paused{background:#49342a;border-color:#916449;color:#f6c5a3}
 @media(max-width:650px){.spend-guard{padding:14px}.spend-guard-metrics{grid-template-columns:1fr}.spend-guard-form input[type=number]{width:100%}.spend-guard-form>label:not(.voice-toggle){flex:1 1 100%}}
+
+
+/* Archer v0.9 — bounded owner-reviewed coding proposals. */
+.code-agent-panel{margin-top:20px}
+.coding-agent-content{padding:18px 22px}
+.coding-agent-content>label{font-size:11px;color:#99b1c3;font-weight:650;display:flex;flex-direction:column;gap:7px}
+.coding-agent-content textarea{width:100%;min-height:100px;background:#0d1928;color:#d8e9ed;border:1px solid #345066;padding:12px;border-radius:8px;resize:vertical;font:inherit;line-height:1.5}
+.coding-actions{display:flex;align-items:center;gap:15px;margin:12px 0 17px;flex-wrap:wrap}
+.coding-actions span,.coding-publish-controls p{font-size:11px;color:#91abba;line-height:1.7}
+.coding-proposal-preview{border:1px solid #2e4458;border-radius:10px;background:#0b1725;padding:16px;max-height:690px;overflow:auto}
+.coding-proposal-preview>h3{font-size:15px;color:#d5e6f3;margin:0 0 8px}
+.coding-proposal-preview>p{font-size:12px;color:#acbfcc;line-height:1.65}
+.coding-proposal-preview>.coding-tests{color:#90d5ce}
+.coding-proposal-preview>.coding-source-meta{font-size:11px;color:#7899aa}
+.coding-proposal-preview>a{font-size:13px;color:#7de4d4}
+.coding-file-diff{border:1px solid #30465c;border-radius:9px;margin:13px 0;overflow:hidden}
+.coding-file-diff summary{padding:12px 14px;background:#15293b;color:#b6e3e0;font-size:12px;cursor:pointer}
+.coding-file-diff h4{padding:0 14px;font-size:11px;color:#8daabb}
+.coding-file-diff pre{white-space:pre;overflow-x:auto;max-height:350px;font:11px/1.65 Consolas,Monaco,monospace;background:#081421;color:#c0d4e2;padding:14px}
+.coding-publish-controls{border-top:1px solid #2e4457;margin-top:17px;padding-top:14px;display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.coding-publish-controls p{flex:1;min-width:250px;margin:0}
+@media(max-width:650px){.coding-agent-content{padding:13px}.coding-actions>.button,.coding-publish-controls>.button{width:100%}.coding-publish-controls p{min-width:0}}
