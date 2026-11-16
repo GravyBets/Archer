@@ -184,4 +184,140 @@ public sealed class GatewayConversationBridge(IHttpClientFactory clients, JsonFi
             };
         }
     }
+
+    public sealed class SessionSummary
+    {
+        public Guid Id { get; set; }
+        public string Title { get; set; } = "";
+        public DateTimeOffset? ArchivedAtUtc { get; set; }
+        public long LastSequence { get; set; }
+    }
+
+    private sealed class SessionCatalog
+    {
+        public List<SessionSummary> Sessions { get; set; } = [];
+        public Guid DefaultSessionId { get; set; }
+    }
+
+    public sealed class SessionLine
+    {
+        public Guid Id { get; set; }
+        public Guid SessionId { get; set; }
+        public long Sequence { get; set; }
+        public string Role { get; set; } = "";
+        public string Content { get; set; } = "";
+        public Guid? ReplyToMessageId { get; set; }
+        public DateTimeOffset CreatedAtUtc { get; set; }
+    }
+
+    private sealed class SessionPage
+    {
+        public Guid SessionId { get; set; }
+        public List<SessionLine> Messages { get; set; } = [];
+        public long NextAfter { get; set; }
+        public long HighWatermark { get; set; }
+        public bool HasMore { get; set; }
+        public bool Archived { get; set; }
+    }
+
+    /// <summary>
+    /// Local-only session inspection; no AI, mobile action, GitHub or Twilio.
+    /// Uses exactly the same separate, opt-in bridge permission as drafts.
+    /// </summary>
+    public async Task<object> SessionsAsync(CancellationToken ct)
+    {
+        if (!IsEnabled)
+            return new { enabled = false, connected = false,
+                sessions = Array.Empty<SessionSummary>(),
+                note = "Local mobile session browser is off." };
+        try
+        {
+            var payload = await FetchLocalAsync<SessionCatalog>(
+                "http://127.0.0.1:5091/internal/conversation/sessions", ct);
+            if (payload.Sessions.Count > 10 ||
+                payload.DefaultSessionId == Guid.Empty ||
+                payload.Sessions.Any(x => x.Id == Guid.Empty || x.Title.Length is < 2 or > 60))
+                throw new InvalidDataException("Invalid session metadata.");
+            return new { enabled = true, connected = true,
+                sessions = payload.Sessions, defaultSessionId = payload.DefaultSessionId,
+                note = "Read-only local view. No mobile notifications or AI requests." };
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception)
+        {
+            return new { enabled = true, connected = false,
+                sessions = Array.Empty<SessionSummary>(),
+                note = "Local gateway session catalog unavailable. Check your private gateway connection." };
+        }
+    }
+
+    public async Task<object> SessionHistoryAsync(Guid sessionId, long after,
+        int limit, CancellationToken ct)
+    {
+        if (!IsEnabled)
+            return new { enabled = false, connected = false,
+                messages = Array.Empty<SessionLine>(), nextAfter = after,
+                note = "Local mobile session browser is off." };
+        if (sessionId == Guid.Empty || after < 0 || limit is < 1 or > 20)
+            throw new ArgumentException("Use a valid session, nonnegative cursor and 1–20 messages.");
+
+        try
+        {
+            // All parts of the URL are fixed or strongly typed. Never accept
+            // arbitrary hosts, paths or redirects from the browser.
+            var url = "http://127.0.0.1:5091/internal/conversation/history" +
+                "?sessionId=" + sessionId.ToString("D") + "&after=" + after +
+                "&limit=" + limit;
+            var page = await FetchLocalAsync<SessionPage>(url, ct);
+            if (page.SessionId != sessionId || page.Messages.Count > limit ||
+                page.NextAfter < after || page.HighWatermark < page.NextAfter ||
+                page.Messages.Any(x => x.Id == Guid.Empty ||
+                    x.SessionId != sessionId || x.Sequence <= after ||
+                    x.Role is not ("owner" or "assistant") ||
+                    x.Content.Length is < 1 or > 4000) ||
+                !page.Messages.Zip(page.Messages.Skip(1),
+                    (a, b) => a.Sequence < b.Sequence).All(x => x))
+                throw new InvalidDataException("Gateway returned invalid conversation ordering.");
+
+            return new { enabled = true, connected = true,
+                sessionId = page.SessionId, messages = page.Messages,
+                nextAfter = page.NextAfter, highWatermark = page.HighWatermark,
+                hasMore = page.HasMore, archived = page.Archived,
+                note = "Read-only encrypted gateway history; AI context is not automatically synchronized." };
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception)
+        {
+            return new { enabled = true, connected = false,
+                messages = Array.Empty<SessionLine>(), nextAfter = after,
+                note = "Local conversation history unavailable. No state was changed." };
+        }
+    }
+
+    private async Task<T> FetchLocalAsync<T>(string url, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Add("X-Archer-Bridge-Key",
+            Environment.GetEnvironmentVariable("ARCHER_GATEWAY_BRIDGE_KEY")!);
+        using var response = await clients.CreateClient("gateway-loopback")
+            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        response.EnsureSuccessStatusCode();
+        if (response.Content.Headers.ContentLength is > 128_000)
+            throw new InvalidDataException("Gateway response exceeded the size limit.");
+
+        await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[8192];
+        int count;
+        while ((count = await stream.ReadAsync(chunk.AsMemory(0, chunk.Length), ct)) > 0)
+        {
+            if (buffer.Length + count > 128_000)
+                throw new InvalidDataException("Gateway response exceeded the size limit.");
+            buffer.Write(chunk, 0, count);
+        }
+        buffer.Position = 0;
+        return await JsonSerializer.DeserializeAsync<T>(buffer, Json, ct) ??
+            throw new InvalidDataException("No gateway response data.");
+    }
+
 }
