@@ -1,12 +1,14 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 0.3.0 (local prototype)  
+**Version:** 0.4.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
 This is a **real starting codebase**, not a screenshot or a mockup. It includes:
 
+- Animated **Archer** landing page as the default interface, with text conversation and optional browser voice
 - Mission Control dashboard with mission creation and tracking
+- Local **Attention** view showing failed tasks; approvals are clearly marked as not yet integrated
 - AI-generated bounded mission plans (3–5 research/analysis tasks)
 - Local main-dashboard AI usage analytics (token counts, observed web searches, estimated costs)
 - Configurable automatic routing between routine/chat, research/planning and code-review models
@@ -298,3 +300,51 @@ If your account lacks the newer models, set `ARCHER_MODEL_ROUTING=fixed`, keep `
 ### Acceptance
 
 The CI build and JS syntax check cover compilation and static syntax. They cannot validate API account access or real billing. Test the live models with a small number of low-cost requests before allowing auto-run.
+
+
+## v0.4.0 — Archer Presence UI, optional voice, mission oversight
+
+The **Archer** home screen is now the default launch destination. Mission Control remains a separate tab and retains its missions, deliverables, and token/cost analytics. No changes were made to the persistent mission schema or API data paths.
+
+### Archer landing page
+
+- An original CSS-rendered glowing sphere animates gently while idle and changes visual behavior for **listening**, **thinking**, **text responding**, **speaking**, **mission alerts**, and **errors**.
+- The sphere is a real accessible button: when the browser supports speech recognition it starts/stops **push-to-talk**; otherwise it focuses the text composer.
+- Status tiles show local ready/running missions, tasks completed today **in the browser's timezone**, and locally recorded failed tasks. Click a tile to open the relevant view.
+- Mission Control remains unchanged as the operational dashboard, including its usage and cost section and auto-run controls.
+- Navigation: **Archer**, **Mission Control**, **Attention**, **Activity**. No backend task or safety authorization change.
+
+### Browser voice (optional, never always-on)
+
+- **Speak** starts the Web Speech recognition API only after you click it; browser microphone permission may be required. Dictation populates the message field **without submitting it automatically**. Review and press Send.
+- **Read Archer's replies aloud** uses the browser's speech-synthesis capability (off by default); **Read last reply** starts speech on demand. **Stop speaking** cancels browser speech. Long automatic playback is limited to the first 1,800 characters and the full text always remains visible.
+- Voice support differs by browser and OS. If microphone recognition is unavailable, Archer's text chat still works. On some platforms recognition may be processed by the browser vendor's cloud service. Do not dictate passwords, credentials, or sensitive information.
+- Text messages and transcripts are sent to Archer's configured AI API **only when you submit** the chat form. Archer does not save audio recordings.
+- This version does **not** provide outbound telephone calling, an Archer phone number, SMS, voice-API streaming, a wake word, or unattended listening.
+
+### Attention and approvals
+
+- **Attention** lists genuinely failed tasks in the local mission state, with navigation to those missions for inspection or manual retry.
+- The **Approvals** panel is deliberately informational: no tools with approval-capable external actions are connected yet.
+- No production uptime monitoring, payment processing, customer messaging, SMS, incident calling, or actual business approval queue was implemented by this UI update. Do not interpret "0 failed tasks" as "the business is healthy."
+
+### Accessibility and privacy
+
+- Orb and navigation are buttons; speech state is announced via a live status region.
+- Press **Enter** in the chat input to send; **Shift+Enter** inserts a newline.
+- Orb animations respect `prefers-reduced-motion` and can remain static when your OS requests reduced motion.
+- No third-party image, icon library, front-end CDN, or audio library is required.
+- The text conversation and mission data continue using Archer's existing local JSON store. The app remains bound to localhost and has **no remote authentication**.
+
+### Manual acceptance test
+
+1. Stop Archer, pull this release from `main`, build and run. Verify `/api/config` shows `0.4.0`.
+2. The app must launch on **Archer**, showing the animated orb and conversation panel.
+3. Select **Mission Control**; existing missions, analytics, artifacts and auto-run controls should all remain functional.
+4. Test a short text chat: the orb should change to **Thinking**, then **Responding**. The chat history should show both sides.
+5. If supported in your browser, press **Speak**, allow microphone access, dictate a short phrase, review its transcription and submit. Toggle spoken replies and test **Read last reply** and **Stop speaking**.
+6. Open **Attention**. It must show only local failed tasks (if any) and explicitly say no external approval workflows are connected.
+7. Use a narrow/mobile viewport and, optionally, Windows reduced-motion settings; the page should remain usable.
+8. Confirm `Data/archer-state.json` and `Data/archer-usage.json` remain intact and Git-ignored.
+
+GitHub CI validates .NET compilation, JavaScript syntax, static UI references and no-key local HTTP health. Browser speech, real microphone permissions and visual animation still require local/manual testing. This update does not incur new API charges merely by opening the home page.
