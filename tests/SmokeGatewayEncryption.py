@@ -129,7 +129,10 @@ def main():
             status, raw = call("/v1/conversation/messages",
                                header={"Authorization": "Bearer " + bearer})
             assert status == 200
-            assert json.loads(raw)["messages"][0]["content"] == sentinel
+            migrated_message = json.loads(raw)["messages"][0]
+            assert migrated_message["content"] == sentinel
+            assert migrated_message["sequence"] == 1
+            assert migrated_message["sessionId"] != "00000000-0000-0000-0000-000000000000"
             encrypted_file = state_path.read_bytes()
             assert sentinel.encode("utf-8") not in encrypted_file
         finally:
@@ -179,7 +182,10 @@ def main():
             status, raw = call("/v1/conversation/messages",
                                header={"Authorization": "Bearer " + bearer})
             assert status == 200
-            assert json.loads(raw)["messages"][0]["content"] == sentinel
+            migrated_message = json.loads(raw)["messages"][0]
+            assert migrated_message["content"] == sentinel
+            assert migrated_message["sequence"] == 1
+            assert migrated_message["sessionId"] != "00000000-0000-0000-0000-000000000000"
         finally:
             stop(process)
 
