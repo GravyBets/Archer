@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 0.2.3 (local prototype)  
+**Version:** 0.3.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -8,6 +8,8 @@ This is a **real starting codebase**, not a screenshot or a mockup. It includes:
 
 - Mission Control dashboard with mission creation and tracking
 - AI-generated bounded mission plans (3–5 research/analysis tasks)
+- Local main-dashboard AI usage analytics (token counts, observed web searches, estimated costs)
+- Configurable automatic routing between routine/chat, research/planning and code-review models
 - Run **one** or **up to three** tasks sequentially, saving their reports
 - Opt-in local **auto-run up to three tasks** in the background, stopping on errors or restart
 - Built-in public web research through the OpenAI Responses API `web_search` tool
@@ -63,6 +65,8 @@ Archer.MissionControl/
   Program.cs                 HTTP endpoints, bounded task execution
   Domain/Models.cs           Missions, tasks, artifacts, activity, chat
   Services/JsonFileStore.cs  Persistent single-user local state
+  Services/ArcherModelRouting.cs  Task-specific model selection
+  Services/ApiUsageLedger.cs  API usage and estimated cost persistence
   Services/MissionAutoRunner.cs  Opt-in bounded background research
   Services/GitHubRepositoryReader.cs  Allowlisted read-only GitHub code snapshots
   Services/ArcherAiService.cs  OpenAI Responses API integration
@@ -228,3 +232,69 @@ After a real GeoShift development-review mission, several confident recommendati
 - Never claim a build, test run, or repository modification occurred unless a real tool performed it.
 
 **Scope:** This is a prompt-level guardrail, not an independent verifier or guarantee of correct reports. Archer still samples only part of the repository and cannot make code changes. For a fair comparison, create a **new development review mission** after upgrading to 0.2.3; previously completed reports do not regenerate automatically.
+
+## v0.3.0 — Usage analytics and adaptive model routing
+
+### Mission Control: usage and estimated costs
+
+Mission Control now contains an **AI Usage & Cost** section with:
+- Estimated API cost this **UTC calendar month** and across all tracked Archer requests.
+- Input and output token totals, request counts, and observed web-search tool calls.
+- Per-model request counts, token counts, and estimated month-to-date cost.
+- The latest eight tracked API requests, including operation/model/time/token count/estimated cost.
+
+The local endpoint `GET /api/usage` exposes the same non-secret summary. No OpenAI administration key is needed: Archer reads usage from each **Responses API result** and persists the ledger in `Archer.MissionControl/Data/archer-usage.json`. The entire `Data` folder is Git-ignored.
+
+**Limitations that matter:**
+- Usage tracking starts **after installing v0.3.0**. It cannot reconstruct earlier requests or an OpenAI account's complete usage.
+- The displayed dollar amounts are **estimates, not an invoice**. They use published standard text rates from November 15, 2026 and $0.01 per observed `web_search_call`, with cached-input token discounts where reported.
+- Charges may differ due to processing tier, regional pricing, cached writes, long prompts, external tools, or pricing changes. Failed requests that do not return a `usage` object cannot be measured; responses marked incomplete **are** recorded if they include usage.
+- Unknown model prices show **unpriced** requests and are not silently counted as $0. API billing on the OpenAI Platform remains authoritative.
+- The dashboard **does not cap spending** or create automatic retries. Do not confuse a model output-token limit with a dollar budget.
+
+### Adaptive model selection
+
+Adaptive routing is enabled by default and does **not** require an additional AI call to choose the model.
+
+| Archer activity | Default model | Reasoning effort |
+| --- | --- | --- |
+| Routine chat | `gpt-6-luna` | low |
+| Mission planning | `gpt-6.1-terra` | low |
+| Public web research | `gpt-6.1-terra` | low |
+| General analysis | `gpt-6.1-terra` | low |
+| Code review with an allowlisted repo URL | `gpt-6.1-sol` | medium |
+
+These models are subject to the OpenAI project's access and rate limits. Archer does not silently fall back to a second paid model on error: check the error, then change configuration if needed.
+
+**Environment variables** (set in the Windows user environment and restart Visual Studio):
+
+- `ARCHER_MODEL_ROUTING=adaptive` (default) enables automatic routing.
+- `ARCHER_MODEL_ROUTING=fixed` uses a single model for every AI call.
+- `ARCHER_MODEL=gpt-5-mini` selects the fixed model; if not set, the fixed-mode default is `gpt-5-mini`.
+- `ARCHER_MODEL_CHAT`, `ARCHER_MODEL_PLAN`, `ARCHER_MODEL_RESEARCH`, `ARCHER_MODEL_ANALYSIS`, and `ARCHER_MODEL_CODE` override individual adaptive tiers.
+
+**Cost comparison, standard input/output rates per 1M tokens (USD, November 15, 2026):**
+
+- `gpt-5-mini`: $0.25 / $2.00
+- `gpt-6-luna`: $0.10 / $0.50
+- `gpt-6.1-terra`: $1.00 / $5.00
+- `gpt-6.1-sol`: $2.00 / $10.00
+
+Current pricing: https://developers.openai.com/api/docs/pricing
+Project-level billing: https://platform.openai.com/settings/organization/billing/overview
+
+### Local test
+
+1. Stop Archer and use **Git → Pull**; rebuild.
+2. Verify `http://127.0.0.1:5087/api/config` returns `version: "0.3.0"` with `routing.mode: "adaptive"`.
+3. Verify `http://127.0.0.1:5087/api/usage` is available and shows zero tracked usage initially.
+4. On the main Mission Control page, look for the **AI Usage & Cost** section above the mission list.
+5. Send a short message in **Talk to Archer** and refresh the dashboard. The API should report a chat request using `gpt-6-luna` and usage tokens and an estimated cost.
+6. Start a research or code-review mission after ensuring your API account allows the selected model. The breakdown should reflect the actual model used.
+7. Check `Data/archer-usage.json` is present and **not** staged in Git. Do not upload this file publicly.
+
+If your account lacks the newer models, set `ARCHER_MODEL_ROUTING=fixed`, keep `ARCHER_MODEL=gpt-5-mini`, restart Visual Studio, and continue using the usage dashboard. Adaptive routing can be re-enabled later.
+
+### Acceptance
+
+The CI build and JS syntax check cover compilation and static syntax. They cannot validate API account access or real billing. Test the live models with a small number of low-cost requests before allowing auto-run.
