@@ -9,6 +9,8 @@ public sealed class ArcherState
     public OwnerPresence? Presence { get; set; }
     public List<WebsiteMonitor> WebsiteMonitors { get; set; } = [];
     public List<WebsiteIncident> WebsiteIncidents { get; set; } = [];
+    // Notification routing preferences are preview-only until real delivery is explicitly configured.
+    public BriefingPreferences BriefingPreferences { get; set; } = new();
 }
 
 public sealed class Mission
@@ -129,3 +131,18 @@ public sealed class WebsiteIncident
 
 public sealed record CreateWebsiteMonitorRequest(string? Name, string? Url);
 public sealed record SetWebsiteMonitorEnabledRequest(bool Enabled);
+
+public sealed class BriefingPreferences
+{
+    // Local time for the eventual DAILY briefing. No scheduler or phone delivery yet.
+    public string TimeZoneId { get; set; } = "America/Chicago";
+    public int DailyHourLocal { get; set; } = 8;
+    public int QuietStartHourLocal { get; set; } = 22;
+    public int QuietEndHourLocal { get; set; } = 7;
+    // Policy preview only; DOES NOT activate outbound calls.
+    public bool CriticalOverrideQuietHours { get; set; } = false;
+}
+
+public sealed record UpdateBriefingPreferencesRequest(
+    string? TimeZoneId, int DailyHourLocal, int QuietStartHourLocal,
+    int QuietEndHourLocal, bool CriticalOverrideQuietHours);

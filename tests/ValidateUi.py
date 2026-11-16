@@ -56,7 +56,11 @@ required = {
     "ownerPresenceDuration", "ownerPresenceShareAi", "ownerPresenceSaveButton",
     "ownerPresenceClearButton", "ownerPresenceLocationButton", "ownerPresenceLocationStatus",
     "operationsMonitorList", "operationsIncidentList", "operationsAddForm",
-    "operationsSiteName", "operationsSiteUrl", "operationsStatus", "operationsIncidentCount"
+    "operationsSiteName", "operationsSiteUrl", "operationsStatus", "operationsIncidentCount",
+    "briefingHeading", "briefingRefreshButton", "briefingGeneratedAt", "briefingCopyButton",
+    "briefingBody", "briefingMetricNotes", "briefingQuietStatus", "briefingAlertList",
+    "briefingPreferencesForm", "briefingTimezone", "briefingHour", "briefingQuietStart",
+    "briefingQuietEnd", "briefingCriticalOverride", "briefingPreferenceStatus"
 }
 assert required.issubset(page.ids), f"Missing expected IDs: {required.difference(page.ids)}"
 
@@ -71,6 +75,9 @@ assert not missing, f"JavaScript references missing DOM IDs: {missing}"
 assert page.scripts[-5:] == ["/js/app.js", "/js/archer-home.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js"]
 assert "/api/presence" in OPERATOR_JS
 assert "/api/operations" in OPERATOR_JS
+assert "/api/briefing" in OPERATOR_JS
+assert "/api/briefing/preferences" in OPERATOR_JS
+assert "briefingText" in OPERATOR_JS
 assert "getCurrentPosition(" in OPERATOR_JS
 assert "watchPosition(" not in OPERATOR_JS
 assert "/api/development/repository" in DEVELOPER_JS

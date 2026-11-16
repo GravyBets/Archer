@@ -295,3 +295,35 @@
 .operations-channel-grid span{color:#8d9eb0;font-size:11px;line-height:1.65}
 @media(max-width:1050px){.owner-presence-fields,.operations-add-form{grid-template-columns:1fr 1fr}.operations-add-form .button{grid-column:1/-1;justify-self:end}}
 @media(max-width:650px){.owner-presence-content{padding:15px}.owner-presence-fields,.operations-add-form,.operations-channel-grid{grid-template-columns:1fr}.operations-add-form{padding:14px}.operations-add-form .button{grid-column:auto;width:100%}.operations-hint{padding:0 14px 14px}.operations-site,.operations-incident{align-items:flex-start;flex-direction:column;padding:15px;gap:12px}.operations-channel-grid>div+div{border-left:0;border-top:1px solid var(--border)}}
+
+
+/* Archer v0.7 — grounded daily briefing and preview-only alert policy. */
+.operations-briefing{margin-bottom:20px}
+.briefing-content{padding:18px 22px 22px}
+.briefing-summary{display:flex;align-items:center;flex-wrap:wrap;gap:13px;margin-bottom:13px}
+.briefing-summary #briefingGeneratedAt{font-size:11px;color:#9bacbd;flex:1}
+.briefing-summary .voice-stop{font-size:11px}
+.briefing-body{font:12px/1.78 Consolas,Monaco,'Courier New',monospace;white-space:pre-wrap;overflow-wrap:anywhere;margin:0;background:#0b1827;border:1px solid #293a4d;border-radius:10px;color:#c7dde2;padding:18px 19px;max-height:440px;overflow-y:auto}
+.briefing-footnote{color:#7f97aa;line-height:1.7;font-size:11px;margin:11px 0}
+.briefing-alerts-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 0;border-top:1px solid #2d3e50;margin-top:16px}
+.briefing-alerts-heading h3,.briefing-preferences h3{font-size:13px;margin:0 0 4px;color:#d4e5ec}
+.briefing-alert-list{display:flex;flex-direction:column;gap:9px}
+.briefing-alert{display:flex;justify-content:space-between;align-items:center;gap:18px;border-radius:9px;padding:14px 16px;border:1px solid #34475b;background:#111f30}
+.briefing-alert strong{font-size:12px;color:#dbe8ee}
+.briefing-alert p{font-size:11px;color:#b4c5d3;margin:5px 0}
+.briefing-alert small{font-size:10px;color:#90a3b5;line-height:1.5;display:block}
+.briefing-critical{border-color:#83664f;background:#28252a}
+.briefing-attention{border-color:#625d4a}
+.briefing-alert-route{flex:0 0 190px;color:#a6d6d2;font-size:11px;text-align:right}
+.briefing-alert-route small{margin-top:5px;font-size:9px;letter-spacing:1px;color:#7f9daa}
+.briefing-no-alerts{font-size:11px;color:#9bb4b4;margin:6px 0;padding:12px;background:#0f2631;border-radius:7px}
+.briefing-preferences{padding:20px 23px;background:#101d2d;border-top:1px solid #2c3b4d}
+.briefing-preferences>div:first-child p{margin:1px 0 14px;color:#91a5b9;font-size:11px}
+.briefing-fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.briefing-fields label{font-size:11px;color:#97adbf;display:flex;flex-direction:column;gap:7px}
+.briefing-fields select,.briefing-fields input{border:1px solid #34485d;border-radius:8px;background:#0a1524;color:#d6e7f1;min-width:0;padding:10px 11px}
+.briefing-override{margin-top:14px;color:#acbfd1;font-size:11px;white-space:normal}
+.briefing-save-row{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-top:16px}
+.briefing-save-row span{font-size:11px;color:#84a3ae;flex:1}
+@media(max-width:1050px){.briefing-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.briefing-content,.briefing-preferences{padding:14px}.briefing-fields{grid-template-columns:1fr}.briefing-alert{flex-direction:column;align-items:flex-start}.briefing-alert-route{text-align:left;flex:initial}.briefing-summary{align-items:flex-start}.briefing-body{padding:13px;font-size:11px}}

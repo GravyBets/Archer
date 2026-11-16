@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 0.6.0 (local prototype)  
+**Version:** 0.7.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -469,3 +469,42 @@ The new **Operations** page can register up to ten approved public HTTPS website
 6. Verify Mission Control, Developer Workspace, cost analytics, chat and voice still behave as before.
 
 CI covers .NET compilation, JS/DOM wiring, local API health, coordinate rounding and clearing, and rejection of unapproved monitoring hosts. It does not prove real SMS/calling, native iOS background support, successful monitoring against your production site or accurate business-revenue data.
+
+## v0.7.0 — Daily briefing previews and alert priorities
+
+Archer can now turn **actual local records** into a concise, no-cost business-operations report, viewable and copyable from the **Operations** page.
+
+### Grounded daily briefing
+
+- Completed tasks in the previous 24 hours, current failed tasks and active/ready missions.
+- Recent observed public HTTPS availability, outages and recoveries. Old website status (>20 minutes without an observed check) is explicitly **stale**, not counted as a current confirmed outage.
+- Measured AI requests and estimated local API spending during the past 24 hours and the current UTC month. These costs are estimates, not OpenAI billing statements.
+- **Revenue, subscriptions, customer counts, conversion rates, payment failures and support tickets are intentionally reported as NOT CONNECTED**, not guessed.
+- A concise plain-text report can be copied. **No AI API call** is made to prepare or preview it, and it does not include personal GPS history.
+
+### Suggested alerts, delivery preferences and quiet hours
+
+- Current, recently checked site outages (three failed checks) are **Critical** suggestions; degraded websites and locally failed research tasks are **Attention**; recovered sites are informational.
+- The alert preview includes the supporting source, reason, and *proposed* delivery channel (future urgent call, text, or briefing).
+- Set your intended daily briefing hour, timezone, quiet hours and whether critical calls could override quiet hours **after** a verified delivery provider and phone have been configured.
+- Quiet-hour routing is an **advisory preview**, never an active call or text. Changing these settings does **not** schedule a job or generate a notification.
+- Supported timezones: America/Chicago, America/New_York, America/Denver, America/Los_Angeles, America/Phoenix, and UTC. Times use a 24-hour clock; equal start/end hours disable quiet hours. Default: Chicago/Central, 8:00 a.m. draft briefing, quiet 10:00 p.m. to 7:00 a.m.; quiet-hour override disabled.
+- Preferences persist in Archer's existing Git-ignored local `Data/archer-state.json`. No phone number or message-provider credentials are stored.
+- The Operations interface clearly says **DRAFT ONLY / NOT SENT** and always lists unconnected sources.
+
+### Endpoints
+
+- `GET /api/briefing` — evidence-only aggregate with `briefingText`, `metrics`, `alerts`, `deliveryStatus: "preview_only"`.
+- `GET /api/briefing/preferences` — timezone choices, current preferences, and `deliveryEnabled: false`.
+- `POST /api/briefing/preferences` — saves approved values, but doesn't send or schedule anything.
+
+### Test when you're at your PC
+
+1. Stop Archer, **Git → Pull**, rebuild and run. Check `GET /api/config` shows `0.7.0`.
+2. Open **Operations** and review **Daily briefing preview**. Confirm it only contains real local counts and marks revenue/payments as unavailable.
+3. Change the daily briefing hour, timezone and quiet hours; **Save preferences** and click **Refresh briefing**. Verify the quiet-hours badge changes when appropriate.
+4. Click **Copy briefing** and check the content. Nothing should be sent automatically.
+5. If monitoring is enabled, ensure old/stale checks aren't presented as current verified outages.
+6. Confirm Archer's missions, usage/cost metrics, personal presence settings and developer workspace still work.
+
+**Still not implemented:** background hosting, actual daily scheduled delivery, SMS provider, outbound phone calling, phone verification, production monitoring, payment/revenue integrations or autonomous corrective actions. Later integrations must apply authenticated delivery consent, event deduplication, abuse/cost controls, real-world observability checks and phone quiet hours. The current implementation intentionally remains localhost-only.

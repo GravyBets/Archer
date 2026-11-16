@@ -181,6 +181,33 @@ public sealed class ApiUsageLedger(IWebHostEnvironment environment)
         finally { _gate.Release(); }
     }
 
+
+    // Compact numeric totals for daily briefing composition; no AI call or
+    // fabricated billing data. This local ledger only covers tracked requests.
+    public sealed record BriefingUsage(
+        int RequestsLast24Hours, decimal EstimatedCostLast24HoursUsd,
+        int UnpricedRequestsLast24Hours,
+        int RequestsMonth, decimal EstimatedCostMonthUsd, int UnpricedRequestsMonth);
+
+    public async Task<BriefingUsage> BriefingTotalsAsync(DateTimeOffset now, CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            var state = await LoadAsync(ct);
+            var cutoff = now.AddHours(-24);
+            var monthStart = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero);
+            var day = state.Items.Where(x => x.RecordedAtUtc >= cutoff && x.RecordedAtUtc <= now).ToArray();
+            var month = state.Items.Where(x => x.RecordedAtUtc >= monthStart && x.RecordedAtUtc <= now).ToArray();
+            return new BriefingUsage(
+                day.Length, day.Sum(x => x.EstimatedCostUsd ?? 0m),
+                day.Count(x => !x.EstimatedCostUsd.HasValue),
+                month.Length, month.Sum(x => x.EstimatedCostUsd ?? 0m),
+                month.Count(x => !x.EstimatedCostUsd.HasValue));
+        }
+        finally { _gate.Release(); }
+    }
+
     private async Task<UsageState> LoadAsync(CancellationToken ct)
     {
         if (!File.Exists(_file)) return new UsageState();

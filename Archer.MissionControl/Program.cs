@@ -4,6 +4,7 @@ using Archer.MissionControl.Services;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<JsonFileStore>();
 builder.Services.AddSingleton<ApiUsageLedger>();
+builder.Services.AddSingleton<BusinessBriefingComposer>();
 builder.Services.AddHostedService<MissionAutoRunner>();
 builder.Services.AddHttpClient("site-health", client =>
 {
@@ -33,7 +34,7 @@ await app.Services.GetRequiredService<JsonFileStore>().RecoverInterruptedTasksAs
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "0.6.0" }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "0.7.0" }));
 
 app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
 {
@@ -41,7 +42,7 @@ app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
     model = ai.Model,
     routing = ai.Routing,
     mode = "Local only · Research and analysis only",
-    version = "0.6.0"
+    version = "0.7.0"
 }));
 
 app.MapGet("/api/state", async (JsonFileStore store, CancellationToken ct) =>
@@ -50,6 +51,60 @@ app.MapGet("/api/state", async (JsonFileStore store, CancellationToken ct) =>
 // Only Archer's local, API-reported usage. This is not an OpenAI billing endpoint.
 app.MapGet("/api/usage", async (ApiUsageLedger ledger, CancellationToken ct) =>
     Results.Ok(await ledger.SummaryAsync(ct)));
+
+// A deterministic local briefing preview. No AI call, SMS, phone call or scheduled delivery.
+app.MapGet("/api/briefing", async (BusinessBriefingComposer composer, CancellationToken ct) =>
+    Results.Ok(await composer.BuildAsync(ct)));
+
+app.MapGet("/api/briefing/preferences", async (JsonFileStore store, CancellationToken ct) =>
+{
+    var preferences = await store.ReadAsync(state => state.BriefingPreferences, ct);
+    return Results.Ok(new
+    {
+        preferences,
+        timeZones = BusinessBriefingComposer.SupportedTimeZones,
+        deliveryEnabled = false,
+        disclaimer = "Saved preferences only influence the briefing and alert-preview routing. No SMS or phone provider is connected."
+    });
+});
+
+app.MapPost("/api/briefing/preferences", async Task<IResult> (
+    UpdateBriefingPreferencesRequest request, JsonFileStore store, CancellationToken ct) =>
+{
+    var next = new BriefingPreferences
+    {
+        TimeZoneId = request.TimeZoneId ?? "",
+        DailyHourLocal = request.DailyHourLocal,
+        QuietStartHourLocal = request.QuietStartHourLocal,
+        QuietEndHourLocal = request.QuietEndHourLocal,
+        CriticalOverrideQuietHours = request.CriticalOverrideQuietHours
+    };
+    try
+    {
+        BusinessBriefingComposer.ValidatePreferences(next);
+        // Supported IDs are valid in .NET; this confirms the actual running OS knows them.
+        _ = TimeZoneInfo.FindSystemTimeZoneById(next.TimeZoneId);
+    }
+    catch (ArgumentException error)
+    {
+        return Results.BadRequest(new { error = error.Message });
+    }
+    catch (TimeZoneNotFoundException)
+    {
+        return Results.BadRequest(new { error = "Timezone unavailable on this operating system." });
+    }
+
+    await store.UpdateAsync(state =>
+    {
+        state.BriefingPreferences = next;
+        return true;
+    }, ct);
+    return Results.Ok(new
+    {
+        message = "Briefing preferences saved locally. Delivery remains disabled.",
+        preferences = next
+    });
+});
 
 // Owner presence is opt-in, expiring and LOCAL ONLY. Never infer activity from coordinates.
 app.MapGet("/api/presence", async (JsonFileStore store, CancellationToken ct) =>
@@ -465,7 +520,7 @@ app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore
 
 app.MapFallbackToFile("index.html");
 
-Console.WriteLine("ARCHER Mission Control V0.6.0 — http://127.0.0.1:5087");
+Console.WriteLine("ARCHER Mission Control V0.7.0 — http://127.0.0.1:5087");
 app.Run("http://127.0.0.1:5087");
 
 static IResult MissingApiKey() => Results.BadRequest(new
