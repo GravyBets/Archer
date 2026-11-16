@@ -5,13 +5,19 @@ using Archer.MissionControl.Domain;
 
 namespace Archer.MissionControl.Services;
 
-public sealed class ArcherAiService(HttpClient http, IWebHostEnvironment environment, GitHubRepositoryReader githubReader)
+public sealed class ArcherAiService(
+    HttpClient http,
+    IWebHostEnvironment environment,
+    GitHubRepositoryReader githubReader,
+    ApiUsageLedger usageLedger,
+    ILogger<ArcherAiService> logger)
 {
     private const string Endpoint = "https://api.openai.com/v1/responses";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("OPENAI_API_KEY"));
-    public string Model => Environment.GetEnvironmentVariable("ARCHER_MODEL") is { Length: > 0 } m ? m : "gpt-5-mini";
+    public string Model => ArcherModelRouting.For("chat").Model;
+    public object Routing => ArcherModelRouting.Describe();
 
     private const string SafetyInstructions = """
         You are Archer, a single-user personal AI mission operator.
@@ -81,17 +87,18 @@ public sealed class ArcherAiService(HttpClient http, IWebHostEnvironment environ
 
     public async Task<PlanDraft> CreatePlanAsync(Mission mission, CancellationToken ct)
     {
+        var choice = ArcherModelRouting.For("plan");
         var payload = new
         {
-            model = Model,
+            model = choice.Model,
             store = false,
-            reasoning = new { effort = "low" },
+            reasoning = new { effort = choice.ReasoningEffort },
             max_output_tokens = 8000,
             instructions = WithLocalKnowledge("Create exactly 3 concise tasks. Summary: one sentence under 180 characters. Titles: under 55 characters each. Descriptions: under 140 characters each. Only research or analysis tasks, no purchases, emails, deployment, scraping private systems, or autonomous transactions. Task output must match the requested JSON schema. Never promise business outcomes."),
             input = $"Mission: {mission.Title}\nGoal: {mission.Objective}\nCreate an executable research/analysis mission plan.",
             text = new { format = new { type = "json_schema", name = "archer_mission_plan", strict = true, schema = PlanningSchema } }
         };
-        var output = await CompleteAsync(payload, ct);
+        var output = await CompleteAsync(payload, choice.Model, "plan", ct);
         try
         {
             var plan = JsonSerializer.Deserialize<PlanDraft>(output, JsonOptions)
@@ -125,6 +132,11 @@ public sealed class ArcherAiService(HttpClient http, IWebHostEnvironment environ
         var repositorySnapshot = await githubReader.TryReadMissionRepositoryAsync(
             mission.Title + "\n" + mission.Objective, ct);
 
+        // A mission explicitly grounded in source code merits the stronger code-review tier.
+        var operation = repositorySnapshot is not null ? "code-review" :
+            useWeb ? "research" : "analysis";
+        var choice = ArcherModelRouting.For(operation);
+
         // Code review must be evidence-first. A previous AI report is not proof that a
         // feature is missing; check exact code, models and tests before recommending it.
         var codeReviewRules = repositorySnapshot is null ? "" :
@@ -155,48 +167,49 @@ public sealed class ArcherAiService(HttpClient http, IWebHostEnvironment environ
         {
             var payload = new
             {
-                model = Model,
+                model = choice.Model,
                 store = false,
-                reasoning = new { effort = "low" },
+                reasoning = new { effort = choice.ReasoningEffort },
                 max_output_tokens = 6500,
                 max_tool_calls = 3,
                 instructions,
                 input,
                 tools = new[] { new { type = "web_search" } }
             };
-            return await CompleteAsync(payload, ct);
+            return await CompleteAsync(payload, choice.Model, operation, ct);
         }
         else
         {
             var payload = new
             {
-                model = Model,
+                model = choice.Model,
                 store = false,
-                reasoning = new { effort = "low" },
+                reasoning = new { effort = choice.ReasoningEffort },
                 max_output_tokens = 4000,
                 instructions,
                 input
             };
-            return await CompleteAsync(payload, ct);
+            return await CompleteAsync(payload, choice.Model, operation, ct);
         }
     }
 
     public Task<string> ChatAsync(string message, ArcherState state, CancellationToken ct)
     {
+        var choice = ArcherModelRouting.For("chat");
         var missions = string.Join("\n", state.Missions.Take(8).Select(m =>
             $"- {m.Title} ({m.Status}): {m.Objective} — {m.Tasks.Count(t => t.Status == "Completed")}/{m.Tasks.Count} tasks done"));
         var conversation = string.Join("\n", state.Conversation.TakeLast(8).Select(c =>
             $"{c.Role}: {c.Content[..Math.Min(c.Content.Length, 1500)]}"));
         var payload = new
         {
-            model = Model, store = false, reasoning = new { effort = "low" }, max_output_tokens = 2600,
+            model = choice.Model, store = false, reasoning = new { effort = choice.ReasoningEffort }, max_output_tokens = 2600,
             instructions = WithLocalKnowledge("You are speaking directly to your owner. Be conversational, concise (usually under 400 words), and useful. Do not imply that new missions or tasks were created unless you actually created them through a tool."),
             input = $"MISSION CONTEXT:\n{missions}\nRECENT CONVERSATION:\n{conversation}\nuser: {message}\nassistant:"
         };
-        return CompleteAsync(payload, ct);
+        return CompleteAsync(payload, choice.Model, "chat", ct);
     }
 
-    private async Task<string> CompleteAsync(object payload, CancellationToken ct)
+    private async Task<string> CompleteAsync(object payload, string model, string operation, CancellationToken ct)
     {
         var key = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
         if (string.IsNullOrWhiteSpace(key))
@@ -217,6 +230,16 @@ public sealed class ArcherAiService(HttpClient http, IWebHostEnvironment environ
 
         using var json = JsonDocument.Parse(raw);
         var root = json.RootElement;
+
+        // Record API-reported usage even for incomplete responses. A failed or
+        // truncated request can still incur charges. Telemetry persistence must
+        // never hide a successful report if its local disk write fails.
+        try { await usageLedger.RecordResponseAsync(root, model, operation, CancellationToken.None); }
+        catch (Exception loggingError)
+        {
+            logger.LogWarning(loggingError,
+                "Could not write Archer's local usage ledger. Check free disk space and file permissions.");
+        }
         if (root.TryGetProperty("status", out var statusValue))
         {
             var status = statusValue.GetString();
