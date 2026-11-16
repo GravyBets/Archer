@@ -49,7 +49,13 @@ public sealed class GitHubRepositoryReader(HttpClient http)
                 $"GitHub repo {repository} is not approved for Archer code reading. " +
                 "Set ARCHER_GITHUB_ALLOWLIST to an explicit comma-separated list of owner/repo names.");
 
-        if (_cache.TryGetValue(repository, out var cached) &&
+        // Different selected file sets must never reuse a cached generic sample.
+        var selection = Regex.Match(missionText,
+            @"(?im)^SOURCE FILES:\s*(?<files>[^\r\n]+)$");
+        var cacheKey = repository + "|" +
+            (selection.Success ? selection.Groups["files"].Value.Trim() : "default");
+
+        if (_cache.TryGetValue(cacheKey, out var cached) &&
             cached.ExpiresAt > DateTimeOffset.UtcNow)
             return cached.Snapshot;
 
@@ -122,8 +128,6 @@ public sealed class GitHubRepositoryReader(HttpClient http)
 
         // Explicit source selections from Developer Workspace override the old
         // heuristic sample. Missing paths are errors, never silent fallbacks.
-        var selection = Regex.Match(missionText,
-            @"(?im)^SOURCE FILES:\s*(?<files>[^\r\n]+)$");
         var requested = selection.Success
             ? selection.Groups["files"].Value.Split(',',
                 StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -181,7 +185,7 @@ public sealed class GitHubRepositoryReader(HttpClient http)
         }
 
         var result = snapshot.ToString();
-        _cache[repository] = (DateTimeOffset.UtcNow.AddMinutes(10), result);
+        _cache[cacheKey] = (DateTimeOffset.UtcNow.AddMinutes(10), result);
         return result;
     }
 
