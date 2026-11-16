@@ -17,6 +17,7 @@ from uuid import uuid4
 BASE = "http://127.0.0.1:5091"
 ADMIN = os.environ["ARCHER_GATEWAY_ADMIN_KEY"]
 INGEST = os.environ["ARCHER_GATEWAY_INGEST_KEY"]
+BRIDGE = os.environ["ARCHER_GATEWAY_BRIDGE_KEY"]
 
 
 def request(path, method="GET", body=None, headers=None, expected=200):
@@ -158,6 +159,9 @@ def run(state_path):
     request("/v1/conversation/messages", expected=401)
     request("/v1/conversation/messages", headers=bearer, expected=401)
     request("/internal/conversation", "DELETE", expected=403)
+    request("/internal/conversation/bridge", expected=403)
+    request("/internal/conversation/bridge", headers={"X-Archer-Admin-Key": ADMIN}, expected=403)
+    request("/internal/conversation/bridge", headers={"X-Archer-Bridge-Key": INGEST}, expected=403)
     talker = request("/internal/devices/enroll", "POST", {
         "label": "Local chat writer", "lifetimeDays": 1,
         "scopes": ["conversation:read", "conversation:write"]
@@ -194,10 +198,28 @@ def run(state_path):
     assert journal["messages"][0]["role"] == "owner"
     assert journal["messages"][0]["content"] == message["content"]
     assert journal["retentionDays"] == 7
+    bridged = request("/internal/conversation/bridge",
+        headers={"X-Archer-Bridge-Key": BRIDGE})
+    assert bridged["desktopHistorySynced"] is False
+    assert bridged["aiReplyGenerated"] is False
+    assert bridged["actionExecuted"] is False
+    assert len(bridged["messages"]) == 1
+    assert bridged["messages"][0]["content"] == message["content"]
     request("/internal/conversation", "DELETE", expected=403)
     deleted = request("/internal/conversation", "DELETE", headers=admin)
     assert deleted["deleted"] == 1
     assert request("/v1/conversation/messages", headers=talk_bearer)["messages"] == []
+    assert request("/internal/conversation/bridge",
+        headers={"X-Archer-Bridge-Key": BRIDGE})["messages"] == []
+
+    # Keep ONE synthetic owner-authored draft for a separate desktop
+    # handshake while this gateway process is still running in CI.
+    desktop_sample = {"clientMessageId": str(uuid4()),
+                      "content": "CI_PHONE_DRAFT_READY_FOR_DESKTOP_REVIEW"}
+    stored = request("/v1/conversation/messages", "POST", desktop_sample, talk_bearer)
+    assert stored["outcome"] == "saved"
+    assert len(request("/internal/conversation/bridge",
+        headers={"X-Archer-Bridge-Key": BRIDGE})["messages"]) == 1
 
     # Rotate can only be done by admin, old bearer dies immediately.
     request("/internal/devices/" + device_id + "/rotate", "POST",
@@ -246,7 +268,8 @@ def run(state_path):
     # No sensitive fields, messages, device hashes, tokens or audit trail appear on disk.
     for secret in (
         token, new_token, reader["deviceToken"], talker["deviceToken"],
-        watcher["deviceToken"], message["content"], "tokenHashHex",
+        watcher["deviceToken"], message["content"], desktop_sample["content"],
+        "tokenHashHex",
         "device.rotated", "device.revoked", "Example site needs review",
         "deliveryPreviews", "sandbox-policy-1",
         "Twilio", "OPENAI_API_KEY"
