@@ -46,7 +46,7 @@ required = {
     "archerPresence", "orbButton", "orbParticleField", "presenceStatus", "presenceActiveMissions",
     "presenceTasksToday", "presenceAttentionCount", "chatMessages", "chatForm",
     "chatText", "voiceInputButton", "voiceReadToggle", "voiceReplayButton",
-    "voiceStopButton", "voiceSupportNote", "missionList", "missionDetail",
+    "voiceStopButton", "voiceSupportNote", "voiceChoiceSelect", "voiceAccentStatus", "missionList", "missionDetail",
     "usageMonthCost", "usageLifetimeCost", "attentionFailures", "attentionIssueCount",
     "developerRepository", "developerLoad", "developerFiles", "developerFilter",
     "developerSelectedCount", "developerPreviewButton", "developerReviewButton",
@@ -84,3 +84,7 @@ assert '[data-state="thinking"]' in CSS
 assert '[data-state="speaking"]' in CSS
 
 print(f"PASS: {len(page.ids)} unique IDs, all literal JS element references and presence states")
+
+assert "getVoices()" in HOME_JS
+assert "voicePicker.addEventListener" in HOME_JS
+assert "en-gb" in HOME_JS.lower()
