@@ -89,8 +89,10 @@ def url_json(url: str, token: str, method: str = "GET",
 
 
 def validate_repo(value: str) -> str:
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", value):
-        raise SafeFailure("Repository identifier is invalid.")
+    # This workflow is bound to the owner's single approved project.
+    # It must not accept arbitrary GitHub owner/name supplied by a trigger.
+    if value != "GravyBets/Archer":
+        raise SafeFailure("Self-work is permitted only on GravyBets/Archer.")
     return value
 
 
