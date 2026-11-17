@@ -57,7 +57,7 @@
         const store = tx.objectStore(STORE);
         let request;
         if (method === 'get') request = store.get(SLOT);
-        if (method === 'put') request = store.put(item, SLOT);
+        if (method === 'add') request = store.add(item, SLOT);
         if (method === 'delete') request = store.delete(SLOT);
         if (!request) return reject(new Error('Unknown operation.'));
         let result;
@@ -116,7 +116,7 @@
     };
     // Structured-clone persistence must succeed; never report success from
     // a volatile memory key. No private-key bytes are ever exported.
-    await transaction('put', record);
+    await transaction('add', record);
     return checkStored(await read());
   }
 
