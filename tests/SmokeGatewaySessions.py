@@ -164,9 +164,27 @@ def main():
                 "createdAtUtc": timestamp,
                 "sequence": position
             })
+        expired_session = str(uuid4())
+        for position in (1, 2):
+            entries.append({
+                "id": str(uuid4()),
+                "clientMessageId": str(uuid4()),
+                "deviceId": str(uuid4()),
+                "role": "owner",
+                "sessionId": expired_session,
+                "content": "Expired-only synthetic message",
+                "createdAtUtc": old,
+                "sequence": position
+            })
         state_path = directory / "mobile-gateway-state.json"
         state_path.write_text(json.dumps({
             "devices": [], "events": [],
+            "conversationSessions": [{
+                "id": expired_session,
+                "title": "Expired synthetic session",
+                "createdAtUtc": recent,
+                "lastSequence": 2
+            }],
             "conversationMessages": entries
         }), encoding="utf-8")
         process = run_gateway(directory, secrets.token_hex(32))
@@ -197,6 +215,27 @@ def main():
             page = request("/v1/conversation/messages?after=0&limit=1", header=viewer)
             assert page["hasMore"] is True and page["nextAfter"] == 3
             assert page["historyGapDetected"] is True
+
+            # Wholly expired session needs a gap warning AND forward
+            # progress: clients must not poll the same empty page forever.
+            expired_page = request(
+                "/v1/conversation/messages?sessionId=" + expired_session +
+                "&after=0&limit=5", header=viewer
+            )
+            assert expired_page["messages"] == []
+            assert expired_page["historyGapDetected"] is True
+            assert expired_page["oldestAvailableSequence"] == 3
+            assert expired_page["missingMessageCountBeforePage"] == 2
+            assert expired_page["highWatermark"] == 2
+            assert expired_page["nextAfter"] == 2
+            assert not expired_page["hasMore"]
+            caught_up = request(
+                "/v1/conversation/messages?sessionId=" + expired_session +
+                "&after=2&limit=5", header=viewer
+            )
+            assert not caught_up["historyGapDetected"]
+            assert caught_up["nextAfter"] == 2
+            assert caught_up["messages"] == []
 
             # In-place migration was encrypted and preserved IDs/cursors.
             encrypted = state_path.read_text(encoding="utf-8")
