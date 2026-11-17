@@ -28,6 +28,7 @@ jobs:
         run: |
           node --check Archer.MissionControl/wwwroot/js/app.js
           node --check Archer.MissionControl/wwwroot/js/archer-home.js
+          node tests/VoiceConversationChecks.mjs
           node --check Archer.MissionControl/wwwroot/js/orb-field.js
           node --check Archer.MissionControl/wwwroot/js/developer.js
           node --check Archer.MissionControl/wwwroot/js/operator-context.js
