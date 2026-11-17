@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 1.13.0 (local prototype)  
+**Version:** 1.14.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -948,3 +948,11 @@ When every message in the session is gone, the API returns an empty page with hi
 **Scope and limitations:** This is source-grounded LOCAL retention detection, not a cloud replay archive. It doesn't recover deleted messages, create backups, send pushes or text messages, enable an iPhone client, or provide end-to-end delivery receipts. The local journal retains at most 200 messages across all sessions and displays only the most recent seven days. Production durable sync, acknowledgements and export/retention controls remain future work.
 
 CI now tests synthetic messages aged past the seven-day window, reconnect catch-up with partially retained history, and entirely expired sessions, including encrypted migration and correct pagination. It incurs no model or provider cost.
+
+## v1.14.0 — Incomplete-history warning in the desktop viewer
+
+The **Shared local conversation history** panel now carries the gateway's retention-gap metadata through the separate authenticated localhost desktop bridge. If records were removed before the requested cursor, the viewer displays a persistent, accessible warning showing the missing sequence-position count and the local retention window. Loading the next page does not remove the alert. Selecting or refreshing a session starts a fresh inspection.
+
+When an entire session has expired, the viewer says **No retained messages**, rather than falsely saying no messages were ever saved. The bridge requires and validates the history gap, oldest available sequence, missing count and retention window fields; incompatible or inconsistent gateway metadata causes a visible load failure rather than silently assuming the transcript is complete. No page automatically requests AI, sends a phone message or publishes a reply.
+
+Regression checks verify gateway-to-desktop retention fields, safe DOM text rendering and warning wiring. This changes ONLY the local read-only UI and bridge, not the seven-day/200-message retention policy, expired-message recovery, native iPhone app, cloud authentication, encrypted desktop storage or production readiness.
