@@ -52,7 +52,8 @@ ensure(page.scripts == ["./config.js",
        "./app.js"], "official pinned SPA browser SDK and local scripts")
 ensure("Content-Security-Policy" in html, "CSP restricts cross-site resources")
 ensure("window.ArcherPocketSettings" in config, "public-only config present")
-ensure("clientId: ''" in config, "no deployed client or secret checked in")
+ensure("clientId: 'Q25ebj5IT14zwo63SP7920S25m21Rjgm'" in config,
+       "public Auth0 SPA Client ID matches the owner-provided development app")
 ensure("dev-113ic41kxj7zpeb8.us.auth0.com" in config and
        "https://archer.example/api/dev" in config, "dev tenant and audience are exact")
 ensure("validSettings()" in js and "window.isSecureContext" in js,
@@ -65,7 +66,8 @@ ensure("cacheLocation: 'memory'" in js and "useRefreshTokens: false" in js,
 ensure("window.history.replaceState" in js, "OAuth authorization code removed from URL")
 ensure("window.location.origin + window.location.pathname" in js,
        "exact same-origin return URI")
-ensure("conversation:read" in js, "API read scope available for future verified probe")
+ensure("conversation:read" in js and "conversation:write" not in js,
+       "login preview requests read-only scope, not write actions")
 ensure("device is not approved" in js.lower(), "browser sign-in not presented as device approval")
 ensure("remote access remains disabled" in js.lower(), "remote access disabled")
 ensure("url.search || url.hash" in sw, "OAuth callback query never intercepted")
