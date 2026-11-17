@@ -53,12 +53,12 @@
   readToggle.checked = getPreference('archer.voice.readAloud') === 'yes';
   handsFreeToggle.checked = getPreference('archer.voice.handsFree') === 'yes';
   const savedPause = Number(getPreference('archer.voice.pauseSeconds'));
-  const pauseSeconds = Number.isInteger(savedPause) && savedPause >= 4 && savedPause <= 10
+  const pauseSeconds = Number.isInteger(savedPause) && savedPause >= 4 && savedPause <= 30
     ? savedPause : 7;
   pauseSlider.value = String(pauseSeconds);
   pauseValue.textContent = pauseSeconds + ' sec';
   pauseSlider.addEventListener('input', () => {
-    const value = Math.min(10, Math.max(4, Number(pauseSlider.value) || 7));
+    const value = Math.min(30, Math.max(4, Number(pauseSlider.value) || 7));
     pauseValue.textContent = value + ' sec';
     setPreference('archer.voice.pauseSeconds', String(value));
     if (voiceSessionActive && recognizedVoiceText()) armSilenceTimer();
@@ -288,7 +288,7 @@
       } else {
         finishRecognizedTurn();
       }
-    }, Math.min(10, Math.max(4, Number(pauseSlider.value) || 7)) * 1000);
+    }, Math.min(30, Math.max(4, Number(pauseSlider.value) || 7)) * 1000);
   }
 
   function stopRecognition() {
@@ -332,7 +332,7 @@
   function resumeRecognition() {
     if (!voiceSessionActive || listening || appState.busy || document.hidden ||
         sendAfterRecognitionEnd) return;
-    if (recognitionRestarts >= 12) {
+    if (recognitionRestarts >= 40) {
       endVoiceConversation(false);
       softError('Browser speech recognition kept stopping. Start again manually.');
       return;
