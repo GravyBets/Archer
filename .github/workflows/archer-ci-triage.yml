@@ -1,0 +1,36 @@
+name: Archer CI Regression Triage — No AI Spending
+
+on:
+  workflow_run:
+    workflows: ["Archer Build"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: archer-main-build-triage
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    # workflows triggered from PRs or forks must NEVER access the issue writer.
+    # Do not download artifacts or execute code from the triggering workflow.
+    if: ${{ github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - name: Checkout trusted default branch only
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Check and summarize the failed Archer main build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 tools/archer_ci_triage.py
