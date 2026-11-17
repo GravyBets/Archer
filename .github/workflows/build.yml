@@ -44,6 +44,8 @@ jobs:
         run: python3 tests/SmokeRemoteAuth0Boundary.py
       - name: Test owner-only Auth0 local identity issuer/client/subject trust settings
         run: dotnet run --project tests/RemoteAuth0OwnerSignInChecks/RemoteAuth0OwnerSignInChecks.csproj --configuration Release
+      - name: Reject crossed Auth0 owners, wrong Native clients and ambiguous signed scopes
+        run: dotnet run --project tests/RemoteAuth0OwnerClaimsChecks/RemoteAuth0OwnerClaimsChecks.csproj --configuration Release
       - name: Smoke-test no-data Auth0 owner login proof remains strictly localhost-only
         run: python3 tests/SmokeAuth0OwnerSignIn.py
       - name: Validate Archer iPhone Auth0 PKCE source, Keychain boundaries and callback settings
