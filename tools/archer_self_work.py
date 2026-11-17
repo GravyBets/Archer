@@ -144,8 +144,16 @@ def claim(args: argparse.Namespace) -> None:
     title = str(candidate.get("title", ""))[:180]
     body = str(candidate.get("body") or "")[:5000]
     category, paths = choose_files(title, body)
-    # Ensure one attempt only, even if the later provider request or CI fails.
-    # GitHub labels may be provisioned by the repository owner before enabling.
+    # Create the internal attempts label if needed; only the repository
+    # owner grants the separate archer-approved label. Never auto-approve.
+    known_labels = url_json(base + "/labels?per_page=100", token)
+    if not any(row.get("name") == ATTEMPTED_LABEL for row in known_labels):
+        url_json(base + "/labels", token, "POST", {
+            "name": ATTEMPTED_LABEL,
+            "color": "B8C3D1",
+            "description": "Consumed one Archer self-work model attempt; reapprove explicitly before retry",
+        })
+    # Ensure one attempt only, even if the provider request or CI fails.
     url_json(base + f"/issues/{candidate['number']}/labels", token,
              "POST", {"labels": [ATTEMPTED_LABEL]})
     claim_document = {
@@ -208,6 +216,8 @@ def validate_patch(patch: dict, allowed: tuple[str, str],
         changed[path] = result
     if not changed:
         raise SafeFailure("No valid changes generated.")
+    if set(changed) == {"tests/ValidateUi.py"}:
+        raise SafeFailure("Worker cannot publish test-only changes without actual application code.")
     return changed
 
 
