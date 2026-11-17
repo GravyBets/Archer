@@ -43,27 +43,10 @@ internal static class Auth0OwnerSignInProbe
                 {
                     OnTokenValidated = context =>
                     {
-                        var subject = UniqueClaim(context.Principal, "sub");
-                        var authorizedParty = UniqueClaim(context.Principal, "azp");
-                        var oauthScopes = UniqueClaim(context.Principal, "scope");
-                        var delegatedScopes = UniqueClaim(context.Principal, "scp");
-                        if (subject is null || authorizedParty is null ||
-                            !string.Equals(subject, config.OwnerSubject, StringComparison.Ordinal) ||
-                            !string.Equals(authorizedParty, config.NativeClientId, StringComparison.Ordinal) ||
-                            (oauthScopes is null) == (delegatedScopes is null))
+                        if (!Auth0OwnerClaimPolicy.AcceptValidatedClaims(
+                                context.Principal, config))
                         {
-                            context.Fail("Owner sign-in claims do not match the explicitly pinned Auth0 account and native client.");
-                            return Task.CompletedTask;
-                        }
-
-                        var scopeText = oauthScopes ?? delegatedScopes ?? "";
-                        var scopes = scopeText.Split(
-                            ' ', StringSplitOptions.RemoveEmptyEntries);
-                        if (scopes.Length is 0 or > 16 ||
-                            scopes.Distinct(StringComparer.Ordinal).Count() != scopes.Length ||
-                            !scopes.Contains("conversation:read", StringComparer.Ordinal))
-                        {
-                            context.Fail("Access token lacks the minimal Archer API read scope.");
+                            context.Fail("Owner sign-in claims do not match the pinned Auth0 account, client and read scope.");
                             return Task.CompletedTask;
                         }
 
@@ -95,12 +78,4 @@ internal static class Auth0OwnerSignInProbe
         });
     }
 
-    private static string? UniqueClaim(ClaimsPrincipal? principal, string type)
-    {
-        var matches = principal?.FindAll(type).ToArray();
-        return matches is { Length: 1 } &&
-            !string.IsNullOrWhiteSpace(matches[0].Value)
-            ? matches[0].Value
-            : null;
-    }
 }
