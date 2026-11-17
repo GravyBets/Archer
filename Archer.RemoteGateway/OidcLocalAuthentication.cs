@@ -15,7 +15,10 @@ internal static class OidcLocalAuthentication
 {
     private const string PrincipalItemKey = "archer.oidc.signed-device";
 
-    internal static void Register(IServiceCollection services, OidcProviderSettings settings)
+    internal static void Register(
+        IServiceCollection services, OidcProviderSettings settings,
+        string deviceClaimType = "device_id", string? pinnedNativeClientId = null,
+        bool auth0StrictRs256 = false)
     {
         // Existing, versioned, synthetic-only database is mandatory. An
         // inaccessible registry prevents startup, not just authorization.
@@ -44,11 +47,9 @@ internal static class OidcLocalAuthentication
                     ValidateLifetime = true,
                     RequireExpirationTime = true,
                     ClockSkew = TimeSpan.Zero,
-                    ValidAlgorithms = new[]
-                    {
-                        SecurityAlgorithms.RsaSha256,
-                        SecurityAlgorithms.EcdsaSha256
-                    },
+                    ValidAlgorithms = auth0StrictRs256
+                        ? new[] { SecurityAlgorithms.RsaSha256 }
+                        : new[] { SecurityAlgorithms.RsaSha256, SecurityAlgorithms.EcdsaSha256 },
                     NameClaimType = "sub"
                 };
 
@@ -57,7 +58,9 @@ internal static class OidcLocalAuthentication
                     OnTokenValidated = context =>
                     {
                         var subject = ExactlyOne(context.Principal, "sub");
-                        var deviceId = ExactlyOne(context.Principal, "device_id");
+                        var deviceId = ExactlyOne(context.Principal, deviceClaimType);
+                        var authorizedParty = pinnedNativeClientId is null
+                            ? null : ExactlyOne(context.Principal, "azp");
                         var scopeClaim = ExactlyOne(context.Principal, "scope");
                         var azureScope = ExactlyOne(context.Principal, "scp");
                         // Ambiguous or missing scopes are denied. This does not
@@ -66,6 +69,8 @@ internal static class OidcLocalAuthentication
                             ? null : scopeClaim ?? azureScope;
 
                         if (subject is null || deviceId is null || scopesText is null ||
+                            (pinnedNativeClientId is not null &&
+                             !string.Equals(authorizedParty, pinnedNativeClientId, StringComparison.Ordinal)) ||
                             !string.Equals(subject, settings.OwnerSubject, StringComparison.Ordinal))
                         {
                             context.Fail("Missing, ambiguous or unapproved owner/device claims.");
