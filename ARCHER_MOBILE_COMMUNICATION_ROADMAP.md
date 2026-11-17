@@ -20,6 +20,7 @@ Current baseline: Archer v1.13.0 is LOCALHOST-ONLY. It supports guarded AI, sour
 - [x] Local AI API spending reservation, per-request limit and pause control.
 - [x] Inventory all 37 existing MissionControl routes, mutating endpoints and credential risks in [mobile security review](ARCHER_MOBILE_SECURITY_REVIEW.md).
 - [ ] Independently verify admin endpoint hardening and broader dependencies before production.
+- [x] Draft a separate [remote gateway security architecture](ARCHER_REMOTE_GATEWAY_SECURITY_DESIGN.md) with boundary, identity, proxy, retention, queue and deployment acceptance gates. **Draft only; no independent approval or public deployment.**
 - [x] Document local/public threat model, token risks, abuse, CSRF, rate limits, provider leakage and hard production blockers in [mobile security review](ARCHER_MOBILE_SECURITY_REVIEW.md).
 - [x] **Local gateway prototype:** separate project and process bound to 127.0.0.1:5091; limited authenticated inbox, independent storage and no admin/AI/GitHub/Twilio routes (v1.2).
 - [ ] Harden and deploy a **separate authenticated public/mobile gateway** behind TLS without exposing today's unauthenticated dashboard or port 5087.
@@ -139,7 +140,7 @@ DONE WHEN: GeoShift converts real paying customers and Archer reports genuine bu
 ## Execution order
 
 1. **Completed:** v1.1 inbox; v1.2 isolated gateway; v1.3 notification sandbox; v1.4 device security; v1.5 local journal; v1.6 encrypted state; v1.7 draft preview; v1.8 manual replies; v1.9 session cursors; v1.10 desktop session browser; v1.11 local encrypted backup/restore, v1.12 offline key rotation, v1.13 retention-safe cursor-gap warnings. No cloud exposure.
-2. **Next:** independent security architecture review and a separately authenticated **TLS-ready public gateway design**, provisioning, retention and APNs-device enrollment; no remote access until those gates pass.
+2. **Next:** independently review the proposed [remote gateway security design](ARCHER_REMOTE_GATEWAY_SECURITY_DESIGN.md), settle owner choices (identity, host, retention, iOS), then implement an isolated authenticated **TLS-ready gateway skeleton** and synthetic tests. No remote access until all security gates pass.
 3. **Then:** shared conversation backend, push service (APNs) and native iOS MVP.
 4. **In parallel after security:** Twilio inbound SMS + ConversationRelay with signature checks and strict budget.
 5. **Before production:** deployment/restore drills, owner approval flows and provider receipts.
