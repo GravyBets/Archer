@@ -2,11 +2,11 @@
 
 // Offline UI shell only. Never cache OAuth redirects, token requests, user
 // data, Auth0 SDK responses, runtime configuration or Archer gateway traffic.
-const CACHE = 'archer-pocket-shell-v3';
+const CACHE = 'archer-pocket-shell-v4';
 // IMPORTANT: /Archer/ currently returns 404 on the deployed site.
 // Do not pre-cache './': cache.addAll rejects ALL files when any fetch is 404.
 // The explicit working /Archer/index.html path is the safe PWA start URL.
-const FILES = ['./index.html', './styles.css', './app.js',
+const FILES = ['./index.html', './styles.css', './app.js', './device-keys.js',
                './manifest.webmanifest', './assets/archer-icon.svg'];
 
 self.addEventListener('install', event => {
