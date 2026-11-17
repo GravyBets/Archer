@@ -38,7 +38,10 @@ def ensure(value, description):
 
 ensure(len(page.ids) == len(set(page.ids)), "unique HTML IDs")
 ensure(set(["identityMessage","signInButton","signOutButton","authCapability",
-            "authTag","connectionBadge","disabledMessage"]).issubset(page.ids),
+            "authTag","connectionBadge","disabledMessage",
+            "deviceKeyStatus","deviceFingerprint","devicePrepareButton",
+            "deviceSelfTestButton","deviceEraseButton","deviceCapability",
+            "deviceTag"]).issubset(page.ids),
        "identity and locked state affordances exist")
 ensure('disabledMessage' in html and 'placeholder="Messaging is not connected" disabled' in html,
        "messaging is visibly unavailable")
@@ -50,7 +53,8 @@ ensure((site / "assets" / "archer-icon.svg").is_file(), "icon exists")
 ensure("apple-mobile-web-app-capable" in html, "iPhone Home Screen support")
 ensure(page.scripts == ["./config.js",
        "https://cdn.auth0.com/js/auth0-spa-js/2.30/auth0-spa-js.production.js",
-       "./app.js"], "official pinned SPA browser SDK and local scripts")
+       "./device-keys.js", "./app.js"],
+       "official pinned SPA browser SDK and local device key before application")
 ensure("Content-Security-Policy" in html, "CSP restricts cross-site resources")
 ensure("window.ArcherPocketSettings" in config, "public-only config present")
 ensure("clientId: 'Q25ebj5IT14zwo63SP792OS25m21Rjgm'" in config,
@@ -94,10 +98,36 @@ ensure("FILES.slice(1)" in sw, "service worker allowlists only public assets")
 ensure("config.js" not in sw and "authorization" not in sw.lower() and
        "FILES.slice(1)" in sw and "if (url.search || url.hash) return;" in sw,
        "service worker caches only allowlisted assets, never OAuth redirects")
-ensure("archer-pocket-shell-v3" in sw and
+ensure("archer-pocket-shell-v4" in sw and
        "fetch(event.request)" in sw and
        ".catch(() => caches.match(event.request))" in sw,
        "mobile app fetches fresh login code after publishing fixes")
+ensure("device-keys.js" in sw and "./device-keys.js" in html,
+       "worker caches public device-key code and page loads it before app")
+ensure("devicePrepare.addEventListener('click'" in js and
+       "deviceKeys.create()" in js and
+       "deviceKeys.selfTest" in js and
+       "deviceKeys.erase()" in js,
+       "local key creation, self-test and erase require explicit user action")
+ensure("deviceTag.textContent = prepared && signedIn ? 'NOT ENROLLED'" in js,
+       "key creation never declares a device approved")
+ensure("readyDevice = null" in js and "if (!value) readyDevice = null" in js,
+       "local browser sign-out clears volatile ready state")
+device_code = (site / "device-keys.js").read_text()
+for fragment in (
+    "crypto?.subtle", "indexedDB.open(KEY_DB, 1)",
+    "extractable !== false", "namedCurve: 'P-256'",
+    "ARCHER_DEVICE_PAIR_P256_V1",
+    "ARCHER_LOCAL_KEY_SELFTEST_V1",
+    "const proof = await SUBTLE().sign(",
+    "store.add(item, SLOT)", "store.delete(SLOT)"
+):
+    ensure(fragment in device_code, "must preserve device proof boundary: " + fragment)
+for forbidden in ("fetch(", "XMLHttpRequest", "localStorage",
+                  "clientSecret", "getAccessTokenSilently", "access_token",
+                  "https://gravybets.github.io/Archer/api"):
+    ensure(forbidden not in device_code,
+           "local device key module must never access network, OAuth token or admin API")
 ensure("No tokens" in readme or "tokens" in readme.lower(), "docs explain secrets policy")
 ensure("Single Page Application" in readme, "requires distinct SPA app registration")
 ensure("Archer iPhone Dev" in readme, "do not reuse Native app")
