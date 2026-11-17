@@ -97,6 +97,14 @@ Check(!contract.Prove(wrong.TicketId, Sign(keyA, ownerA, wrong), now),
 Check(contract.Approve(ownerA, wrong.TicketId, read, now) is null,
     "burned ticket cannot be approved");
 
+// Incorrect signature lengths also count against the three-attempt cap.
+var malformed = contract.Begin(ownerA, "Malformed signatures", pub, now);
+for (var i = 0; i < 3; i++)
+    Check(!contract.Prove(malformed.TicketId, new byte[] { 0x01 }, now),
+        "short signature denied and counted " + (i + 1));
+Check(!contract.Prove(malformed.TicketId, Sign(keyA, ownerA, malformed), now),
+    "malformed proof flood cannot bypass attempt cap");
+
 // Expiry is enforced for both proof and approval.
 var timedOut = contract.Begin(ownerA, "Expired", pub, now);
 Check(!contract.Prove(timedOut.TicketId, Sign(keyA, ownerA, timedOut),
