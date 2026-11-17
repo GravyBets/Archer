@@ -69,6 +69,14 @@ assert before["messages"][0]["content"] == draft["content"]
 assert before["messages"][0]["role"] == "owner"
 assert before["nextAfter"] == before["messages"][0]["sequence"]
 assert before["highWatermark"] == before["nextAfter"]
+# Desktop must preserve the gateway's retention flags, even when the first
+# available sequence is not 1 after an offline reconnect.
+for key in ("oldestAvailableSequence", "historyGapDetected",
+            "missingMessageCountBeforePage", "retentionDays"):
+    assert before[key] == direct_history[key], (key, before, direct_history)
+assert before["retentionDays"] == 7
+assert before["historyGapDetected"] == (first_sequence > 1)
+assert before["missingMessageCountBeforePage"] == first_sequence - 1
 req(DESKTOP + "/api/mobile/session-history?sessionId=" + main_id +
     "&after=-1", expected=400)
 
