@@ -2,7 +2,7 @@
   "name": "Archer Pocket — Owner Preview",
   "short_name": "Archer",
   "description": "Owner authentication preview. Remote access is disabled.",
-  "start_url": "./",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#07111b",

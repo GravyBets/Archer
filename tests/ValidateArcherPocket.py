@@ -43,7 +43,8 @@ ensure(set(["identityMessage","signInButton","signOutButton","authCapability",
 ensure('disabledMessage' in html and 'placeholder="Messaging is not connected" disabled' in html,
        "messaging is visibly unavailable")
 ensure(manifest["display"] == "standalone", "installable PWA")
-ensure(manifest["scope"] == "./" and manifest["start_url"] == "./", "relative static site paths")
+ensure(manifest["scope"] == "./" and manifest["start_url"] == "./index.html",
+       "Home Screen must launch working direct index.html, not GitHub Pages directory 404")
 ensure(manifest["icons"][0]["src"] == "./assets/archer-icon.svg", "same-origin icon")
 ensure((site / "assets" / "archer-icon.svg").is_file(), "icon exists")
 ensure("apple-mobile-web-app-capable" in html, "iPhone Home Screen support")
@@ -83,11 +84,17 @@ ensure("device is not approved" in js.lower(), "browser sign-in not presented as
 ensure("remote access remains disabled" in js.lower(), "remote access disabled")
 ensure("url.search || url.hash" in sw, "OAuth callback query never intercepted")
 ensure("event.request.mode === 'navigate'" in sw, "offline shell navigation handling")
-ensure("FILES.slice(2)" in sw, "service worker allowlists only public assets")
+ensure("const FILES = ['./index.html'" in sw and
+       "const FILES = ['./', " not in sw,
+       "install must never pre-cache GitHub Pages 404 directory and block PWA startup")
+ensure("cache.addAll(FILES)" in sw,
+       "precache uses only known-good page and static assets")
+
+ensure("FILES.slice(1)" in sw, "service worker allowlists only public assets")
 ensure("config.js" not in sw and "authorization" not in sw.lower() and
-       "FILES.slice(2)" in sw and "if (url.search || url.hash) return;" in sw,
+       "FILES.slice(1)" in sw and "if (url.search || url.hash) return;" in sw,
        "service worker caches only allowlisted assets, never OAuth redirects")
-ensure("archer-pocket-shell-v2" in sw and
+ensure("archer-pocket-shell-v3" in sw and
        "fetch(event.request)" in sw and
        ".catch(() => caches.match(event.request))" in sw,
        "mobile app fetches fresh login code after publishing fixes")
