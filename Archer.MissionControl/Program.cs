@@ -825,7 +825,7 @@ app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore
     try
     {
         var snapshot = await store.ReadAsync(state => state, ct);
-        var answer = await ai.ChatAsync(message, snapshot, ct);
+        var answer = await ai.ChatAsync(message, snapshot, ct, request.VoiceMode);
         await store.UpdateAsync(state =>
         {
             state.Conversation.Add(new ConversationEntry { Role = "user", Content = message });
