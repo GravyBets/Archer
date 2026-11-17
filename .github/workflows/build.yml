@@ -38,6 +38,10 @@ jobs:
         run: dotnet run --project tests/RemoteOidcSettingsChecks/RemoteOidcSettingsChecks.csproj --configuration Release
       - name: Smoke-test independent OIDC local validation probe and unsafe settings
         run: python3 tests/SmokeRemoteOidcBoundary.py
+      - name: Test Auth0 tenant client audience and namespaced device claim preflight
+        run: dotnet run --project tests/RemoteAuth0ProfileChecks/RemoteAuth0ProfileChecks.csproj --configuration Release
+      - name: Smoke-test Auth0 local-only validation profile and conflicting identity refusal
+        run: python3 tests/SmokeRemoteAuth0Boundary.py
       - name: Restore standalone encrypted backup utility
         run: dotnet restore Archer.GatewayBackup/Archer.GatewayBackup.csproj
       - name: Build standalone encrypted backup utility
