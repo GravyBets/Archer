@@ -27,6 +27,6 @@ Expect liveness=200, readiness=503 and unimplemented conversation route=404. Tes
 
 ## What must happen before real mobile access
 
-A separately reviewed OIDC login/PKCE design, audited token validation and rotation, strict owner-account isolation, scoped device enrollment and revocation, trusted TLS ingress/proxy, encrypted database, durable outbox, rate/cost limits, off-host backups, real device security testing, Apple/APNs integration and owner go-live approval are all still required. See [remote architecture proposal](../ARCHER_REMOTE_GATEWAY_SECURITY_DESIGN.md) in draft PR #24 and [mobile security review](../ARCHER_MOBILE_SECURITY_REVIEW.md).
+A separately reviewed OIDC login/PKCE design, audited token validation and rotation, strict owner-account isolation, scoped device enrollment and revocation, trusted TLS ingress/proxy, encrypted database, durable outbox, rate/cost limits, off-host backups, real device security testing, Apple/APNs integration and owner go-live approval are all still required. See the remote architecture proposal in [draft PR #24](https://github.com/GravyBets/Archer/pull/24) and the [mobile security review](../ARCHER_MOBILE_SECURITY_REVIEW.md).
 
 **Do not change a port or a flag to publish this app: it contains no production authentication.** Future public implementation requires a separate reviewed design and implementation, not a configuration toggle.
