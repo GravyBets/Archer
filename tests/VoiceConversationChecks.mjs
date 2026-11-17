@@ -85,7 +85,8 @@ const browser={
   addEventListener(){},
 };
 const appState={data:{missions:[]},busy:false};
-const doc={hidden:false,getElementById:elt,createElement:()=>({value:'',textContent:''})};
+const doc={hidden:false,getElementById:elt,createElement:()=>({value:'',textContent:''}),
+  addEventListener() {}};
 const sandbox={window:browser,document:doc,navigator:{language:'en-US'},
   SpeechSynthesisUtterance:FakeUtterance,appState,Date,console};
 runInNewContext(source,sandbox,{filename:'archer-home.js'});
