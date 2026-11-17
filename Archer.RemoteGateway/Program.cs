@@ -7,6 +7,8 @@ using System.Threading.RateLimiting;
 SecurityBoundary.DemandLocalOnlyEnvironment();
 
 var builder = WebApplication.CreateBuilder(args);
+var identityFixture = LocalTestAuthentication.FromEnvironment(builder.Environment);
+identityFixture?.Register(builder.Services);
 builder.WebHost.ConfigureKestrel(server =>
 {
     // Explicit binding overrides ASPNETCORE_URLS (including 0.0.0.0).
@@ -46,6 +48,11 @@ app.Use(async (context, next) =>
     await next();
 });
 app.UseRateLimiter();
+if (identityFixture is not null)
+{
+    app.UseAuthentication();
+    app.UseAuthorization();
+}
 
 app.MapGet("/health/live", () => Results.Ok(new
 {
@@ -54,6 +61,7 @@ app.MapGet("/health/live", () => Results.Ok(new
     prototype = true,
     publicAccessEnabled = false,
     remoteAuthenticationEnabled = false,
+    signedSyntheticIdentityProbeEnabled = identityFixture is not null,
     conversationEndpointsEnabled = false,
     pushEnabled = false,
     aiEnabled = false,
@@ -67,6 +75,21 @@ app.MapGet("/health/ready", () => Results.Json(new
     reason = "Remote identity, TLS ingress, encrypted durable storage and independent review are not configured.",
     publicAccessEnabled = false
 }, statusCode: StatusCodes.Status503ServiceUnavailable));
+
+// The signed identity test endpoint exists ONLY when fixture configuration is
+// present, the ASP.NET environment is Development and mode is local-test.
+// The POST variant is an authorization probe: it writes no data anywhere.
+if (identityFixture is not null)
+{
+    app.MapGet("/_local/identity-probe/{ownerSubject}",
+            (HttpContext context, string ownerSubject) =>
+                LocalTestAuthentication.Probe(context, ownerSubject, write: false))
+        .RequireAuthorization();
+    app.MapPost("/_local/identity-probe/{ownerSubject}",
+            (HttpContext context, string ownerSubject) =>
+                LocalTestAuthentication.Probe(context, ownerSubject, write: true))
+        .RequireAuthorization();
+}
 
 // No devices, messages, admin operations, push registration, model or
 // Twilio routes. All other paths (including /v1/*) return 404.
