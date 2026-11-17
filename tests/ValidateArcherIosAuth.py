@@ -63,7 +63,7 @@ ensure(".disabled(!ArcherAuthConfiguration.configured)" in VIEW,
        "button disabled when Client ID is placeholder")
 ensure("Gateway access still awaits" in SESSION or "gateway access still" in SESSION,
        "server authorization never inferred from client sign-in")
-ensure("Device enrollment" in VIEW, "device gate clearly disclosed")
+ensure("device enrollment" in VIEW.lower(), "device gate clearly disclosed")
 ensure("Remote conversations: unavailable" in VIEW, "chat routes not falsely represented")
 ensure("no token" in README.lower(), "readme documents token-redaction policy")
 ensure("client secret" in README.lower(), "README rejects client secret")
