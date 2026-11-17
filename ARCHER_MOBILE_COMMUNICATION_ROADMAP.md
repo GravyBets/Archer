@@ -1,7 +1,7 @@
 # Archer — Mobile, Messaging, Voice & Safe Business Operations Roadmap
 
 Working plan: 2026-11-16. Target: one Archer across Windows, iPhone, text, phone, and (if approved) CarPlay.
-Current baseline: Archer v1.13.0 is LOCALHOST-ONLY. It supports guarded AI, source review/code drafts, site checks, opt-in outbound SMS/one-way calls and manually selected coarse presence. Native iOS, real push, inbound voice/text conversation and cloud hosting DO NOT exist yet.
+Current baseline: Archer v1.14.0 is LOCALHOST-ONLY. It supports guarded AI, source review/code drafts, site checks, opt-in outbound SMS/one-way calls and manually selected coarse presence. Native iOS, real push, inbound voice/text conversation and cloud hosting DO NOT exist yet.
 
 ## Product decisions
 
@@ -60,6 +60,7 @@ DONE WHEN: each issue has one durable actionable item, no duplicate paid alert, 
 - [x] v1.8 manual owner-approved assistant-reply publication from desktop to encrypted gateway, idempotent and linked to a phone-authored draft; NO automatic model call or public access.
 - [x] v1.10 opt-in desktop **read-only session browser**: lists local encrypted gateway sessions, previews owner/Archer messages and pages using server cursors; no AI or phone activity.
 - [x] v1.13 per-session incremental reads disclose expired-history gaps, earliest retained sequence and a safe continuation cursor when all older messages are gone; encrypted synthetic CI validates reconnect behavior.
+- [x] v1.14 desktop read-only session viewer surfaces and preserves gateway retention-gap warnings, including an entirely expired transcript; bridge rejects missing or contradictory gap metadata.
 - [ ] Connect Windows and phone chat to the same authenticated production session backend with proper multi-device ordering, privacy, reply streaming and authenticated internet access.
 - [ ] Stream short responses by default, allow detailed mode when requested, and retain clear action boundaries.
 - [ ] Audition British male neural voices for naturalness, latency and price; choose a voice only after a live test.
@@ -138,7 +139,7 @@ DONE WHEN: GeoShift converts real paying customers and Archer reports genuine bu
 
 ## Execution order
 
-1. **Completed:** v1.1 inbox; v1.2 isolated gateway; v1.3 notification sandbox; v1.4 device security; v1.5 local journal; v1.6 encrypted state; v1.7 draft preview; v1.8 manual replies; v1.9 session cursors; v1.10 desktop session browser; v1.11 local encrypted backup/restore, v1.12 offline key rotation, v1.13 retention-safe cursor-gap warnings. No cloud exposure.
+1. **Completed:** v1.1 inbox; v1.2 isolated gateway; v1.3 notification sandbox; v1.4 device security; v1.5 local journal; v1.6 encrypted state; v1.7 draft preview; v1.8 manual replies; v1.9 session cursors; v1.10 desktop session browser; v1.11 local encrypted backup/restore, v1.12 offline key rotation, v1.13 retention-safe cursor-gap warnings; v1.14 desktop incomplete-history warnings. No cloud exposure.
 2. **Next:** independent security architecture review and a separately authenticated **TLS-ready public gateway design**, provisioning, retention and APNs-device enrollment; no remote access until those gates pass.
 3. **Then:** shared conversation backend, push service (APNs) and native iOS MVP.
 4. **In parallel after security:** Twilio inbound SMS + ConversationRelay with signature checks and strict budget.
@@ -236,3 +237,11 @@ This completes a **local development utility**, not production key-vault integra
 MobileGateway's encrypted per-session sync now returns oldestAvailableSequence, historyGapDetected and missingMessageCountBeforePage alongside the existing cursor/highWatermark. A future phone app can warn honestly when seven-day/200-message retention has removed earlier messages. If all messages are expired, nextAfter advances to highWatermark rather than looping over an empty page. Tests simulate partially and fully expired sessions, prove proper warning and forward progress, and validate encrypted local migration.
 
 This is a **local protocol improvement only**. It does not restore expired messages or supply an internet/mobile client. Genuine durable push delivery, server retention policy, backups, owner export/deletion and production phone reconnection remain outstanding.
+
+### v1.14.0 — Desktop cannot silently hide missing mobile history
+
+The opt-in desktop session browser now displays an accessible, persistent **Incomplete history** alert when the local gateway reports expired/pruned messages. It shows the missing-sequence count, explains that messages are unavailable, and retains the warning while the owner pages forward. An entirely expired session is labeled as having **no retained messages**, avoiding the false impression that it was never used.
+
+The separate read-only desktop bridge validates gateway gap fields, their consistency with cursor/high-watermark positions and the local retention window. Missing fields from an older gateway fail visibly rather than defaulting to no loss. The local-only flag and separate bridge key remain required, and no model calls, mobile writes, APNs, SMS, phone calls or internet listener are added.
+
+Production conversation completeness remains **unresolved**: device acknowledgments, full encrypted history export/deletion, controlled retention, secure multi-device identity, durable cloud synchronization and authenticated mobile transport are still separate future milestones.
