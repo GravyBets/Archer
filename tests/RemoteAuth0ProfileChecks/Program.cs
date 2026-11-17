@@ -82,6 +82,8 @@ try
         "Auth0 domain suffix confusion");
     Bad("ARCHER_REMOTE_AUTH0_DOMAIN", "dev..us.auth0.com",
         "empty label rejected");
+    Bad("ARCHER_REMOTE_AUTH0_DOMAIN", "dev-.us.auth0.com",
+        "trailing hyphen in DNS label rejected");
     Bad("ARCHER_REMOTE_AUTH0_DOMAIN", "dev-example.us.auth0.com\n",
         "control character rejected");
     Bad("ARCHER_REMOTE_AUTH0_DOMAIN", " tenant.us.auth0.com ",
