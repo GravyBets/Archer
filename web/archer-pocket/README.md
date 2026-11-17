@@ -1,6 +1,9 @@
 # Archer Pocket — iPhone Home Screen web app (no Mac needed)
 
-**Status:** Static owner-login preview, NOT deployed, not a connected phone client.
+**Status:** Static owner-login preview deployed on GitHub Pages at
+`https://gravybets.github.io/Archer/index.html`. Real Auth0 browser sign-in
+was confirmed from the owner's iPhone on November 17, 2026. **This is still
+not a connected or approved Archer phone client.**
 This deliberately does **not** expose the ASP.NET Core desktop API or the
 remote local-only gateway. There is no chat, device enrollment, money movement,
 AI, SMS, calling, monitoring or mission-execution connection in this web app.
@@ -52,8 +55,16 @@ identifier, not a functional HTTPS API destination.
 
 ## iPhone install, once a real HTTPS URL exists
 
-1. Open the HTTPS page in Safari on iPhone.
+1. Open the **direct working** HTTPS page
+   `https://gravybets.github.io/Archer/index.html` in Safari on iPhone.
+   The bare `/Archer/` address was observed returning GitHub Pages 404.
+   The PWA manifest now explicitly launches `./index.html` to avoid it.
+   Also ensure Auth0 **Allowed Callback URLs** and **Allowed Logout URLs**
+   include the exact `https://gravybets.github.io/Archer/index.html` URL.
 2. Tap **Share → Add to Home Screen** (or **Open as Web App**, when offered).
+   Do this **after merging and manually republishing** the corrected manifest:
+   earlier versions attempted to pre-cache `/Archer/` (404), preventing service
+   worker installation, and launched Home Screen icons at the broken directory.
 3. Launch Archer from the Home Screen.
 4. Tap **Sign in with Auth0** to authenticate. A browser login might not
    survive being moved from Safari to the installed Home Screen app because
