@@ -10,7 +10,8 @@ namespace Archer.RemoteGateway;
 /// Local cryptographic test fixture, NOT an identity provider or production
 /// authentication solution. The pinned public key verifies RS256 JWTs issued
 /// by synthetic tests. OIDC discovery, JWKS rotation, account recovery,
-/// enrollment and persistent revocation remain unimplemented.
+/// production enrollment and cross-replica revocation remain unimplemented.
+/// The optional SQLite-backed local fixture is still synthetic-only.
 /// </summary>
 internal sealed class LocalTestAuthentication
 {
@@ -103,7 +104,10 @@ internal sealed class LocalTestAuthentication
             if (rsa.KeySize < 2048)
                 throw new InvalidOperationException("Synthetic RSA verification key must be at least 2048 bits.");
             var registryPath = Environment.GetEnvironmentVariable(prefix + "DEVICE_REGISTRY_FILE");
-            var registry = string.IsNullOrWhiteSpace(registryPath)
+            if (registryPath is not null && string.IsNullOrWhiteSpace(registryPath))
+                throw new InvalidOperationException(
+                    "An explicit synthetic enrollment registry path cannot be blank.");
+            var registry = registryPath is null
                 ? null
                 : new DurableDeviceRegistry(registryPath);
             return new LocalTestAuthentication(issuer, audience, owner, device, revoked, rsa, registry);
