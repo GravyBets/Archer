@@ -121,7 +121,8 @@ def main():
             assert code == 503 and ready["status"] == "blocked"
             assert ready["publicAccessEnabled"] is False
 
-            for path in ("/v1/conversations", "/v1/me/devices",
+            for path in ("/_local/identity-probe/owner-synthetic-A",
+                         "/v1/conversations", "/v1/me/devices",
                          "/v1/push/register", "/api/state",
                          "/internal/devices", "/swagger", "/"):
                 code, _, _ = request(path)
