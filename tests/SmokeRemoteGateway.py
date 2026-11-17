@@ -112,6 +112,7 @@ def main():
                           "signedSyntheticIdentityProbeEnabled",
                           "oidcLocalValidationProbeEnabled",
                           "auth0LocalValidationProbeEnabled",
+                          "auth0OwnerSignInOnlyProbeEnabled",
                           "conversationEndpointsEnabled", "pushEnabled",
                           "aiEnabled", "providerCallsEnabled"):
                 assert live[field] is False, (field, live)
@@ -124,7 +125,8 @@ def main():
             assert code == 503 and ready["status"] == "blocked"
             assert ready["publicAccessEnabled"] is False
 
-            for path in ("/_local/auth0-probe/owner-synthetic-A",
+            for path in ("/_local/auth0-owner-proof",
+                         "/_local/auth0-probe/owner-synthetic-A",
                          "/_local/identity-probe/owner-synthetic-A",
                          "/v1/conversations", "/v1/me/devices",
                          "/v1/push/register", "/api/state",
