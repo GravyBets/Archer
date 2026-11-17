@@ -119,7 +119,7 @@ app.MapGet("/health/live", () => Results.Ok(new
 {
     status = "ok",
     component = "Archer.MobileGateway",
-    version = "1.13.0",
+    version = "1.14.0",
     publicAccessEnabled = false,
     deliveryEnabled = false
 }));
@@ -610,5 +610,5 @@ app.MapDelete("/internal/conversation", async Task<IResult> (
     });
 });
 
-Console.WriteLine("Archer Mobile Gateway v1.13.0: LOCAL LOOPBACK ONLY on 127.0.0.1:5091");
+Console.WriteLine("Archer Mobile Gateway v1.14.0: LOCAL LOOPBACK ONLY on 127.0.0.1:5091");
 app.Run();

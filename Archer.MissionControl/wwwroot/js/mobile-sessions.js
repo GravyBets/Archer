@@ -11,6 +11,7 @@
   const refreshButton = el('mobileSessionRefresh');
   const messages = el('mobileSessionMessages');
   const status = el('mobileSessionStatus');
+  const retentionWarning = el('mobileSessionRetentionWarning');
   const more = el('mobileSessionMore');
   let selectedId = '';
   let after = 0;
@@ -28,6 +29,25 @@
     messages.replaceChildren(textNode('p', message, 'developer-empty'));
     more.hidden = true;
     more.disabled = true;
+  }
+
+  function clearRetentionWarning() {
+    retentionWarning.textContent = '';
+    retentionWarning.hidden = true;
+  }
+
+  // Keep this warning visible across later pages. A page fetched after the
+  // gap will no longer report it, but that cannot restore missing history.
+  function showRetentionWarning(result) {
+    if (result.historyGapDetected !== true) return;
+    const count = result.missingMessageCountBeforePage;
+    if (!Number.isSafeInteger(count) || count < 1)
+      throw new Error('Invalid conversation retention warning.');
+    retentionWarning.textContent = count + ' earlier message' +
+      (count === 1 ? ' is' : 's are') +
+      ' no longer available under local retention (' + result.retentionDays +
+      ' days). This transcript is incomplete; the missing messages cannot be recovered here.';
+    retentionWarning.hidden = false;
   }
 
   function setBusy(value) {
@@ -58,6 +78,7 @@
     const cursor = reset ? 0 : after;
     if (reset) {
       after = 0;
+      clearRetentionWarning();
       clear('Loading this local conversation…');
     }
     try {
@@ -68,20 +89,24 @@
       if (!result.connected || result.sessionId !== selectedId)
         throw new Error(result.note || 'Local session is not available.');
       if (reset) messages.replaceChildren();
-      if (!Array.isArray(result.messages)) throw new Error('Invalid history response.');
+      if (!Array.isArray(result.messages) ||
+          typeof result.historyGapDetected !== 'boolean')
+        throw new Error('Invalid history response.');
+      showRetentionWarning(result);
       if (result.messages.length) {
         const empty = messages.querySelector('.developer-empty');
         if (empty) empty.remove();
         for (const item of result.messages) displayMessage(item);
       } else if (!messages.children.length) {
-        clear('No messages saved in this local conversation.');
+        clear('No retained messages in this local conversation.');
       }
       after = result.nextAfter;
       more.hidden = !result.hasMore;
       more.disabled = !result.hasMore;
       const context = result.archived ? 'Archived session' : 'Local session';
-      status.textContent = context + ' · ' + result.highWatermark +
-        ' total sequence positions · ' +
+      status.textContent = context + ' · ' +
+        (retentionWarning.hidden ? 'Retained history view' : 'Incomplete history') +
+        ' · ' + result.highWatermark + ' total sequence positions · ' +
         (result.hasMore ? 'More messages available' : 'Showing available retained messages');
     } catch (error) {
       if (requestId === activeRequest) {
@@ -103,6 +128,7 @@
         selectedId = '';
         select.replaceChildren(textNode('option', 'Local gateway is disabled or unavailable'));
         status.textContent = data.note || 'Gateway not connected.';
+        clearRetentionWarning();
         clear('No mobile conversation data loaded.');
         return;
       }
@@ -123,6 +149,7 @@
       selectedId = '';
       select.replaceChildren(textNode('option', 'Session catalog unavailable'));
       status.textContent = 'Cannot list local mobile sessions. No message or AI action was sent.';
+      clearRetentionWarning();
       clear('No mobile conversation data loaded.');
       return;
     } finally {

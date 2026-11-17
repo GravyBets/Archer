@@ -446,3 +446,7 @@
 .mobile-session-message-text{font-size:12px;color:#c6dae2;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0 0}
 #mobileSessionMore{font-size:11px;margin-top:10px}
 @media(max-width:650px){.mobile-session-toolbar select{width:100%;flex-basis:100%}.mobile-session-toolbar .button{flex:1}.mobile-session-message{max-width:100%}}
+
+/* v1.14 — never style an incomplete transcript as complete */
+.mobile-session-retention-warning{font-size:12px;line-height:1.55;margin:10px 0 14px;padding:11px 13px;border:1px solid #b58a42;border-radius:8px;background:#302a1f;color:#ffe3a9}
+.mobile-session-retention-warning[hidden]{display:none}

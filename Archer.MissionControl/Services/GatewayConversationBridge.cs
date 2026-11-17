@@ -218,6 +218,12 @@ public sealed class GatewayConversationBridge(IHttpClientFactory clients, JsonFi
         public long HighWatermark { get; set; }
         public bool HasMore { get; set; }
         public bool Archived { get; set; }
+        // Nullable so an older gateway cannot silently suppress a retention
+        // warning by omitting fields introduced in the local sync protocol.
+        public long? OldestAvailableSequence { get; set; }
+        public bool? HistoryGapDetected { get; set; }
+        public long? MissingMessageCountBeforePage { get; set; }
+        public int? RetentionDays { get; set; }
     }
 
     /// <summary>
@@ -279,11 +285,35 @@ public sealed class GatewayConversationBridge(IHttpClientFactory clients, JsonFi
                     (a, b) => a.Sequence < b.Sequence).All(x => x))
                 throw new InvalidDataException("Gateway returned invalid conversation ordering.");
 
+            // The desktop must not show a "complete" transcript if its
+            // gateway is too old to report history loss or reports
+            // contradictory cursor metadata.
+            if (page.OldestAvailableSequence is not long oldest ||
+                page.HistoryGapDetected is not bool gap ||
+                page.MissingMessageCountBeforePage is not long missing ||
+                page.RetentionDays is not int retentionDays ||
+                oldest < 0 || page.HighWatermark < 0 ||
+                oldest > page.HighWatermark + 1 ||
+                missing < 0 || retentionDays is < 1 or > 365 ||
+                missing != (oldest > 0 && after < oldest - 1
+                    ? oldest - 1 - after : 0) ||
+                gap != (missing > 0) ||
+                page.Messages.Any(x => x.Sequence < oldest ||
+                    x.Sequence > page.HighWatermark) ||
+                (page.Messages.Count == 0 && page.HasMore))
+                throw new InvalidDataException("Gateway did not provide consistent retention metadata.");
+
             return new { enabled = true, connected = true,
                 sessionId = page.SessionId, messages = page.Messages,
                 nextAfter = page.NextAfter, highWatermark = page.HighWatermark,
                 hasMore = page.HasMore, archived = page.Archived,
-                note = "Read-only encrypted gateway history; AI context is not automatically synchronized." };
+                oldestAvailableSequence = oldest,
+                historyGapDetected = gap,
+                missingMessageCountBeforePage = missing,
+                retentionDays,
+                note = gap
+                    ? "Earlier messages are no longer available under local retention. This is an incomplete transcript."
+                    : "Read-only encrypted gateway history; AI context is not automatically synchronized." };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception error)

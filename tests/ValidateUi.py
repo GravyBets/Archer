@@ -83,7 +83,7 @@ required = {
     "mobileDraftHeading", "mobileDraftConnection", "mobileDraftNote",
     "mobileDraftRefresh", "mobileDraftItems", "mobileDraftShareReply",
     "mobileSessionHeading", "mobileSessionSelect", "mobileSessionRefresh",
-    "mobileSessionStatus", "mobileSessionMessages", "mobileSessionMore"
+    "mobileSessionStatus", "mobileSessionRetentionWarning", "mobileSessionMessages", "mobileSessionMore"
 }
 assert required.issubset(page.ids), f"Missing expected IDs: {required.difference(page.ids)}"
 
@@ -99,6 +99,11 @@ assert page.scripts[-11:] == ["/js/app.js", "/js/archer-home.js", "/js/orb-field
 assert "/api/mobile/sessions" in MOBILE_SESSIONS_JS
 assert "/api/mobile/session-history" in MOBILE_SESSIONS_JS
 assert "textContent" in MOBILE_SESSIONS_JS
+assert "historyGapDetected" in MOBILE_SESSIONS_JS
+assert "missingMessageCountBeforePage" in MOBILE_SESSIONS_JS
+assert "clearRetentionWarning()" in MOBILE_SESSIONS_JS
+assert "role=\"alert\"" in HTML
+assert "mobile-session-retention-warning[hidden]" in CSS
 assert "api('/api/chat'" not in MOBILE_SESSIONS_JS
 assert "/api/mobile/conversation-preview" in MOBILE_DRAFTS_JS
 assert "/api/mobile/reply-publish" in MOBILE_DRAFTS_JS

@@ -1,4 +1,4 @@
-# Archer mobile gateway — security and threat review (v1.13.0)
+# Archer mobile gateway — security and threat review (v1.14.0)
 
 **Review date:** 2026-11-16. This is an engineering threat model, NOT an independent penetration test or approval for internet exposure.
 
@@ -156,6 +156,14 @@ No preview is delivered to an Apple device; no APNs device token, push server, m
 - These are **informational flags**, not delivery receipts or cryptographic proof that a remote device processed messages. Seven-day visibility and a global 200-message limit still apply; a production service needs durable retention guarantees, explicit device acknowledgements and safe export/deletion policies.
 - CI exercises partially and wholly expired synthetic encrypted session states. No new external routes, phone calls, location tracking or provider integrations were introduced.
 
+## v1.14.0 read-only desktop retention warning
+
+- The local desktop bridge now requires and verifies all gateway retention metadata: oldest retained sequence, missing-sequence count, gap detection and retention days. An older or inconsistent gateway response is rejected instead of presenting an apparently complete conversation.
+- In the browser, a detected gap is prominently disclosed and survives forward pagination. Reloading or changing session clears the old alert before the newly selected first page is inspected. Message content and warning text are written via textContent, not interpreted as HTML.
+- **Honesty is not recovery:** the count reflects missing sequence positions since the requested cursor, not verified delivery or evidence that an owner read those messages. A screen refresh still cannot restore expired entries or reconstruct earlier conversations.
+- The local desktop dashboard and its session-history API remain unauthenticated on loopback and may expose opted-in private messages to malicious same-user processes. These changes do not grant remote access, add production device authentication, fix desktop storage encryption or justify lifting the production security gate.
+- Regression checks compare desktop bridge gap fields to the source gateway and statically validate the warning DOM and JavaScript wiring. They do not replace an independent security assessment.
+
 ## v1.12.0 offline encryption key rotation threat model
 
 - The standalone offline tool now supports rotate-new: it authenticates the original encrypted state with ARCHER_GATEWAY_DATA_KEY_HEX and prepares a new ciphertext file using a *different* ARCHER_GATEWAY_NEW_DATA_KEY_HEX provided in the private process environment. Key values never appear as command-line arguments, program output or GitHub secrets.
@@ -206,4 +214,4 @@ Production deployment stays BLOCKED until all these gates pass.
 - Kestrel explicit endpoint binding: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/endpoints?view=aspnetcore-10.0
 - Kestrel proxy/forwarding security: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/security-considerations
 
-This document inventories the current source at v1.13.0; revisit it when endpoints or authorization logic change.
+This document inventories the current source at v1.14.0; revisit it when endpoints or authorization logic change.
