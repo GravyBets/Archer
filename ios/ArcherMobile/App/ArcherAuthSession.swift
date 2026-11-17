@@ -1,4 +1,5 @@
 import Auth0
+import Combine
 import Foundation
 
 /// The only capability in this iOS milestone is Auth0 identity sign-in.
