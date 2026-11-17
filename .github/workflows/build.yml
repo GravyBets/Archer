@@ -34,6 +34,10 @@ jobs:
         run: dotnet run --project tests/RemoteDeviceRegistryChecks/RemoteDeviceRegistryChecks.csproj --configuration Release
       - name: Ensure signed JWT authorization tracks live SQLite revocation across restarts
         run: python3 tests/SmokeRemotePersistentAuth.py
+      - name: Validate pinned OIDC provider configuration fails closed
+        run: dotnet run --project tests/RemoteOidcSettingsChecks/RemoteOidcSettingsChecks.csproj --configuration Release
+      - name: Smoke-test independent OIDC local validation probe and unsafe settings
+        run: python3 tests/SmokeRemoteOidcBoundary.py
       - name: Restore standalone encrypted backup utility
         run: dotnet restore Archer.GatewayBackup/Archer.GatewayBackup.csproj
       - name: Build standalone encrypted backup utility
