@@ -1,0 +1,35 @@
+name: Archer iOS Auth0 Build
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - 'tests/ValidateArcherIosAuth.py'
+      - '.github/workflows/ios-auth0.yml'
+jobs:
+  ios-simulator-build:
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate offline iPhone Auth0 configuration and source safety
+        run: python3 tests/ValidateArcherIosAuth.py
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        working-directory: ios/ArcherMobile
+        run: xcodegen generate
+      - name: Resolve pinned Auth0.swift 3.3.1
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project ios/ArcherMobile/ArcherMobile.xcodeproj \
+            -scheme ArcherMobile
+      - name: Compile iOS Simulator app, without signing or personal credentials
+        run: |
+          xcodebuild \
+            -project ios/ArcherMobile/ArcherMobile.xcodeproj \
+            -scheme ArcherMobile \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
