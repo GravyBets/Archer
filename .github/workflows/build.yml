@@ -30,6 +30,10 @@ jobs:
         run: python3 tests/SmokeRemoteSignedIdentity.py
       - name: Verify offline P-256 owner-approved device pairing and revocation
         run: dotnet run --project tests/RemoteDevicePairingChecks/RemoteDevicePairingChecks.csproj --configuration Release
+      - name: Validate persisted device enrollment, owner isolation and atomic revocation
+        run: dotnet run --project tests/RemoteDeviceRegistryChecks/RemoteDeviceRegistryChecks.csproj --configuration Release
+      - name: Ensure signed JWT authorization tracks live SQLite revocation across restarts
+        run: python3 tests/SmokeRemotePersistentAuth.py
       - name: Restore standalone encrypted backup utility
         run: dotnet restore Archer.GatewayBackup/Archer.GatewayBackup.csproj
       - name: Build standalone encrypted backup utility
