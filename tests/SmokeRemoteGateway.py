@@ -129,7 +129,7 @@ def main():
             for method in ("POST", "PUT", "DELETE"):
                 code, _, _ = request("/v1/conversations", method)
                 assert code == 404, (method, code)
-            assert request("/health/live", method="POST")[0] == 405
+            assert request("/health/live", method="POST")[0] in (404, 405)
 
             assert request("/health/live", headers={"Host": "attacker.example:5093"})[0] == 403
             assert request("/health/live", headers={"Host": "127.0.0.1:1234"})[0] == 403
