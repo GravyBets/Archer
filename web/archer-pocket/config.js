@@ -9,5 +9,5 @@
 window.ArcherPocketSettings = Object.freeze({
   domain: 'dev-1l3ic41kxj7zpeb8.us.auth0.com',
   audience: 'https://archer.example/api/dev',
-  clientId: 'Q25ebj5IT14zwo63SP7920S25m21Rjgm'
+  clientId: 'Q25ebj5IT14zwo63SP792OS25m21Rjgm'
 });
