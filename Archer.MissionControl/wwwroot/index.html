@@ -75,6 +75,10 @@
                   <option value="">Finding local voices…</option>
                 </select>
               </label>
+              <label class="voice-rate-control" for="voiceRateSlider">Speaking pace
+                <input id="voiceRateSlider" type="range" min="0.80" max="1.65" step="0.05" value="1.25" aria-label="Archer speaking speed" />
+                <output id="voiceRateValue" for="voiceRateSlider" aria-live="off">1.25×</output>
+              </label>
               <button type="button" class="voice-stop" id="voiceReplayButton" disabled>Read last reply</button>
               <button type="button" class="voice-stop" id="voiceStopButton" data-allow-busy="true" disabled>Stop speaking</button>
               <span id="voiceSupportNote">Voice uses browser features; no phone connection is enabled.</span>
