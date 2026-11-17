@@ -14,6 +14,14 @@
   const capability = byId('authCapability');
   const tag = byId('authTag');
   const badge = byId('connectionBadge');
+  const deviceStatus = byId('deviceKeyStatus');
+  const deviceFingerprint = byId('deviceFingerprint');
+  const deviceCapability = byId('deviceCapability');
+  const deviceTag = byId('deviceTag');
+  const devicePrepare = byId('devicePrepareButton');
+  const deviceSelfTest = byId('deviceSelfTestButton');
+  const deviceErase = byId('deviceEraseButton');
+  const deviceKeys = window.ArcherPocketDeviceKeys;
   const settings = window.ArcherPocketSettings ?? {};
   const EXPECTED_DOMAIN = 'dev-1l3ic41kxj7zpeb8.us.auth0.com';
   const EXPECTED_AUDIENCE = 'https://archer.example/api/dev';
@@ -21,6 +29,64 @@
 
   let client = null;
   let busy = false;
+  let signedIn = false;
+  let deviceBusy = false;
+  let readyDevice = null;
+
+  function setDeviceMessage(message, isError = false) {
+    deviceStatus.textContent = message;
+    deviceStatus.classList.toggle('problem', isError);
+  }
+
+  function setDeviceUi() {
+    const active = signedIn && !deviceBusy && !!deviceKeys;
+    const prepared = !!readyDevice;
+    devicePrepare.hidden = prepared;
+    devicePrepare.disabled = !active || prepared;
+    deviceSelfTest.hidden = !prepared;
+    deviceSelfTest.disabled = !active || !prepared;
+    deviceErase.hidden = !prepared;
+    deviceErase.disabled = !active || !prepared;
+    deviceFingerprint.hidden = !prepared || !signedIn;
+    deviceCapability.textContent = prepared && signedIn
+      ? 'Local signing key prepared; owner approval and server pairing NOT done'
+      : 'Owner-approved cryptographic pairing required';
+    deviceTag.textContent = prepared && signedIn ? 'NOT ENROLLED' : 'LOCKED';
+    deviceTag.classList.remove('ready');
+  }
+
+  async function refreshDevice() {
+    readyDevice = null;
+    if (!signedIn) {
+      setDeviceMessage('Sign in before preparing a local device key.');
+      setDeviceUi();
+      return;
+    }
+    if (!deviceKeys) {
+      setDeviceMessage('Device-key support is unavailable in this browser.', true);
+      setDeviceUi();
+      return;
+    }
+    deviceBusy = true;
+    setDeviceUi();
+    try {
+      readyDevice = await deviceKeys.read();
+      if (readyDevice) {
+        const fp = await deviceKeys.fingerprint(readyDevice);
+        deviceFingerprint.textContent = 'Public key fingerprint: ' +
+          fp.slice(0, 16) + '… (local only)';
+        setDeviceMessage('A local non-extractable signing key is ready. This device is NOT enrolled or approved.');
+      } else {
+        setDeviceMessage('You can generate a local signing key. Server enrollment will be added after the protected gateway is ready.');
+      }
+    } catch {
+      setDeviceMessage('Secure browser storage is unavailable or its contents are invalid. No device is approved.', true);
+    } finally {
+      deviceBusy = false;
+      setDeviceUi();
+    }
+  }
+
 
   function setMessage(message, isError = false) {
     status.textContent = message;
@@ -34,6 +100,11 @@
   }
 
   function setSignedIn(value) {
+    signedIn = value;
+    // A locally stored signing key never authorizes a signed-out user.
+    if (!value) readyDevice = null;
+    setDeviceUi();
+    void refreshDevice();
     signIn.hidden = value;
     signOut.hidden = !value;
     signIn.disabled = busy || value || !client;
@@ -134,6 +205,64 @@
       signIn.disabled = !client;
     }
   }
+
+  devicePrepare.addEventListener('click', async () => {
+    if (!signedIn || deviceBusy || !deviceKeys || readyDevice) return;
+    deviceBusy = true;
+    setDeviceUi();
+    try {
+      // The key is generated only by a deliberate owner action and is NEVER
+      // uploaded or approved automatically. No network call occurs.
+      readyDevice = await deviceKeys.create();
+      if (!await deviceKeys.selfTest(readyDevice))
+        throw new Error('Local cryptographic test failed.');
+      setDeviceMessage('Local P-256 key created and self-tested. It is NOT enrolled; no server pairing has happened.');
+      const fp = await deviceKeys.fingerprint(readyDevice);
+      deviceFingerprint.textContent = 'Public key fingerprint: ' +
+        fp.slice(0, 16) + '… (local only)';
+    } catch {
+      readyDevice = null;
+      setDeviceMessage('Could not securely save and verify this device key. No device was approved.', true);
+    } finally {
+      deviceBusy = false;
+      setDeviceUi();
+    }
+  });
+
+  deviceSelfTest.addEventListener('click', async () => {
+    if (!signedIn || deviceBusy || !readyDevice || !deviceKeys) return;
+    deviceBusy = true;
+    setDeviceUi();
+    try {
+      const ok = await deviceKeys.selfTest(readyDevice);
+      setDeviceMessage(ok
+        ? 'The stored key successfully signed a new local challenge. This is only a local test—not server enrollment.'
+        : 'Local key verification failed. This device remains unapproved.', !ok);
+    } catch {
+      setDeviceMessage('Local proof could not be verified. No remote access is available.', true);
+    } finally {
+      deviceBusy = false;
+      setDeviceUi();
+    }
+  });
+
+  deviceErase.addEventListener('click', async () => {
+    if (!signedIn || deviceBusy || !readyDevice || !deviceKeys) return;
+    if (!window.confirm('Erase this browser\'s signing key? This is irreversible. If the key were ever approved by a server, you would need to revoke that approval separately.')) return;
+    deviceBusy = true;
+    setDeviceUi();
+    try {
+      await deviceKeys.erase();
+      readyDevice = null;
+      deviceFingerprint.textContent = '';
+      setDeviceMessage('Local signing key erased. No server-side device status was changed.');
+    } catch {
+      setDeviceMessage('Local key erase failed. Remove website data or retry; no remote commands are enabled.', true);
+    } finally {
+      deviceBusy = false;
+      setDeviceUi();
+    }
+  });
 
   signIn.addEventListener('click', async () => {
     if (busy || !client) return;
