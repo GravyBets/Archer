@@ -12,8 +12,11 @@ var oidcSettings = OidcProviderSettings.FromEnvironment(
     builder.Environment.IsDevelopment(), Environment.GetEnvironmentVariable);
 var auth0Profile = Auth0LocalProfile.FromEnvironment(
     builder.Environment.IsDevelopment(), Environment.GetEnvironmentVariable);
+var ownerSignInOnly = Auth0OwnerSignInSettings.FromEnvironment(
+    builder.Environment.IsDevelopment(), Environment.GetEnvironmentVariable);
 var activeAuthenticationModes = (identityFixture is null ? 0 : 1) +
-    (oidcSettings is null ? 0 : 1) + (auth0Profile is null ? 0 : 1);
+    (oidcSettings is null ? 0 : 1) + (auth0Profile is null ? 0 : 1) +
+    (ownerSignInOnly is null ? 0 : 1);
 if (activeAuthenticationModes > 1)
     throw new InvalidOperationException(
         "Local identity modes are mutually exclusive; refuse ambiguous authenticators.");
@@ -26,6 +29,8 @@ if (auth0Profile is not null)
         deviceClaimType: auth0Profile.DeviceClaimType,
         pinnedNativeClientId: auth0Profile.NativeClientId,
         auth0StrictRs256: true);
+if (ownerSignInOnly is not null)
+    Auth0OwnerSignInProbe.Register(builder.Services, ownerSignInOnly);
 builder.WebHost.ConfigureKestrel(server =>
 {
     // Explicit binding overrides ASPNETCORE_URLS (including 0.0.0.0).
@@ -81,6 +86,7 @@ app.MapGet("/health/live", () => Results.Ok(new
     signedSyntheticIdentityProbeEnabled = identityFixture is not null,
     oidcLocalValidationProbeEnabled = oidcSettings is not null,
     auth0LocalValidationProbeEnabled = auth0Profile is not null,
+    auth0OwnerSignInOnlyProbeEnabled = ownerSignInOnly is not null,
     conversationEndpointsEnabled = false,
     pushEnabled = false,
     aiEnabled = false,
@@ -136,6 +142,15 @@ if (auth0Profile is not null)
     app.MapPost("/_local/auth0-probe/{ownerSubject}",
             (HttpContext context, string ownerSubject) =>
                 OidcLocalAuthentication.Probe(context, ownerSubject, write: true))
+        .RequireAuthorization();
+}
+
+// Owner-only proof: validates issuer/JWKS, API audience, Native client and
+// exact Auth0 subject but DOES NOT approve any phone or access data.
+if (ownerSignInOnly is not null)
+{
+    app.MapGet("/_local/auth0-owner-proof",
+            (HttpContext context) => Auth0OwnerSignInProbe.Probe(context))
         .RequireAuthorization();
 }
 
