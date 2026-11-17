@@ -1,0 +1,35 @@
+name: Archer Pocket Static Site — Manual Publish
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: archer-pocket-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Owner-triggered static-only GitHub Pages deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate static SPA/PWA boundaries before publishing
+        run: |
+          python3 tests/ValidateArcherPocket.py
+          node --check web/archer-pocket/app.js
+          node --check web/archer-pocket/config.js
+          node --check web/archer-pocket/sw.js
+      - name: Upload only the public Archer Pocket UI folder
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/archer-pocket
+      - name: Publish static pages from manual approval only
+        id: deployment
+        uses: actions/deploy-pages@v4
