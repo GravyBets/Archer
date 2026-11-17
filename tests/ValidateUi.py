@@ -53,7 +53,7 @@ required = {
     "archerPresence", "orbButton", "orbParticleField", "presenceStatus", "presenceActiveMissions",
     "presenceTasksToday", "presenceAttentionCount", "chatMessages", "chatForm",
     "chatText", "voiceInputButton", "voiceReadToggle", "voiceReplayButton",
-    "voiceStopButton", "voiceSupportNote", "voiceChoiceSelect", "voiceAccentStatus", "missionList", "missionDetail",
+    "voiceStopButton", "voiceSupportNote", "voiceChoiceSelect", "voiceRateSlider", "voiceRateValue", "voiceAccentStatus", "missionList", "missionDetail",
     "usageMonthCost", "usageLifetimeCost", "attentionFailures", "attentionIssueCount",
     "developerRepository", "developerLoad", "developerFiles", "developerFilter",
     "developerSelectedCount", "developerPreviewButton", "developerReviewButton",
@@ -151,4 +151,9 @@ print(f"PASS: {len(page.ids)} unique IDs, all literal JS element references and 
 
 assert "getVoices()" in HOME_JS
 assert "voicePicker.addEventListener" in HOME_JS
+assert "archer.voice.rate" in HOME_JS
+assert "utterance.rate = Math.min(1.65, Math.max(0.80" in HOME_JS
+assert 'id="voiceRateSlider"' in HTML
+assert 'value="1.25"' in HTML
+assert 'id="voiceRateValue"' in HTML
 assert "en-gb" in HOME_JS.lower()
