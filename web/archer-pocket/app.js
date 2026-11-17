@@ -17,7 +17,7 @@
   const settings = window.ArcherPocketSettings ?? {};
   const EXPECTED_DOMAIN = 'dev-113ic41kxj7zpeb8.us.auth0.com';
   const EXPECTED_AUDIENCE = 'https://archer.example/api/dev';
-  const SCOPES = 'openid profile email conversation:read conversation:write';
+  const SCOPES = 'openid profile email conversation:read';
 
   let client = null;
   let busy = false;
