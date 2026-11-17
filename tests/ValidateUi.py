@@ -55,7 +55,7 @@ required = {
     "chatText", "voiceInputButton", "voiceReadToggle", "voiceReplayButton",
     "voiceStopButton", "voiceSupportNote", "voiceChoiceSelect", "voiceAccentStatus", "missionList", "missionDetail",
     "usageMonthCost", "usageLifetimeCost", "attentionFailures", "attentionIssueCount",
-    "developerRepository", "developerLoad", "developerFiles", "developerFilter",
+    "developerRepository", "developerLoad", "developerArcherButton", "developerFiles", "developerFilter",
     "developerSelectedCount", "developerPreviewButton", "developerReviewButton",
     "developerBranch", "developerTree", "developerPreview", "developerPreviewMeta", "developerStatus",
     "ownerPresenceStatus", "ownerPresenceActivity", "ownerPresencePlace",
@@ -129,6 +129,11 @@ assert "getCurrentPosition(" in OPERATOR_JS
 assert "watchPosition(" not in OPERATOR_JS
 assert "/api/development/repository" in DEVELOPER_JS
 assert "/api/development/preview" in DEVELOPER_JS
+assert "inspectArcherButton" in DEVELOPER_JS
+assert "https://github.com/GravyBets/Archer" in DEVELOPER_JS
+assert "loadButton.click();" in DEVELOPER_JS
+assert "ARCHER_GITHUB_WRITE_TOKEN" not in DEVELOPER_JS
+
 assert "SOURCE FILES:" in DEVELOPER_JS
 assert "showModal()" in DEVELOPER_JS
 assert "showView('archer');" in JS

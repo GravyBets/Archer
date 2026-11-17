@@ -446,3 +446,7 @@
 .mobile-session-message-text{font-size:12px;color:#c6dae2;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0 0}
 #mobileSessionMore{font-size:11px;margin-top:10px}
 @media(max-width:650px){.mobile-session-toolbar select{width:100%;flex-basis:100%}.mobile-session-toolbar .button{flex:1}.mobile-session-message{max-width:100%}}
+
+/* Keep the owner's self-review launcher distinct from actual code generation. */
+.developer-repo-row #developerArcherButton{white-space:nowrap}
+@media(max-width:650px){.developer-repo-row #developerArcherButton{width:100%}}

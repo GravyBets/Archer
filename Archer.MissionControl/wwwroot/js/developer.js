@@ -9,6 +9,7 @@
   const el = id => document.getElementById(id);
   const repoInput = el('developerRepository');
   const loadButton = el('developerLoad');
+  const inspectArcherButton = el('developerArcherButton');
   const filter = el('developerFilter');
   const list = el('developerFiles');
   const previewButton = el('developerPreviewButton');
@@ -107,6 +108,15 @@
       loadButton.disabled = false;
       updateButtons();
     }
+  });
+
+  // Safe self-review shortcut: identical read-only allowlist validation as
+  // manually entered URLs. No AI call, file modifications or auto-publishing.
+  inspectArcherButton.addEventListener('click', () => {
+    if (busy || appState.busy) return;
+    repoInput.value = 'https://github.com/GravyBets/Archer';
+    repoInput.dispatchEvent(new Event('input', { bubbles: true }));
+    loadButton.click();
   });
 
   filter.addEventListener('input', renderFiles);
