@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07111b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Archer Pocket">
+  <meta name="description" content="Archer Pocket: private owner sign-in preview.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'self'; script-src 'self' https://cdn.auth0.com; style-src 'self'; connect-src 'self' https://dev-113ic41kxj7zpeb8.us.auth0.com; frame-src https://dev-113ic41kxj7zpeb8.us.auth0.com; img-src 'self' data:; manifest-src 'self'; form-action https://dev-113ic41kxj7zpeb8.us.auth0.com; object-src 'none'; upgrade-insecure-requests">
+  <title>Archer Pocket · Owner preview</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="./assets/archer-icon.svg">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="app-header">
+      <div class="brand-mark" aria-hidden="true">A<span>.</span></div>
+      <div class="brand">
+        <strong>ARCHER</strong>
+        <span>POCKET · DEVELOPMENT</span>
+      </div>
+      <span class="status-pill" id="connectionBadge">LOCAL PREVIEW</span>
+    </header>
+
+    <section class="hero" aria-labelledby="heroTitle">
+      <div class="orb-stage" aria-hidden="true"><div class="orb-glow"></div><div class="orb"></div></div>
+      <p class="eyebrow">YOUR OPERATOR · YOUR CONTROL</p>
+      <h1 id="heroTitle">Archer<span>.</span><br><small>Anywhere.</small></h1>
+      <p class="intro">Your private mobile access starts with proving who you are. Secure device pairing and remote conversations will come later.</p>
+    </section>
+
+    <section class="identity-panel" aria-labelledby="identityTitle">
+      <div class="section-heading">
+        <span class="section-icon" aria-hidden="true">◈</span>
+        <div><h2 id="identityTitle">Owner identity</h2><p>Auth0 Universal Login · Authorization Code + PKCE</p></div>
+      </div>
+      <p id="identityMessage" class="identity-message" role="status" aria-live="polite">Checking sign-in configuration…</p>
+      <div class="actions">
+        <button id="signInButton" type="button" class="button primary" disabled>Sign in with Auth0</button>
+        <button id="signOutButton" type="button" class="button secondary" disabled hidden>Sign out</button>
+      </div>
+      <p class="note">Passkeys are managed by Auth0 and your iPhone. No tokens, email addresses or account IDs are shown on this screen.</p>
+    </section>
+
+    <section class="capability-panel" aria-labelledby="featuresTitle">
+      <div class="section-heading">
+        <span class="section-icon" aria-hidden="true">◇</span>
+        <div><h2 id="featuresTitle">System readiness</h2><p>We will unlock each capability separately.</p></div>
+      </div>
+      <ul class="capability-list">
+        <li><span class="circle">1</span><span><strong>Owner sign-in</strong><small id="authCapability">Not yet verified on this device</small></span><span id="authTag" class="capability-tag">PENDING</span></li>
+        <li><span class="circle">2</span><span><strong>Approved device</strong><small>Owner-approved cryptographic pairing required</small></span><span class="capability-tag">LOCKED</span></li>
+        <li><span class="circle">3</span><span><strong>Private messages</strong><small>Encrypted remote gateway not connected</small></span><span class="capability-tag">LOCKED</span></li>
+        <li><span class="circle">4</span><span><strong>Autonomous missions</strong><small>Approvals, cost controls and audit trail required</small></span><span class="capability-tag">LOCKED</span></li>
+      </ul>
+    </section>
+
+    <section class="future-message" aria-label="Messaging preview">
+      <p>Conversation</p>
+      <div class="preview-bubble">Your iPhone connection will appear here after secure gateway and device enrollment are complete.</div>
+      <div class="disabled-composer">
+        <label class="sr-only" for="disabledMessage">Archer messages are not available yet</label>
+        <input id="disabledMessage" value="" placeholder="Messaging is not connected" disabled>
+        <button disabled aria-label="Messaging unavailable">↑</button>
+      </div>
+    </section>
+    <footer>ARCHER POCKET · AUTHENTICATION PREVIEW ONLY<br>Never enter secrets or tokens into this interface.</footer>
+  </main>
+  <script src="./config.js"></script>
+  <script src="https://cdn.auth0.com/js/auth0-spa-js/2.30/auth0-spa-js.production.js"></script>
+  <script src="./app.js" defer></script>
+</body>
+</html>
