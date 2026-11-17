@@ -111,7 +111,7 @@ def main():
             "ARCHER_REMOTE_TEST_DEVICE_ID": "A" * 48,
             "ARCHER_REMOTE_TEST_DEVICE_REVOKED": "false",
         })
-        assert_bad_startup(bad, "cannot be enabled together")
+        assert_bad_startup(bad, "Local identity modes are mutually exclusive")
         check(True, "two bearer identity systems cannot be activated together")
 
         print(f"PASS: {checks} local OIDC boundary checks. No provider discovery, external calls or public routes.")
