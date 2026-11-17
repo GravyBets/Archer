@@ -10,12 +10,22 @@ var builder = WebApplication.CreateBuilder(args);
 var identityFixture = LocalTestAuthentication.FromEnvironment(builder.Environment);
 var oidcSettings = OidcProviderSettings.FromEnvironment(
     builder.Environment.IsDevelopment(), Environment.GetEnvironmentVariable);
-if (identityFixture is not null && oidcSettings is not null)
+var auth0Profile = Auth0LocalProfile.FromEnvironment(
+    builder.Environment.IsDevelopment(), Environment.GetEnvironmentVariable);
+var activeAuthenticationModes = (identityFixture is null ? 0 : 1) +
+    (oidcSettings is null ? 0 : 1) + (auth0Profile is null ? 0 : 1);
+if (activeAuthenticationModes > 1)
     throw new InvalidOperationException(
-        "Synthetic local JWT fixture and provider OIDC validation cannot be enabled together.");
+        "Local identity modes are mutually exclusive; refuse ambiguous authenticators.");
 identityFixture?.Register(builder.Services);
 if (oidcSettings is not null)
     OidcLocalAuthentication.Register(builder.Services, oidcSettings);
+if (auth0Profile is not null)
+    OidcLocalAuthentication.Register(
+        builder.Services, auth0Profile.Oidc,
+        deviceClaimType: auth0Profile.DeviceClaimType,
+        pinnedNativeClientId: auth0Profile.NativeClientId,
+        auth0StrictRs256: true);
 builder.WebHost.ConfigureKestrel(server =>
 {
     // Explicit binding overrides ASPNETCORE_URLS (including 0.0.0.0).
@@ -55,7 +65,7 @@ app.Use(async (context, next) =>
     await next();
 });
 app.UseRateLimiter();
-if (identityFixture is not null || oidcSettings is not null)
+if (activeAuthenticationModes > 0)
 {
     app.UseAuthentication();
     app.UseAuthorization();
@@ -70,6 +80,7 @@ app.MapGet("/health/live", () => Results.Ok(new
     remoteAuthenticationEnabled = false,
     signedSyntheticIdentityProbeEnabled = identityFixture is not null,
     oidcLocalValidationProbeEnabled = oidcSettings is not null,
+    auth0LocalValidationProbeEnabled = auth0Profile is not null,
     conversationEndpointsEnabled = false,
     pushEnabled = false,
     aiEnabled = false,
@@ -108,6 +119,21 @@ if (oidcSettings is not null)
                 OidcLocalAuthentication.Probe(context, ownerSubject, write: false))
         .RequireAuthorization();
     app.MapPost("/_local/oidc-probe/{ownerSubject}",
+            (HttpContext context, string ownerSubject) =>
+                OidcLocalAuthentication.Probe(context, ownerSubject, write: true))
+        .RequireAuthorization();
+}
+
+// Auth0 is explicitly configured with an approved tenant, API audience,
+// Native client ID and namespaced device claim. This is NOT mobile sign-in,
+// a public API, or a secure device-binding implementation. No data is written.
+if (auth0Profile is not null)
+{
+    app.MapGet("/_local/auth0-probe/{ownerSubject}",
+            (HttpContext context, string ownerSubject) =>
+                OidcLocalAuthentication.Probe(context, ownerSubject, write: false))
+        .RequireAuthorization();
+    app.MapPost("/_local/auth0-probe/{ownerSubject}",
             (HttpContext context, string ownerSubject) =>
                 OidcLocalAuthentication.Probe(context, ownerSubject, write: true))
         .RequireAuthorization();
