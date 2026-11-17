@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Data.Sqlite;
 
 namespace Archer.RemoteGateway;
 
@@ -15,10 +16,11 @@ internal sealed class LocalTestAuthentication
 {
     private const string PrincipalItemKey = "archer.test.signed-device";
     private readonly RSA _publicKey;
+    private readonly DurableDeviceRegistry? _registry;
 
     private LocalTestAuthentication(
         string issuer, string audience, string ownerSubject, string deviceId,
-        bool revoked, RSA publicKey)
+        bool revoked, RSA publicKey, DurableDeviceRegistry? registry)
     {
         Issuer = issuer;
         Audience = audience;
@@ -26,6 +28,7 @@ internal sealed class LocalTestAuthentication
         DeviceId = deviceId;
         Revoked = revoked;
         _publicKey = publicKey;
+        _registry = registry;
     }
 
     private string Issuer { get; }
@@ -40,7 +43,8 @@ internal sealed class LocalTestAuthentication
         var names = new[]
         {
             "JWT_PUBLIC_KEY_FILE", "JWT_ISSUER", "JWT_AUDIENCE",
-            "OWNER_SUBJECT", "DEVICE_ID", "DEVICE_REVOKED"
+            "OWNER_SUBJECT", "DEVICE_ID", "DEVICE_REVOKED",
+            "DEVICE_REGISTRY_FILE"
         };
         var configured = names.Any(name =>
             Environment.GetEnvironmentVariable(prefix + name) is not null);
@@ -98,7 +102,11 @@ internal sealed class LocalTestAuthentication
             rsa.ImportFromPem(pem);
             if (rsa.KeySize < 2048)
                 throw new InvalidOperationException("Synthetic RSA verification key must be at least 2048 bits.");
-            return new LocalTestAuthentication(issuer, audience, owner, device, revoked, rsa);
+            var registryPath = Environment.GetEnvironmentVariable(prefix + "DEVICE_REGISTRY_FILE");
+            var registry = string.IsNullOrWhiteSpace(registryPath)
+                ? null
+                : new DurableDeviceRegistry(registryPath);
+            return new LocalTestAuthentication(issuer, audience, owner, device, revoked, rsa, registry);
         }
         catch
         {
@@ -153,11 +161,42 @@ internal sealed class LocalTestAuthentication
                             return Task.CompletedTask;
                         }
 
+                        var effectiveScopes = new HashSet<string>(scopes, StringComparer.Ordinal);
+                        if (_registry is not null)
+                        {
+                            // Fresh cross-process query on EVERY signed request.
+                            // A revoked or absent enrollment denies a still-valid JWT.
+                            // Never fall back to bearer scopes after storage failure.
+                            try
+                            {
+                                var persisted = _registry.CurrentScopes(subject, device);
+                                if (persisted is null)
+                                {
+                                    context.Fail("Synthetic device is not enrolled or was revoked.");
+                                    return Task.CompletedTask;
+                                }
+                                effectiveScopes.IntersectWith(persisted);
+                            }
+                            catch (Exception ex) when (ex is SqliteException
+                                or IOException or UnauthorizedAccessException
+                                or InvalidOperationException)
+                            {
+                                context.Fail("Synthetic enrollment registry unavailable.");
+                                return Task.CompletedTask;
+                            }
+
+                            if (effectiveScopes.Count == 0)
+                            {
+                                context.Fail("No valid intersection with synthetic enrolled scopes.");
+                                return Task.CompletedTask;
+                            }
+                        }
+
                         var principal = new TrustedDeviceIdentity(
                             subject, device,
                             new DateTimeOffset(context.SecurityToken.ValidTo, TimeSpan.Zero),
                             DeviceRevoked: false,
-                            Scopes: new HashSet<string>(scopes, StringComparer.Ordinal));
+                            Scopes: effectiveScopes);
 
                         context.HttpContext.Items[PrincipalItemKey] = principal;
                         return Task.CompletedTask;
