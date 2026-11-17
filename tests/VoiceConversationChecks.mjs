@@ -151,6 +151,19 @@ check('after concise spoken reply Archer starts listening again',()=>{
   assert.equal(rec.starts,3);
   assert.equal(rec.active,true);
 });
+check('optional extended 20-second pause preserves deliberate hesitations',()=>{
+  elt('voicePauseSlider').value='20';
+  elt('voicePauseSlider').dispatch('input');
+  rec.push('I need more time to complete a thought');
+  advance(15000);
+  assert.equal(requests.length,1);
+  advance(4999);
+  assert.equal(requests.length,1);
+  advance(1);
+  assert.equal(requests.length,2);
+  assert.equal(requests[1].voiceMode,true);
+  assert.equal(requests[1].message,'I need more time to complete a thought');
+});
 check('End conversation halts mic and prevents automatic restart',()=>{
   elt('voiceEndConversation').dispatch('click');
   const prior=rec.starts;
