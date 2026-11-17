@@ -160,11 +160,12 @@ assert 'value="1.25"' in HTML
 assert 'id="voiceRateValue"' in HTML
 assert 'id="voiceHandsFreeToggle"' in HTML
 assert 'id="voicePauseSlider"' in HTML
+assert 'max="30" step="1" value="7"' in HTML
 assert 'id="voicePauseValue"' in HTML
 assert 'id="voiceEndConversation"' in HTML
 assert "voiceSessionActive = handsFreeToggle.checked" in HOME_JS
 assert "recognition.continuous = voiceSessionActive" in HOME_JS
-assert "recognitionRestarts >= 12" in HOME_JS
+assert "recognitionRestarts >= 40" in HOME_JS
 assert "sendAfterRecognitionEnd = true" in HOME_JS
 assert "el('chatForm').requestSubmit()" in HOME_JS
 assert "window.ArcherPresence?.prepareSend?.()" in JS
