@@ -38,7 +38,7 @@ class SafetyTests(unittest.TestCase):
             self.assertEqual(len(pair), 2)
             self.assertTrue(all(p.startswith(("Archer.MissionControl/wwwroot/", "tests/"))
                                 for p in pair))
-            self.assertFalse(any("..", p or "" for p in pair))
+            self.assertFalse(any(".." in p for p in pair))
 
     def test_only_approved_unattempted_issue_selected(self):
         issues = [
