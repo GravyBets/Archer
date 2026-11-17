@@ -2,7 +2,7 @@
 
 // Offline UI shell only. Never cache OAuth redirects, token requests, user
 // data, Auth0 SDK responses, runtime configuration or Archer gateway traffic.
-const CACHE = 'archer-pocket-shell-v1';
+const CACHE = 'archer-pocket-shell-v2';
 const FILES = ['./', './index.html', './styles.css', './app.js',
                './manifest.webmanifest', './assets/archer-icon.svg'];
 
@@ -38,6 +38,17 @@ self.addEventListener('fetch', event => {
     FILES.slice(2).map(path => new URL(path, self.registration.scope).pathname)
   );
   if (!safePaths.has(url.pathname)) return;
-  event.respondWith(caches.match(event.request)
-    .then(cached => cached || fetch(event.request)));
+  // Prefer freshly deployed JS and CSS. A cache-first app.js could keep
+  // pointing an installed iPhone PWA at a removed/misspelled Auth0 hostname.
+  // No OAuth callback or credential response reaches this handler.
+  event.respondWith(fetch(event.request)
+    .then(response => {
+      if (response.ok && response.type === 'basic') {
+        const copy = response.clone();
+        event.waitUntil(caches.open(CACHE)
+          .then(cache => cache.put(event.request, copy)));
+      }
+      return response;
+    })
+    .catch(() => caches.match(event.request)));
 });
