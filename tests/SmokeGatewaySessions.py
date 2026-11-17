@@ -9,6 +9,7 @@ import json
 import os
 import secrets
 import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -140,7 +141,111 @@ def main():
         finally:
             stop(process)
 
-    print("PASS: session segregation, monotonic cursors, paged sync, replay, archive and encrypted restart")
+
+    # Simulate a phone reconnecting after two messages have expired.
+    # Seed a recognizable synthetic legacy file and let the actual gateway
+    # migrate/encrypt it: no model, phone, APNs, or live user data.
+    with tempfile.TemporaryDirectory(prefix="archer-retention-gap-ci-") as location:
+        directory = Path(location)
+        now = datetime.now(timezone.utc)
+        old = (now - timedelta(days=10)).isoformat()
+        recent = (now - timedelta(minutes=2)).isoformat()
+        entries = []
+        for position, (content, timestamp) in enumerate([
+            ("Expired 1", old), ("Expired 2", old),
+            ("Retained 3", recent), ("Retained 4", recent)
+        ], start=1):
+            entries.append({
+                "id": str(uuid4()),
+                "clientMessageId": str(uuid4()),
+                "deviceId": str(uuid4()),
+                "role": "owner",
+                "content": content,
+                "createdAtUtc": timestamp,
+                "sequence": position
+            })
+        expired_session = str(uuid4())
+        for position in (1, 2):
+            entries.append({
+                "id": str(uuid4()),
+                "clientMessageId": str(uuid4()),
+                "deviceId": str(uuid4()),
+                "role": "owner",
+                "sessionId": expired_session,
+                "content": "Expired-only synthetic message",
+                "createdAtUtc": old,
+                "sequence": position
+            })
+        state_path = directory / "mobile-gateway-state.json"
+        state_path.write_text(json.dumps({
+            "devices": [], "events": [],
+            "conversationSessions": [{
+                "id": expired_session,
+                "title": "Expired synthetic session",
+                "createdAtUtc": recent,
+                "lastSequence": 2
+            }],
+            "conversationMessages": entries
+        }), encoding="utf-8")
+        process = run_gateway(directory, secrets.token_hex(32))
+        try:
+            admin = {"X-Archer-Admin-Key": ADMIN}
+            enrolled = request("/internal/devices/enroll", "POST", {
+                "label": "Reconnecting test iPhone",
+                "scopes": ["conversation:read"]
+            }, admin)
+            viewer = {"Authorization": "Bearer " + enrolled["deviceToken"]}
+            full = request("/v1/conversation/messages?after=0&limit=2", header=viewer)
+            assert full["oldestAvailableSequence"] == 3
+            assert full["historyGapDetected"] is True
+            assert full["missingMessageCountBeforePage"] == 2
+            assert [x["sequence"] for x in full["messages"]] == [3, 4]
+            assert full["highWatermark"] == 4
+            assert "no longer available" in full["note"]
+
+            resumed = request("/v1/conversation/messages?after=2", header=viewer)
+            assert resumed["historyGapDetected"] is False
+            assert resumed["missingMessageCountBeforePage"] == 0
+            assert [x["sequence"] for x in resumed["messages"]] == [3, 4]
+            last = request("/v1/conversation/messages?after=3", header=viewer)
+            assert [x["sequence"] for x in last["messages"]] == [4]
+            current = request("/v1/conversation/messages?after=4", header=viewer)
+            assert current["messages"] == []
+            assert not current["historyGapDetected"]
+            page = request("/v1/conversation/messages?after=0&limit=1", header=viewer)
+            assert page["hasMore"] is True and page["nextAfter"] == 3
+            assert page["historyGapDetected"] is True
+
+            # Wholly expired session needs a gap warning AND forward
+            # progress: clients must not poll the same empty page forever.
+            expired_page = request(
+                "/v1/conversation/messages?sessionId=" + expired_session +
+                "&after=0&limit=5", header=viewer
+            )
+            assert expired_page["messages"] == []
+            assert expired_page["historyGapDetected"] is True
+            assert expired_page["oldestAvailableSequence"] == 3
+            assert expired_page["missingMessageCountBeforePage"] == 2
+            assert expired_page["highWatermark"] == 2
+            assert expired_page["nextAfter"] == 2
+            assert not expired_page["hasMore"]
+            caught_up = request(
+                "/v1/conversation/messages?sessionId=" + expired_session +
+                "&after=2&limit=5", header=viewer
+            )
+            assert not caught_up["historyGapDetected"]
+            assert caught_up["nextAfter"] == 2
+            assert caught_up["messages"] == []
+
+            # In-place migration was encrypted and preserved IDs/cursors.
+            encrypted = state_path.read_text(encoding="utf-8")
+            assert "Expired 1" not in encrypted
+            assert "Retained 4" not in encrypted
+            assert "archer-gateway-aes256gcm-v1" in encrypted
+        finally:
+            stop(process)
+
+    print("PASS: session segregation, monotonic cursors, paged sync, replay, archive and encrypted restart and explicit retention gap reporting")
 
 
 if __name__ == "__main__":

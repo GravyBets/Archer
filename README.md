@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 1.12.0 (local prototype)  
+**Version:** 1.13.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -932,3 +932,19 @@ There is no in-place swap, server restart, backup retention policy, key vault, s
 CI exercises two random synthetic keys, missing/equal/malformed new key, wrong original key, authenticated ciphertext tampering, active-gateway refusal, destination overwrite refusal, unchanged original, and starting a new gateway with the NEW key to verify original device credentials, messages, and monotonic session sequence survive. No provider credentials or real user data are involved.
 
 See ARCHER_MOBILE_SECURITY_REVIEW.md and ARCHER_MOBILE_COMMUNICATION_ROADMAP.md for the remaining production-security tasks.
+
+## v1.13.0 — Honest reconnects: retained-history gap detection
+
+The encrypted MobileGateway journal now explicitly warns a reconnecting device when local retention has removed messages since its last known cursor. This prevents a future mobile client from silently presenting incomplete local history as the full conversation.
+
+GET /v1/conversation/messages with your authorised device bearer and optional sessionId, after and limit still returns ordered page messages, nextAfter, hasMore and highWatermark. It now ALSO returns:
+
+- **oldestAvailableSequence:** earliest still-retained server sequence in that session. Zero if no message was ever stored; if ALL messages have expired, this is highWatermark + 1.
+- **historyGapDetected:** true when messages preceding the current requested cursor position have disappeared under local retention.
+- **missingMessageCountBeforePage:** number of missing leading sequence positions between after and oldestAvailableSequence. These positions are not recoverable from the local journal.
+
+When every message in the session is gone, the API returns an empty page with historyGapDetected=true and advances nextAfter to highWatermark. Clients can show a clear history-unavailable warning and then resume; they should **never** claim the full old transcript was restored. When after is already current, the gap flag is false.
+
+**Scope and limitations:** This is source-grounded LOCAL retention detection, not a cloud replay archive. It doesn't recover deleted messages, create backups, send pushes or text messages, enable an iPhone client, or provide end-to-end delivery receipts. The local journal retains at most 200 messages across all sessions and displays only the most recent seven days. Production durable sync, acknowledgements and export/retention controls remain future work.
+
+CI now tests synthetic messages aged past the seven-day window, reconnect catch-up with partially retained history, and entirely expired sessions, including encrypted migration and correct pagination. It incurs no model or provider cost.

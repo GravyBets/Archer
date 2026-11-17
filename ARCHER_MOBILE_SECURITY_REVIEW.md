@@ -1,4 +1,4 @@
-# Archer mobile gateway — security and threat review (v1.12.0)
+# Archer mobile gateway — security and threat review (v1.13.0)
 
 **Review date:** 2026-11-16. This is an engineering threat model, NOT an independent penetration test or approval for internet exposure.
 
@@ -149,6 +149,13 @@ No preview is delivered to an Apple device; no APNs device token, push server, m
 - Cursors and visible pages are not full message-delivery receipts: history is capped and has seven-day retention. Additional privacy, encrypted backups, account separation and long-term sync rules are required before production.
 
 
+## v1.13.0 reconnect-retention and incomplete history
+
+- Incremental session reads now disclose earliest retained sequence, explicit historyGapDetected and missingMessageCountBeforePage when source data has aged out or been pruned. Clients must treat missing history as unavailable and must not represent the returned page as a complete transcript.
+- When a session contains no retained messages but the stored highWatermark indicates prior messages, the returned nextAfter advances to highWatermark. This prevents an endless empty-page loop while preserving a visible gap warning for the caller.
+- These are **informational flags**, not delivery receipts or cryptographic proof that a remote device processed messages. Seven-day visibility and a global 200-message limit still apply; a production service needs durable retention guarantees, explicit device acknowledgements and safe export/deletion policies.
+- CI exercises partially and wholly expired synthetic encrypted session states. No new external routes, phone calls, location tracking or provider integrations were introduced.
+
 ## v1.12.0 offline encryption key rotation threat model
 
 - The standalone offline tool now supports rotate-new: it authenticates the original encrypted state with ARCHER_GATEWAY_DATA_KEY_HEX and prepares a new ciphertext file using a *different* ARCHER_GATEWAY_NEW_DATA_KEY_HEX provided in the private process environment. Key values never appear as command-line arguments, program output or GitHub secrets.
@@ -199,4 +206,4 @@ Production deployment stays BLOCKED until all these gates pass.
 - Kestrel explicit endpoint binding: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/endpoints?view=aspnetcore-10.0
 - Kestrel proxy/forwarding security: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/security-considerations
 
-This document inventories the current source at v1.12.0; revisit it when endpoints or authorization logic change.
+This document inventories the current source at v1.13.0; revisit it when endpoints or authorization logic change.
