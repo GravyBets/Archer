@@ -72,7 +72,12 @@ public sealed class GatewayConversationJournal(GatewayStore store)
                     sessionId = x.SessionId,
                     sequence = x.Sequence
                 }).ToArray(),
-                nextAfter = page.Length == 0 ? after : page[^1].Sequence,
+                // If every message in a session has expired, advance the
+                // cursor to its known high watermark so the client doesn't
+                // retry an empty page forever. The gap warning still applies.
+                nextAfter = page.Length == 0 && lostPrefix
+                    ? session.LastSequence
+                    : page.Length == 0 ? after : page[^1].Sequence,
                 hasMore = candidates.Length > limit,
                 highWatermark = session.LastSequence,
                 oldestAvailableSequence,
