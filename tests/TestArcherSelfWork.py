@@ -25,11 +25,11 @@ class SafetyTests(unittest.TestCase):
         return {
             "summary": "Repair a small validated source behavior",
             "tests": "Run voice browser and regression checks",
-            "edits": edits or [{
+            "edits": ([{
                 "path": self.allowed[0],
                 "old_text": "return 'old';",
                 "new_text": "return 'new';",
-            }],
+            }] if edits is None else edits),
         }
 
     def test_public_allowlist_and_scope(self):
