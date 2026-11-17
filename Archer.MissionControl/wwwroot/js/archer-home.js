@@ -15,6 +15,8 @@
   const replayButton = el('voiceReplayButton');
   const note = el('voiceSupportNote');
   const voicePicker = el('voiceChoiceSelect');
+  const rateSlider = el('voiceRateSlider');
+  const rateValue = el('voiceRateValue');
   const accentStatus = el('voiceAccentStatus');
   const input = el('chatText');
 
@@ -36,6 +38,19 @@
   const getPreference = key => { try { return window.localStorage.getItem(key); } catch { return null; } };
   const setPreference = (key, value) => { try { window.localStorage.setItem(key, value); } catch { /* privacy mode */ } };
   readToggle.checked = getPreference('archer.voice.readAloud') === 'yes';
+
+  // Default to a conversational pace; keep the preference locally per browser.
+  // Invalid/old preferences cannot push Web Speech rate beyond the offered range.
+  const savedRate = Number(getPreference('archer.voice.rate'));
+  const speakingRate = Number.isFinite(savedRate) && savedRate >= 0.80 && savedRate <= 1.65
+    ? Math.round(savedRate * 20) / 20 : 1.25;
+  rateSlider.value = String(speakingRate);
+  rateValue.textContent = speakingRate.toFixed(2) + '×';
+  rateSlider.addEventListener('input', () => {
+    const value = Math.min(1.65, Math.max(0.80, Number(rateSlider.value) || 1.25));
+    rateValue.textContent = value.toFixed(2) + '×';
+    setPreference('archer.voice.rate', value.toFixed(2));
+  });
 
   function statusText(value, hint = '') {
     el('presenceStatus').textContent = value;
@@ -168,7 +183,7 @@
     } else {
       utterance.lang = 'en-GB';
     }
-    utterance.rate = 0.99;
+    utterance.rate = Math.min(1.65, Math.max(0.80, Number(rateSlider.value) || 1.25));
     utterance.pitch = 0.96;
     utterance.volume = 1;
     utterance.onstart = () => { speaking = true; stopButton.disabled = false; setState('speaking', 'Archer is reading the reply aloud.'); };
@@ -259,6 +274,7 @@
   if (!hasSpeechOut) {
     readToggle.disabled = true;
     voicePicker.disabled = true;
+    rateSlider.disabled = true;
     accentStatus.textContent = 'Spoken playback is unavailable in this browser.';
     readToggle.checked = false;
     if (recognition) note.textContent = 'Speech-to-text available. Speech playback is unavailable in this browser.';
