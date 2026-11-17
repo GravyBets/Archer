@@ -116,7 +116,7 @@ internal sealed class DevicePairingContract
     /// </summary>
     internal bool Prove(string ticketId, byte[] signature, DateTimeOffset now)
     {
-        if (string.IsNullOrEmpty(ticketId) || signature is not { Length: 64 })
+        if (string.IsNullOrEmpty(ticketId))
             return false;
         lock (_gate)
         {
@@ -124,14 +124,22 @@ internal sealed class DevicePairingContract
                 now >= pending.Challenge.ExpiresAtUtc || pending.Proved)
                 return false;
 
-            bool valid;
-            using (var verifier = ECDsa.Create())
+            var valid = false;
+            if (signature is { Length: 64 })
             {
-                verifier.ImportSubjectPublicKeyInfo(pending.PublicKeySpki, out _);
-                valid = verifier.VerifyData(
-                    ProofPayload(pending.OwnerSubject, pending.Challenge),
-                    signature, HashAlgorithmName.SHA256,
-                    DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
+                try
+                {
+                    using var verifier = ECDsa.Create();
+                    verifier.ImportSubjectPublicKeyInfo(pending.PublicKeySpki, out _);
+                    valid = verifier.VerifyData(
+                        ProofPayload(pending.OwnerSubject, pending.Challenge),
+                        signature, HashAlgorithmName.SHA256,
+                        DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
+                }
+                catch (CryptographicException)
+                {
+                    // Cryptographically invalid signatures consume attempts.
+                }
             }
             if (valid)
             {
