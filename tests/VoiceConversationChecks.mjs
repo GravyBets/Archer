@@ -75,6 +75,7 @@ const speechSynthesis = {
 };
 const browser={
   SpeechRecognition:Recognition,
+  SpeechSynthesisUtterance:FakeUtterance,
   speechSynthesis,
   localStorage:{
     getItem:k=>store.has(k)?store.get(k):null,
