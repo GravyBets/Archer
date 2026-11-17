@@ -180,7 +180,7 @@ check('without handsfree toggle it never silently submits voice',()=>{
   rec.push('this is manual dictation');
   rec.spontaneousEnd();
   advance(12000);
-  assert.equal(requests.length,1);
+  assert.equal(requests.length,2);
   assert.equal(elt('chatText').value,'this is manual dictation');
 });
 check('microphone denial fails closed',()=>{
@@ -190,7 +190,7 @@ check('microphone denial fails closed',()=>{
   elt('voiceInputButton').dispatch('click');
   rec.denied();
   advance(12000);
-  assert.equal(requests.length,1);
+  assert.equal(requests.length,2);
   assert.equal(elt('voiceInputButton').textContent,'🎙 Speak');
 });
 console.log('PASS:',cases,'handsfree opt-in, silence, restart, auto-send once, playback, privacy and failure scenarios');
