@@ -53,7 +53,9 @@ required = {
     "archerPresence", "orbButton", "orbParticleField", "presenceStatus", "presenceActiveMissions",
     "presenceTasksToday", "presenceAttentionCount", "chatMessages", "chatForm",
     "chatText", "voiceInputButton", "voiceReadToggle", "voiceReplayButton",
-    "voiceStopButton", "voiceSupportNote", "voiceChoiceSelect", "voiceRateSlider", "voiceRateValue", "voiceAccentStatus", "missionList", "missionDetail",
+    "voiceStopButton", "voiceSupportNote", "voiceChoiceSelect", "voiceRateSlider", "voiceRateValue",
+    "voiceHandsFreeToggle", "voicePauseSlider", "voicePauseValue", "voiceEndConversation",
+    "voiceAccentStatus", "missionList", "missionDetail",
     "usageMonthCost", "usageLifetimeCost", "attentionFailures", "attentionIssueCount",
     "developerRepository", "developerLoad", "developerFiles", "developerFilter",
     "developerSelectedCount", "developerPreviewButton", "developerReviewButton",
@@ -156,4 +158,17 @@ assert "utterance.rate = Math.min(1.65, Math.max(0.80" in HOME_JS
 assert 'id="voiceRateSlider"' in HTML
 assert 'value="1.25"' in HTML
 assert 'id="voiceRateValue"' in HTML
+assert 'id="voiceHandsFreeToggle"' in HTML
+assert 'id="voicePauseSlider"' in HTML
+assert 'id="voicePauseValue"' in HTML
+assert 'id="voiceEndConversation"' in HTML
+assert "voiceSessionActive = handsFreeToggle.checked" in HOME_JS
+assert "recognition.continuous = voiceSessionActive" in HOME_JS
+assert "recognitionRestarts >= 12" in HOME_JS
+assert "sendAfterRecognitionEnd = true" in HOME_JS
+assert "el('chatForm').requestSubmit()" in HOME_JS
+assert "window.ArcherPresence?.prepareSend?.()" in JS
+assert "JSON.stringify({ message, voiceMode })" in JS
+assert "document.addEventListener('visibilitychange'" in HOME_JS
+
 assert "en-gb" in HOME_JS.lower()
