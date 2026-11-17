@@ -60,6 +60,22 @@ An iOS SwiftUI source target now lives under [`ios/ArcherMobile`](ios/ArcherMobi
 
 Native compilation requires macOS/Xcode, with a GitHub macOS Simulator compilation workflow for review. A physical device requires legitimate personal Apple signing, and TestFlight distribution generally requires paid Apple Developer membership.
 
+## Local owner-token verification without pretending a phone is enrolled
+
+An additional **development-only** `Auth0OwnerSignInProbe` mode allows a future real Auth0 access token to prove the configured owner logged in even before secure per-device claims are implemented. It must run in isolation and NEVER grants device access or exposes conversations. Variables (all values must stay private in personal developer environment, never in public GitHub):
+
+```text
+ASPNETCORE_ENVIRONMENT=Development
+ARCHER_REMOTE_GATEWAY_MODE=local-test
+ARCHER_REMOTE_AUTH0_SIGNIN_ENABLED=local-proof
+ARCHER_REMOTE_AUTH0_SIGNIN_DOMAIN=<TENANT>.<REGION>.auth0.com
+ARCHER_REMOTE_AUTH0_SIGNIN_API_AUDIENCE=https://archer.example/api/dev
+ARCHER_REMOTE_AUTH0_SIGNIN_NATIVE_CLIENT_ID=<NATIVE_CLIENT_ID>
+ARCHER_REMOTE_AUTH0_SIGNIN_OWNER_SUBJECT=<AUTH0|EXACT_OWNER_SUB>
+```
+
+Only signed, unexpired RS256 access tokens from the exact tenant, intended for the exact API and Native client, belonging to the exact configured owner, with a minimal `conversation:read` API scope, can get `200` on `GET /_local/auth0-owner-proof`. No JSON `sub`, email or access-token value is returned. There is deliberately **no live device or message route, nor any public listener**. An iPhone cannot reach this localhost endpoint; a future private staging connection, audited TLS and sender-constrained device proof remain required for end-to-end tests. Do not post tokens into ChatGPT, issue trackers, screenshots or curl shell history.
+
 ## Acceptance gates before cloud staging
 
 - [x] Auth0 chosen; no paid tenant or provider requests from Archer's CI
