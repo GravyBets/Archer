@@ -92,7 +92,7 @@ def main():
             check(True, "invalid configuration rejects startup: " + str(changes))
 
         refuse({"ASPNETCORE_ENVIRONMENT": "Production"}, "local-test/Development")
-        refuse({"ARCHER_REMOTE_GATEWAY_MODE": "production"}, "local-test/Development")
+        refuse({"ARCHER_REMOTE_GATEWAY_MODE": "production"}, "supports only local-test mode")
         refuse({"ARCHER_REMOTE_OIDC_ENABLED": "true"}, "explicit local-validation")
         refuse({"ARCHER_REMOTE_OIDC_ISSUER": "http://identity.example.com"}, "approved public HTTPS")
         refuse({"ARCHER_REMOTE_OIDC_ISSUER": "https://localhost"}, "approved public HTTPS")
