@@ -43,6 +43,7 @@ python3 tests/SmokeRemoteOidcBoundary.py
 dotnet run --project tests/RemoteAuth0ProfileChecks/RemoteAuth0ProfileChecks.csproj
 python3 tests/SmokeRemoteAuth0Boundary.py
 dotnet run --project tests/RemoteAuth0OwnerSignInChecks/RemoteAuth0OwnerSignInChecks.csproj
+dotnet run --project tests/RemoteAuth0OwnerClaimsChecks/RemoteAuth0OwnerClaimsChecks.csproj
 python3 tests/SmokeAuth0OwnerSignIn.py
 ```
 
