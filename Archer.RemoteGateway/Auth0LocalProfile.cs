@@ -52,7 +52,7 @@ internal sealed record Auth0LocalProfile(
         var domain = Required("DOMAIN", 180);
         if (!Regex.IsMatch(
                 domain,
-                @"^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+\.auth0\.com$",
+                @"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+\.auth0\.com$",
                 RegexOptions.CultureInvariant | RegexOptions.IgnoreCase,
                 TimeSpan.FromMilliseconds(100)) ||
             domain.Contains("..", StringComparison.Ordinal) ||
