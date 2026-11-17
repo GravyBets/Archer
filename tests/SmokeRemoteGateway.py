@@ -109,6 +109,9 @@ def main():
             code, live, headers = request("/health/live")
             assert code == 200 and live["prototype"] is True, live
             for field in ("publicAccessEnabled", "remoteAuthenticationEnabled",
+                          "signedSyntheticIdentityProbeEnabled",
+                          "oidcLocalValidationProbeEnabled",
+                          "auth0LocalValidationProbeEnabled",
                           "conversationEndpointsEnabled", "pushEnabled",
                           "aiEnabled", "providerCallsEnabled"):
                 assert live[field] is False, (field, live)
@@ -121,7 +124,8 @@ def main():
             assert code == 503 and ready["status"] == "blocked"
             assert ready["publicAccessEnabled"] is False
 
-            for path in ("/_local/identity-probe/owner-synthetic-A",
+            for path in ("/_local/auth0-probe/owner-synthetic-A",
+                         "/_local/identity-probe/owner-synthetic-A",
                          "/v1/conversations", "/v1/me/devices",
                          "/v1/push/register", "/api/state",
                          "/internal/devices", "/swagger", "/"):
