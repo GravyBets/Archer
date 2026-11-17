@@ -71,7 +71,8 @@ ensure("remote access remains disabled" in js.lower(), "remote access disabled")
 ensure("url.search || url.hash" in sw, "OAuth callback query never intercepted")
 ensure("event.request.mode === 'navigate'" in sw, "offline shell navigation handling")
 ensure("FILES.slice(2)" in sw, "service worker allowlists only public assets")
-ensure("config.js" not in sw and "token" not in sw.lower().replace("tokens",""),
+ensure("config.js" not in sw and "caches.put" not in sw and
+       "authorization" not in sw.lower(),
        "service worker cannot cache app config or credentials")
 ensure("No tokens" in readme or "tokens" in readme.lower(), "docs explain secrets policy")
 ensure("Single Page Application" in readme, "requires distinct SPA app registration")
