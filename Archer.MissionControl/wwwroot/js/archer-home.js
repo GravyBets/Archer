@@ -19,6 +19,10 @@
   const rateValue = el('voiceRateValue');
   const accentStatus = el('voiceAccentStatus');
   const input = el('chatText');
+  const handsFreeToggle = el('voiceHandsFreeToggle');
+  const pauseSlider = el('voicePauseSlider');
+  const pauseValue = el('voicePauseValue');
+  const endConversationButton = el('voiceEndConversation');
 
   const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
   const hasSpeechOut = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
@@ -29,7 +33,16 @@
   let hasFailures = false;
   let stoppedByUser = false;
   let initialTranscript = '';
-  let finalTranscript = '';
+  let carriedTranscript = '';
+  let currentTranscript = '';
+  let voiceSessionActive = false; // explicit Speak action only, never auto-start on page load
+  let sendingVoiceTurn = false;
+  let sendAfterRecognitionEnd = false;
+  let waitingForVoiceReply = false;
+  let silenceTimer = null;
+  let restartTimer = null;
+  let recognitionRestarts = 0;
+  let recentVoiceError = false;
   let transientError = false;
   let lastReply = '';
   let availableVoices = [];
@@ -38,6 +51,22 @@
   const getPreference = key => { try { return window.localStorage.getItem(key); } catch { return null; } };
   const setPreference = (key, value) => { try { window.localStorage.setItem(key, value); } catch { /* privacy mode */ } };
   readToggle.checked = getPreference('archer.voice.readAloud') === 'yes';
+  handsFreeToggle.checked = getPreference('archer.voice.handsFree') === 'yes';
+  const savedPause = Number(getPreference('archer.voice.pauseSeconds'));
+  const pauseSeconds = Number.isInteger(savedPause) && savedPause >= 4 && savedPause <= 10
+    ? savedPause : 7;
+  pauseSlider.value = String(pauseSeconds);
+  pauseValue.textContent = pauseSeconds + ' sec';
+  pauseSlider.addEventListener('input', () => {
+    const value = Math.min(10, Math.max(4, Number(pauseSlider.value) || 7));
+    pauseValue.textContent = value + ' sec';
+    setPreference('archer.voice.pauseSeconds', String(value));
+    if (voiceSessionActive && recognizedVoiceText()) armSilenceTimer();
+  });
+  handsFreeToggle.addEventListener('change', () => {
+    setPreference('archer.voice.handsFree', handsFreeToggle.checked ? 'yes' : 'no');
+    if (!handsFreeToggle.checked) endVoiceConversation(false);
+  });
 
   // Default to a conversational pace; keep the preference locally per browser.
   // Invalid/old preferences cannot push Web Speech rate beyond the offered range.
@@ -73,8 +102,9 @@
       idle: 'TEXT READY', listening: 'MIC ACTIVE', thinking: 'PROCESSING',
       responding: 'REPLY READY', speaking: 'VOICE OUTPUT', alert: 'TASK ALERT', error: 'CHECK STATUS'
     })[value] || 'TEXT READY';
-    mic.setAttribute('aria-pressed', listening ? 'true' : 'false');
-    mic.textContent = listening ? '■ Stop listening' : '🎙 Speak';
+    mic.setAttribute('aria-pressed', listening || voiceSessionActive ? 'true' : 'false');
+    mic.textContent = (listening || voiceSessionActive) ? '■ Stop listening' : '🎙 Speak';
+    endConversationButton.disabled = !(voiceSessionActive || waitingForVoiceReply || listening);
   }
 
   function settle() {
