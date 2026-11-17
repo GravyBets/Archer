@@ -564,6 +564,10 @@
   update(appState.data);
   settle();
 
+  // Do not leave an opted-in microphone running in a background tab.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) endVoiceConversation();
+  });
   window.addEventListener('beforeunload', () => {
     endVoiceConversation(false);
     if (hasSpeechOut) window.speechSynthesis.cancel();
