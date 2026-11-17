@@ -76,6 +76,6 @@ for prohibited in (
 ):
     ensure(prohibited not in swift_source,
            "iPhone source must not expose tokens or unsupported auth: " + prohibited)
-ensure(re.search(r"scope.*=\s*\n?\s*\"openid", CONFIG) is not None,
+ensure('"openid profile email offline_access conversation:read conversation:write"' in CONFIG,
        "request a real ID token with openid")
 print(f"PASS: {checks} offline iOS owner-login, callback, secret-handling and permission gates")
