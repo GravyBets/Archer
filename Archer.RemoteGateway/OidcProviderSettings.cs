@@ -54,7 +54,7 @@ internal sealed record OidcProviderSettings(
             uri.UserInfo.Length != 0 ||
             uri.Fragment.Length != 0 || uri.Query.Length != 0 ||
             uri.Host.Length < 4 || !uri.Host.Contains('.') ||
-            uri.Host.StartsWith('.', StringComparison.Ordinal) ||
+            uri.Host.StartsWith(".", StringComparison.Ordinal) ||
             uri.Host.EndsWith(".invalid", StringComparison.OrdinalIgnoreCase) ||
             uri.Host.EndsWith(".test", StringComparison.OrdinalIgnoreCase) ||
             uri.Host.EndsWith(".local", StringComparison.OrdinalIgnoreCase) ||
