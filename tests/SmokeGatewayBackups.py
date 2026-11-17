@@ -18,12 +18,15 @@ from SmokeGatewayEncryption import run_gateway, stop, call, ADMIN
 TOOL = Path("Archer.GatewayBackup/bin/Release/net10.0/Archer.GatewayBackup.dll").resolve()
 
 
-def invoke(command, source, target=None, key=None, success=True):
+def invoke(command, source, target=None, key=None, success=True, new_key=None):
     env = dict(os.environ)
+    env.pop("ARCHER_GATEWAY_NEW_DATA_KEY_HEX", None)
     if key is not None:
         env["ARCHER_GATEWAY_DATA_KEY_HEX"] = key
     else:
         env.pop("ARCHER_GATEWAY_DATA_KEY_HEX", None)
+    if new_key is not None:
+        env["ARCHER_GATEWAY_NEW_DATA_KEY_HEX"] = new_key
     params = ["dotnet", str(TOOL), command, str(source)]
     if target is not None:
         params.append(str(target))
@@ -43,18 +46,22 @@ def main():
     assert TOOL.exists(), "Build Archer.GatewayBackup Release before running smoke."
     key = secrets.token_hex(32)
     wrong_key = secrets.token_hex(32)
+    rotated_key = secrets.token_hex(32)
     with tempfile.TemporaryDirectory(prefix="archer-backup-ci-") as root:
         root = Path(root)
         source_dir = root / "active"
         backup_dir = root / "backup"
         restore_dir = root / "restored"
-        for directory in (source_dir, backup_dir, restore_dir):
+        rotated_dir = root / "rotated"
+        for directory in (source_dir, backup_dir, restore_dir, rotated_dir):
             directory.mkdir()
         source = source_dir / "mobile-gateway-state.json"
         backup = backup_dir / "archer-state-verified.archerbackup"
         restored = restore_dir / "mobile-gateway-state.json"
         corrupt = backup_dir / "damaged.archerbackup"
         refused = restore_dir / "never-created.json"
+        rotated = rotated_dir / "mobile-gateway-state.json"
+        refused_rotate = rotated_dir / "never-rotated.json"
 
         # Create real encrypted local state with a synthetic phone message.
         process = run_gateway(source_dir, key)
@@ -78,7 +85,10 @@ def main():
             invoke("verify", backup, key=key)
             # Never attempt live restore while gateway is listening.
             invoke("restore-new", backup, restored, key, success=False)
+            invoke("rotate-new", source, rotated, key, success=False,
+                   new_key=rotated_key)
             assert not restored.exists()
+            assert not rotated.exists()
         finally:
             stop(process)
 
@@ -95,6 +105,48 @@ def main():
         invoke("verify", corrupt, key=key, success=False)
         invoke("restore-new", corrupt, refused, key=key, success=False)
         assert not refused.exists()
+
+        # A rotation must refuse missing, malformed, identical or wrong
+        # keys and never write any state on failure.
+        invoke("rotate-new", source, refused_rotate, key, success=False)
+        invoke("rotate-new", source, refused_rotate, key, success=False,
+               new_key=key)
+        invoke("rotate-new", source, refused_rotate, key, success=False,
+               new_key="0" * 20)
+        invoke("rotate-new", source, refused_rotate, wrong_key, success=False,
+               new_key=rotated_key)
+        invoke("rotate-new", corrupt, refused_rotate, key, success=False,
+               new_key=rotated_key)
+        invoke("rotate-new", source, source, key, success=False,
+               new_key=rotated_key)
+        assert not refused_rotate.exists()
+        assert source.read_bytes() == encrypted_source
+
+        invoke("rotate-new", source, rotated, key, new_key=rotated_key)
+        assert rotated.exists()
+        assert rotated.read_bytes() != encrypted_source
+        assert b"Hello from synthetic backup" not in rotated.read_bytes()
+        invoke("verify", rotated, key=rotated_key)
+        invoke("verify", rotated, key=key, success=False)
+        invoke("rotate-new", source, rotated, key, success=False,
+               new_key=rotated_key)  # no overwrite
+        assert source.read_bytes() == encrypted_source
+
+        # New encrypted copy must be readable by the SAME device token,
+        # and preserve message order and session identity.
+        process = run_gateway(rotated_dir, rotated_key)
+        try:
+            status, raw = call("/v1/conversation/messages", header={
+                "Authorization": "Bearer " + bearer
+            })
+            assert status == 200, status
+            messages = json.loads(raw)["messages"]
+            assert len(messages) == 1
+            assert messages[0]["content"] == "Hello from synthetic backup"
+            assert messages[0]["sequence"] == 1
+            assert json.loads(raw)["assistantConnected"] is False
+        finally:
+            stop(process)
 
         # Restore ONLY to a new file; a valid backup and original key
         # preserve device identity, messages and session sequence.
@@ -119,7 +171,7 @@ def main():
 
         assert source.read_bytes() == encrypted_source
 
-    print("PASS: authenticated encrypted backup, no-overwrite restore, wrong-key/tamper refusal and recovered owner journal")
+    print("PASS: verified backup, no-overwrite restore, offline key rotation, wrong-key/tamper refusal and recovered owner journal")
 
 
 if __name__ == "__main__":

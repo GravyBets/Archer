@@ -1,6 +1,6 @@
 # ARCHER — Personal Autonomous AI Operator
 
-**Version:** 1.11.0 (local prototype)  
+**Version:** 1.12.0 (local prototype)  
 **Platform:** ASP.NET Core / .NET 10, vanilla HTML/CSS/JavaScript  
 **License:** Personal prototype; no production deployment or multi-user authentication.
 
@@ -906,3 +906,29 @@ The utility verifies the AES-256-GCM authentication tag using the exact gateway 
 CI tests an encrypted synthetic conversation, backup while the local gateway runs, wrong/missing key refusal, ciphertext tampering, live restore and overwrite rejection, then restores to a fresh path and verifies the same conversation and device bearer survived. No real provider accounts or user data are used.
 
 See ARCHER_MOBILE_SECURITY_REVIEW.md and ARCHER_MOBILE_COMMUNICATION_ROADMAP.md for key rotation, cloud identity, iOS, push, and actual synchronized conversations still to do.
+
+
+## v1.12.0 — Offline, fail-closed gateway encryption-key rotation
+
+Archer.GatewayBackup now supports **rotate-new**: preparing a new, independently encrypted state file with a replacement AES-256-GCM key. It NEVER overwrites the source, uploads data, changes the running gateway, sends messages or incurs model fees.
+
+### Rotation procedure — PERSONAL HOME PC ONLY
+
+1. Back up and verify the existing encrypted state using your ORIGINAL private ARCHER_GATEWAY_DATA_KEY_HEX. Store the backup and its old key safely and independently.
+2. Completely **STOP Archer.MobileGateway**. Rotation is refused if anything listens on localhost port 5091.
+3. Generate a brand-new cryptographically random 32-byte (64 hex-character) key and store it securely in your password manager. Set ARCHER_GATEWAY_NEW_DATA_KEY_HEX privately in the rotation process. Keep ARCHER_GATEWAY_DATA_KEY_HEX set to the OLD key. These keys must be distinct. Never pass keys as command-line arguments, print them to logs, commit them, or paste them into chats.
+4. Prepare a new destination directory and run this sample with paths adapted to your home PC (existing source must be encrypted; destination must not exist):
+
+    dotnet run --project Archer.GatewayBackup/Archer.GatewayBackup.csproj -- rotate-new "C:\Archer\Archer.MobileGateway\Data\mobile-gateway-state.json" "D:\SecureArcherBackups\rotated-gateway-state.json"
+
+5. The tool authenticates the old ciphertext, encrypts a fresh copy with the NEW key, checks the new ciphertext can be decrypted correctly, and writes ONLY to a brand-new file. A wrong/missing original key, missing/malformed/equal new key, damaged source, existing destination or active gateway aborts without touching the original.
+6. Privately set ARCHER_GATEWAY_DATA_KEY_HEX to the NEW key for an independent verify command on the rotated copy. The utility does NOT automatically activate it. When ready, keep the gateway stopped, create a separate gateway data directory, put ONLY the verified rotated file there named mobile-gateway-state.json, and point ARCHER_GATEWAY_DATA_DIR to that directory. Start the gateway using the NEW key, check /health/ready and inspect device access, inbox and conversation sessions.
+7. Retain the ORIGINAL encrypted state, ORIGINAL key and older backups securely until you have independently verified recovery. **Old backup files still need the old key**; rotation of a new copy does not retroactively rotate old backups.
+
+### Limits and verification
+
+There is no in-place swap, server restart, backup retention policy, key vault, secure secret manager, emergency key recovery or background rotation schedule. An old lost key cannot be recreated. Historical copies on disks or in backups are not erased. Environment secrets can be accessed by sufficiently privileged processes on the same computer.
+
+CI exercises two random synthetic keys, missing/equal/malformed new key, wrong original key, authenticated ciphertext tampering, active-gateway refusal, destination overwrite refusal, unchanged original, and starting a new gateway with the NEW key to verify original device credentials, messages, and monotonic session sequence survive. No provider credentials or real user data are involved.
+
+See ARCHER_MOBILE_SECURITY_REVIEW.md and ARCHER_MOBILE_COMMUNICATION_ROADMAP.md for the remaining production-security tasks.

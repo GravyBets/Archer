@@ -7,12 +7,13 @@ using Archer.MobileGateway;
 // GitHub, a public service or any cloud storage destination.
 if (args.Length < 2 ||
     (args[0] == "verify" && args.Length != 2) ||
-    (args[0] is "backup" or "restore-new" && args.Length != 3) ||
-    args[0] is not ("verify" or "backup" or "restore-new"))
+    (args[0] is "backup" or "restore-new" or "rotate-new" && args.Length != 3) ||
+    args[0] is not ("verify" or "backup" or "restore-new" or "rotate-new"))
 {
     Console.Error.WriteLine("Usage: Archer.GatewayBackup verify <encrypted-file>");
     Console.Error.WriteLine("       Archer.GatewayBackup backup <gateway-state-file> <new-backup-file>");
     Console.Error.WriteLine("       Archer.GatewayBackup restore-new <verified-backup-file> <new-gateway-state-file>");
+    Console.Error.WriteLine("       Archer.GatewayBackup rotate-new <encrypted-source> <new-encrypted-file>");
     return 2;
 }
 
@@ -71,9 +72,34 @@ try
     if (File.Exists(target))
         throw new IOException("Destination already exists. Overwriting an encrypted state or backup is prohibited.");
 
-    if (args[0] == "restore-new" && await GatewayIsListeningAsync())
+    if ((args[0] is "restore-new" or "rotate-new") &&
+        await GatewayIsListeningAsync())
         throw new InvalidOperationException(
-            "Gateway is listening on localhost:5091. Stop the gateway before restoring any state.");
+            "Gateway is listening on localhost:5091. Stop it before restoring or rotating keys.");
+
+    // A rotation writes an entirely NEW encrypted copy, never modifies the
+    // original, and refuses a missing/equal new key. BOTH keys come from
+    // environment variables rather than process arguments or source files.
+    byte[] output = original;
+    if (args[0] == "rotate-new")
+    {
+        var newHex = Environment.GetEnvironmentVariable(
+            "ARCHER_GATEWAY_NEW_DATA_KEY_HEX");
+        var oldHex = Environment.GetEnvironmentVariable(
+            "ARCHER_GATEWAY_DATA_KEY_HEX");
+        var newEncryption = GatewayStateEncryption.WithExplicitKey(newHex);
+        if (string.Equals(oldHex, newHex, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                "New encryption key must be different from the original key.");
+
+        var rotated = newEncryption.Encrypt(json);
+        var (verified, rotatedLegacy) =
+            newEncryption.DecryptOrIdentifyLegacy(rotated);
+        if (rotatedLegacy || !string.Equals(verified, json, StringComparison.Ordinal))
+            throw new InvalidDataException(
+                "New ciphertext could not be authenticated; no file will be created.");
+        output = Encoding.UTF8.GetBytes(rotated);
+    }
 
     var temporary = Path.Combine(targetDirectory,
         ".archer-verified-" + Guid.NewGuid().ToString("N") + ".tmp");
@@ -86,7 +112,7 @@ try
             FileAccess.Write, FileShare.None, 8192,
             FileOptions.Asynchronous | FileOptions.WriteThrough))
         {
-            await file.WriteAsync(original);
+            await file.WriteAsync(output);
             await file.FlushAsync();
         }
         File.Move(temporary, target); // Never overwrite.
@@ -96,9 +122,12 @@ try
         if (File.Exists(temporary)) File.Delete(temporary);
     }
 
-    Console.WriteLine(args[0] == "backup"
-        ? "PASS: encrypted, authenticated backup created in a new file."
-        : "PASS: encrypted state restored to a NEW destination file. No existing state was overwritten.");
+    Console.WriteLine(args[0] switch
+    {
+        "backup" => "PASS: encrypted, authenticated backup created in a new file.",
+        "rotate-new" => "PASS: rotated encrypted state written to a NEW file. Original unchanged. Configure the NEW key before using the new file.",
+        _ => "PASS: encrypted state restored to a NEW destination file. No existing state was overwritten."
+    });
     return 0;
 }
 catch (Exception error) when (error is not OperationCanceledException)

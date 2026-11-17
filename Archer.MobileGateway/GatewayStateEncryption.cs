@@ -33,13 +33,25 @@ public sealed class GatewayStateEncryption
     {
         var hex = Environment.GetEnvironmentVariable("ARCHER_GATEWAY_DATA_KEY_HEX");
         if (string.IsNullOrWhiteSpace(hex)) return;
+        _key = ParseKey(hex, "ARCHER_GATEWAY_DATA_KEY_HEX");
+    }
 
-        if (hex.Length != 64 ||
-            !hex.All(c => char.IsAsciiHexDigit(c)))
+    private GatewayStateEncryption(byte[] key) => _key = key;
+
+    /// <summary>
+    /// Offline key rotation ONLY. Passing null must fail, never fall back
+    /// to the gateway's ordinary key from the process environment.
+    /// </summary>
+    public static GatewayStateEncryption WithExplicitKey(string? hex)
+        => new(ParseKey(hex, "ARCHER_GATEWAY_NEW_DATA_KEY_HEX"));
+
+    private static byte[] ParseKey(string? hex, string variable)
+    {
+        if (hex is null || hex.Length != 64 ||
+            !hex.All(char.IsAsciiHexDigit))
             throw new InvalidOperationException(
-                "ARCHER_GATEWAY_DATA_KEY_HEX must contain exactly 64 hex characters (a random 256-bit key). Never use a sample or check the key into Git.");
-
-        _key = Convert.FromHexString(hex);
+                variable + " must be a privately generated 64-hex-character (256-bit) key.");
+        return Convert.FromHexString(hex);
     }
 
     public bool IsReady => _key is { Length: 32 };
