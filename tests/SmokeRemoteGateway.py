@@ -80,7 +80,7 @@ def verify_rejected_startup(name, env_updates):
             assert code != 0, f"{name} incorrectly accepted remote config"
             log.seek(0)
             output = log.read()
-            assert "Refusing" in output or "supports only local-test" in output, output[-1200:]
+            assert any(marker in output for marker in ("Refusing", "supports only local-test", "Remote binding configuration is forbidden")), output[-1200:]
         finally:
             stop(process)
 
