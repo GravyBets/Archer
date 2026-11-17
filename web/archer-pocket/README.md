@@ -17,23 +17,28 @@ browser-only PWA: create a separate **Single Page Application** called
 
 ## Finish configuration in the Auth0 dashboard
 
-1. Create **Applications → Applications → Create Application** named
-   **Archer Pocket Dev**, type **Single Page Application**.
+1. **Completed:** The owner created **Archer Pocket Dev** as a separate
+   **Single Page Application** on November 17, 2026. Its *public*
+   Client ID is checked into `config.js`. This is an OAuth identifier,
+   never a client secret.
 2. After the owner approves static public hosting, deploy this folder to an
    HTTPS static host such as GitHub Pages. Use the resulting **exact** HTTPS
    URL for callback/login and origins; do not guess URLs before hosting.
-   For a site available at `https://example.test/archer/`, use:
-   - Allowed Callback URLs: `https://example.test/archer/`
-   - Allowed Logout URLs: `https://example.test/archer/`
-   - Allowed Web Origins: `https://example.test`
-   This example is **not** a working site.
+   For the planned `GravyBets/Archer` GitHub Pages project URL, configure:
+   - Allowed Callback URLs: `https://gravybets.github.io/Archer/`
+   - Allowed Logout URLs: `https://gravybets.github.io/Archer/`
+   - Allowed Web Origins: `https://gravybets.github.io`
+   Keep Cross-Origin Authentication OFF and Allowed Origins (CORS) blank.
+   **As of the owner setup screenshot, GitHub Pages is NOT enabled, and
+   the URL must not be represented as live until manual deployment succeeds.**
 3. On **Applications → APIs → Archer Remote Gateway Dev →
    Application Access**, grant this new SPA client **User-delegated** access
    to `conversation:read` (and `conversation:write` only when messaging is
    actually implemented). Keep **Client Access** and **Anonymous Access**
    disabled. Application user sign-up stays disabled.
-4. In `config.js`, set only the new SPA public **Client ID**. No Native
-   Client ID, client secret, Google App Password, Auth0 access/refresh
+4. **Completed:** `config.js` now includes only the new SPA public **Client
+   ID**, not the Native app Client ID. No client secret, Google App Password,
+   Auth0 access/refresh
    tokens, exact personal owner `sub`, Apple ID, API keys or private
    certificates should ever be in that file. Public app Client IDs are
    intentionally readable by browsers.
