@@ -1,7 +1,7 @@
 # Archer — Mobile, Messaging, Voice & Safe Business Operations Roadmap
 
 Working plan: 2026-11-16. Target: one Archer across Windows, iPhone, text, phone, and (if approved) CarPlay.
-Current baseline: Archer v1.12.0 is LOCALHOST-ONLY. It supports guarded AI, source review/code drafts, site checks, opt-in outbound SMS/one-way calls and manually selected coarse presence. Native iOS, real push, inbound voice/text conversation and cloud hosting DO NOT exist yet.
+Current baseline: Archer v1.13.0 is LOCALHOST-ONLY. It supports guarded AI, source review/code drafts, site checks, opt-in outbound SMS/one-way calls and manually selected coarse presence. Native iOS, real push, inbound voice/text conversation and cloud hosting DO NOT exist yet.
 
 ## Product decisions
 
@@ -59,6 +59,7 @@ DONE WHEN: each issue has one durable actionable item, no duplicate paid alert, 
 - [ ] Define the full production multi-channel conversation service (account identity, remote sessions, encrypted backups, export/deletion, cross-channel lifecycle, message consistency and desktop/phone history integration).
 - [x] v1.8 manual owner-approved assistant-reply publication from desktop to encrypted gateway, idempotent and linked to a phone-authored draft; NO automatic model call or public access.
 - [x] v1.10 opt-in desktop **read-only session browser**: lists local encrypted gateway sessions, previews owner/Archer messages and pages using server cursors; no AI or phone activity.
+- [x] v1.13 per-session incremental reads disclose expired-history gaps, earliest retained sequence and a safe continuation cursor when all older messages are gone; encrypted synthetic CI validates reconnect behavior.
 - [ ] Connect Windows and phone chat to the same authenticated production session backend with proper multi-device ordering, privacy, reply streaming and authenticated internet access.
 - [ ] Stream short responses by default, allow detailed mode when requested, and retain clear action boundaries.
 - [ ] Audition British male neural voices for naturalness, latency and price; choose a voice only after a live test.
@@ -137,7 +138,7 @@ DONE WHEN: GeoShift converts real paying customers and Archer reports genuine bu
 
 ## Execution order
 
-1. **Completed:** v1.1 inbox; v1.2 isolated gateway; v1.3 notification sandbox; v1.4 device security; v1.5 local journal; v1.6 encrypted state; v1.7 draft preview; v1.8 manual replies; v1.9 session cursors; v1.10 desktop session browser; v1.11 local encrypted backup/restore, v1.12 safe offline key rotation to a new file. No cloud exposure.
+1. **Completed:** v1.1 inbox; v1.2 isolated gateway; v1.3 notification sandbox; v1.4 device security; v1.5 local journal; v1.6 encrypted state; v1.7 draft preview; v1.8 manual replies; v1.9 session cursors; v1.10 desktop session browser; v1.11 local encrypted backup/restore, v1.12 offline key rotation, v1.13 retention-safe cursor-gap warnings. No cloud exposure.
 2. **Next:** independent security architecture review and a separately authenticated **TLS-ready public gateway design**, provisioning, retention and APNs-device enrollment; no remote access until those gates pass.
 3. **Then:** shared conversation backend, push service (APNs) and native iOS MVP.
 4. **In parallel after security:** Twilio inbound SMS + ConversationRelay with signature checks and strict budget.
@@ -229,3 +230,9 @@ CI builds the utility, stores a synthetic local encrypted conversation, validate
 The standalone backup tool now supports rotate-new with an OLD authenticated AES-256-GCM key and a separately supplied NEW random 256-bit key, reading and verifying source state before producing a **new** ciphertext file. The source and all prior backups remain unchanged; old archives still require their original key. Rotation is forbidden while gateway port 5091 is serving, with any missing/equal/malformed keys, invalid ciphertext or pre-existing output. The rotated output is authenticated with the new key before the write, then can be verified and mounted as a fresh local gateway data directory after explicitly changing the key. Automated synthetic CI verifies state continuity (session sequence, message, device token), rejection cases and unchanged source.
 
 This completes a **local development utility**, not production key-vault integration, automatic backup rekeying, old-key revocation, Windows recovery testing or public/cloud access.
+
+### v1.13.0 — Explicit message retention gaps during device reconnect
+
+MobileGateway's encrypted per-session sync now returns oldestAvailableSequence, historyGapDetected and missingMessageCountBeforePage alongside the existing cursor/highWatermark. A future phone app can warn honestly when seven-day/200-message retention has removed earlier messages. If all messages are expired, nextAfter advances to highWatermark rather than looping over an empty page. Tests simulate partially and fully expired sessions, prove proper warning and forward progress, and validate encrypted local migration.
+
+This is a **local protocol improvement only**. It does not restore expired messages or supply an internet/mobile client. Genuine durable push delivery, server retention policy, backups, owner export/deletion and production phone reconnection remain outstanding.
