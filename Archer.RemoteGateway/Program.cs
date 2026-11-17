@@ -8,7 +8,14 @@ SecurityBoundary.DemandLocalOnlyEnvironment();
 
 var builder = WebApplication.CreateBuilder(args);
 var identityFixture = LocalTestAuthentication.FromEnvironment(builder.Environment);
+var oidcSettings = OidcProviderSettings.FromEnvironment(
+    builder.Environment.IsDevelopment(), Environment.GetEnvironmentVariable);
+if (identityFixture is not null && oidcSettings is not null)
+    throw new InvalidOperationException(
+        "Synthetic local JWT fixture and provider OIDC validation cannot be enabled together.");
 identityFixture?.Register(builder.Services);
+if (oidcSettings is not null)
+    OidcLocalAuthentication.Register(builder.Services, oidcSettings);
 builder.WebHost.ConfigureKestrel(server =>
 {
     // Explicit binding overrides ASPNETCORE_URLS (including 0.0.0.0).
@@ -48,7 +55,7 @@ app.Use(async (context, next) =>
     await next();
 });
 app.UseRateLimiter();
-if (identityFixture is not null)
+if (identityFixture is not null || oidcSettings is not null)
 {
     app.UseAuthentication();
     app.UseAuthorization();
@@ -62,6 +69,7 @@ app.MapGet("/health/live", () => Results.Ok(new
     publicAccessEnabled = false,
     remoteAuthenticationEnabled = false,
     signedSyntheticIdentityProbeEnabled = identityFixture is not null,
+    oidcLocalValidationProbeEnabled = oidcSettings is not null,
     conversationEndpointsEnabled = false,
     pushEnabled = false,
     aiEnabled = false,
@@ -88,6 +96,20 @@ if (identityFixture is not null)
     app.MapPost("/_local/identity-probe/{ownerSubject}",
             (HttpContext context, string ownerSubject) =>
                 LocalTestAuthentication.Probe(context, ownerSubject, write: true))
+        .RequireAuthorization();
+}
+
+// Provider-backed JWT checks live behind a distinct no-data localhost probe.
+// Even an actual owner token cannot open a message, pairing or paid endpoint.
+if (oidcSettings is not null)
+{
+    app.MapGet("/_local/oidc-probe/{ownerSubject}",
+            (HttpContext context, string ownerSubject) =>
+                OidcLocalAuthentication.Probe(context, ownerSubject, write: false))
+        .RequireAuthorization();
+    app.MapPost("/_local/oidc-probe/{ownerSubject}",
+            (HttpContext context, string ownerSubject) =>
+                OidcLocalAuthentication.Probe(context, ownerSubject, write: true))
         .RequireAuthorization();
 }
 
