@@ -54,8 +54,17 @@ ensure("Content-Security-Policy" in html, "CSP restricts cross-site resources")
 ensure("window.ArcherPocketSettings" in config, "public-only config present")
 ensure("clientId: 'Q25ebj5IT14zwo63SP7920S25m21Rjgm'" in config,
        "public Auth0 SPA Client ID matches the owner-provided development app")
-ensure("dev-113ic41kxj7zpeb8.us.auth0.com" in config and
+ensure("dev-1l3ic41kxj7zpeb8.us.auth0.com" in config and
        "https://archer.example/api/dev" in config, "dev tenant and audience are exact")
+# Prevent the original numeral-one versus lowercase-ell regression: a correct
+# config alone is insufficient if login JS or the page CSP still points at
+# an invalid Auth0 host.
+AUTH0_DOMAIN = "dev-1l3ic41kxj7zpeb8.us.auth0.com"
+ensure(AUTH0_DOMAIN in js, "Auth0 login SDK guard uses the true tenant")
+ensure(AUTH0_DOMAIN in html, "Auth0 page CSP permits the true tenant")
+ensure("dev-113ic41kxj7zpeb8.us.auth0.com" not in
+       (config + js + html), "old typo must not ship in any site asset")
+
 ensure("validSettings()" in js and "window.isSecureContext" in js,
        "non-HTTPS remote access rejects initialization")
 ensure("!client" in js, "unconfigured login button disabled")
@@ -73,9 +82,13 @@ ensure("remote access remains disabled" in js.lower(), "remote access disabled")
 ensure("url.search || url.hash" in sw, "OAuth callback query never intercepted")
 ensure("event.request.mode === 'navigate'" in sw, "offline shell navigation handling")
 ensure("FILES.slice(2)" in sw, "service worker allowlists only public assets")
-ensure("config.js" not in sw and "caches.put" not in sw and
-       "authorization" not in sw.lower(),
-       "service worker cannot cache app config or credentials")
+ensure("config.js" not in sw and "authorization" not in sw.lower() and
+       "FILES.slice(2)" in sw and "if (url.search || url.hash) return;" in sw,
+       "service worker caches only allowlisted assets, never OAuth redirects")
+ensure("archer-pocket-shell-v2" in sw and
+       "fetch(event.request)" in sw and
+       ".catch(() => caches.match(event.request))" in sw,
+       "mobile app fetches fresh login code after publishing fixes")
 ensure("No tokens" in readme or "tokens" in readme.lower(), "docs explain secrets policy")
 ensure("Single Page Application" in readme, "requires distinct SPA app registration")
 ensure("Archer iPhone Dev" in readme, "do not reuse Native app")
