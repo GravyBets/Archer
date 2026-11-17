@@ -24,6 +24,12 @@ jobs:
         run: dotnet restore Archer.GatewayBackup/Archer.GatewayBackup.csproj
       - name: Build standalone encrypted backup utility
         run: dotnet build Archer.GatewayBackup/Archer.GatewayBackup.csproj --configuration Release --no-restore
+      - name: Validate offline-only Archer Pocket Auth0 PWA
+        run: |
+          python3 tests/ValidateArcherPocket.py
+          node --check web/archer-pocket/app.js
+          node --check web/archer-pocket/sw.js
+          node --check web/archer-pocket/config.js
       - name: Check dashboard and presence JavaScript
         run: |
           node --check Archer.MissionControl/wwwroot/js/app.js
