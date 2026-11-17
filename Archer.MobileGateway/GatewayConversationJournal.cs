@@ -37,13 +37,25 @@ public sealed class GatewayConversationJournal(GatewayStore store)
             var session = state.ConversationSessions.FirstOrDefault(x => x.Id == id);
             if (session is null) return null;
 
-            var candidates = state.ConversationMessages
-                .Where(x => x.SessionId == id && x.Sequence > after &&
+            var available = state.ConversationMessages
+                .Where(x => x.SessionId == id &&
                     x.CreatedAtUtc >= now.AddDays(-RetentionDays) &&
                     x.CreatedAtUtc <= now)
                 .OrderBy(x => x.Sequence)
-                .Take(limit + 1)
                 .ToArray();
+            // A cursor can be far behind retention. Explicitly disclose
+            // missing history rather than displaying a seemingly complete
+            // transcript after an offline device reconnects.
+            var oldestAvailableSequence = available.Length > 0
+                ? available[0].Sequence
+                : session.LastSequence > 0 ? session.LastSequence + 1 : 0;
+            var lostPrefix = oldestAvailableSequence > 0 &&
+                after < oldestAvailableSequence - 1;
+            var missingBeforePage = lostPrefix
+                ? oldestAvailableSequence - 1 - after
+                : 0;
+            var candidates = available.Where(x => x.Sequence > after)
+                .Take(limit + 1).ToArray();
             var page = candidates.Take(limit).ToArray();
             return (object)new
             {
@@ -63,11 +75,16 @@ public sealed class GatewayConversationJournal(GatewayStore store)
                 nextAfter = page.Length == 0 ? after : page[^1].Sequence,
                 hasMore = candidates.Length > limit,
                 highWatermark = session.LastSequence,
+                oldestAvailableSequence,
+                historyGapDetected = lostPrefix,
+                missingMessageCountBeforePage = missingBeforePage,
                 archived = session.ArchivedAtUtc is not null,
                 retentionDays = RetentionDays,
                 savedOnly = true,
                 assistantConnected = false,
-                note = "Encrypted local conversation sync only. No live mobile AI or external service is connected."
+                note = lostPrefix
+                    ? "Some earlier messages are no longer available under local retention. Do not treat this page as a complete transcript."
+                    : "Encrypted local conversation sync only. No live mobile AI or external service is connected."
             };
         }, ct);
     }
