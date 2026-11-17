@@ -28,6 +28,8 @@ jobs:
         run: python3 tests/SmokeRemoteGateway.py
       - name: Verify signed synthetic JWT identities and authorization isolation
         run: python3 tests/SmokeRemoteSignedIdentity.py
+      - name: Verify offline P-256 owner-approved device pairing and revocation
+        run: dotnet run --project tests/RemoteDevicePairingChecks/RemoteDevicePairingChecks.csproj --configuration Release
       - name: Restore standalone encrypted backup utility
         run: dotnet restore Archer.GatewayBackup/Archer.GatewayBackup.csproj
       - name: Build standalone encrypted backup utility
