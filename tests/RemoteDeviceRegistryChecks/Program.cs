@@ -39,11 +39,11 @@ DevicePairingContract.DeviceSummary Approve(
     return approved!;
 }
 
-if (args is ["seed", var path])
+if (args is ["seed", var seedPath])
 {
     var approved = Approve(ownerA, "CI synthetic iPhone",
         new[] { "conversation:read", "conversation:write" });
-    var registry = new DurableDeviceRegistry(path, createIfMissing: true);
+    var registry = new DurableDeviceRegistry(seedPath, createIfMissing: true);
     registry.SaveApproved(approved, now);
     Check(registry.CurrentScopes(ownerA, approved.DeviceId) is not null,
         "seed grant stored");
@@ -52,9 +52,9 @@ if (args is ["seed", var path])
     return;
 }
 
-if (args is ["revoke", var path, var deviceId])
+if (args is ["revoke", var revokePath, var deviceId])
 {
-    var registry = new DurableDeviceRegistry(path);
+    var registry = new DurableDeviceRegistry(revokePath);
     Check(registry.Revoke(ownerA, deviceId, now),
         "trusted synthetic owner revoked approved device");
     Console.WriteLine("REVOKED=true");
