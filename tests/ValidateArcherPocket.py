@@ -52,8 +52,10 @@ ensure(page.scripts == ["./config.js",
        "./app.js"], "official pinned SPA browser SDK and local scripts")
 ensure("Content-Security-Policy" in html, "CSP restricts cross-site resources")
 ensure("window.ArcherPocketSettings" in config, "public-only config present")
-ensure("clientId: 'Q25ebj5IT14zwo63SP7920S25m21Rjgm'" in config,
+ensure("clientId: 'Q25ebj5IT14zwo63SP792OS25m21Rjgm'" in config,
        "public Auth0 SPA Client ID matches the owner-provided development app")
+ensure("Q25ebj5IT14zwo63SP7920S25m21Rjgm" not in config,
+       "reject numeral zero in place of Auth0 client ID capital O")
 ensure("dev-1l3ic41kxj7zpeb8.us.auth0.com" in config and
        "https://archer.example/api/dev" in config, "dev tenant and audience are exact")
 # Prevent the original numeral-one versus lowercase-ell regression: a correct
