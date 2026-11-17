@@ -1,7 +1,7 @@
 # Archer — Mobile, Messaging, Voice & Safe Business Operations Roadmap
 
 Working plan: 2026-11-16. Target: one Archer across Windows, iPhone, text, phone, and (if approved) CarPlay.
-Current baseline: Archer v1.11.0 is LOCALHOST-ONLY. It supports guarded AI, source review/code drafts, site checks, opt-in outbound SMS/one-way calls and manually selected coarse presence. Native iOS, real push, inbound voice/text conversation and cloud hosting DO NOT exist yet.
+Current baseline: Archer v1.12.0 is LOCALHOST-ONLY. It supports guarded AI, source review/code drafts, site checks, opt-in outbound SMS/one-way calls and manually selected coarse presence. Native iOS, real push, inbound voice/text conversation and cloud hosting DO NOT exist yet.
 
 ## Product decisions
 
@@ -29,7 +29,8 @@ Current baseline: Archer v1.11.0 is LOCALHOST-ONLY. It supports guarded AI, sour
 - [x] Local gateway enforces loopback, restrictive Host/Origin, scoped read/ack tokens and layered global/per-device rate limits (v1.4).
 - [ ] Production HTTPS, trusted ingress, secure secret management, outbound caps, input validation review and per-identity distributed rate limits.
 - [x] AES-256-GCM authenticated encryption for the entire local mobile gateway state (inbox, conversation journal, device hashes and audit); migration and wrong/missing key protection in CI (v1.6).
-- [x] v1.11 offline local **AES-GCM verified backup/verify/restore-new utility**, tamper/key-loss detection and synthetic restore drill in CI; existing files cannot be overwritten.
+- [x] v1.11 offline local **AES-GCM verified backup/verify/restore-new utility**, tamper/key-loss detection and synthetic restore drill in CI
+- [x] v1.12 safe offline **rotate-new** command re-encrypts a separate verified file with a distinct key; refuses gateway-online rotation, overwrite, missing/equal/wrong keys and tampered state in CI.; existing files cannot be overwritten.
 - [ ] Configure real encrypted **off-host** backups for your personal home installation, retain your secret key separately, document key rotation, complete a real Windows restore drill and add health/cost alerts. Automated CI is not production backup coverage.
 - [x] Add isolated gateway CI rejecting unauthenticated access, enforcing device scopes, revocation and bounded inbox payloads; gateway has no mission/call/code/GPS endpoint.
 - [ ] Independent penetration test, HTTPS/reverse proxy, mobile client threat review and production audit.
@@ -136,7 +137,7 @@ DONE WHEN: GeoShift converts real paying customers and Archer reports genuine bu
 
 ## Execution order
 
-1. **Completed:** v1.1 inbox; v1.2 isolated gateway; v1.3 notification sandbox; v1.4 device security; v1.5 local journal; v1.6 encrypted state; v1.7 draft preview; v1.8 manual replies; v1.9 session cursors; v1.10 desktop session browser; v1.11 local encrypted backup/restore utility. No cloud exposure.
+1. **Completed:** v1.1 inbox; v1.2 isolated gateway; v1.3 notification sandbox; v1.4 device security; v1.5 local journal; v1.6 encrypted state; v1.7 draft preview; v1.8 manual replies; v1.9 session cursors; v1.10 desktop session browser; v1.11 local encrypted backup/restore, v1.12 safe offline key rotation to a new file. No cloud exposure.
 2. **Next:** independent security architecture review and a separately authenticated **TLS-ready public gateway design**, provisioning, retention and APNs-device enrollment; no remote access until those gates pass.
 3. **Then:** shared conversation backend, push service (APNs) and native iOS MVP.
 4. **In parallel after security:** Twilio inbound SMS + ConversationRelay with signature checks and strict budget.
@@ -189,7 +190,7 @@ A device may be enrolled with `conversation:read` or both `conversation:read` an
 - First read of a recognizable v1.5 plaintext state performs in-place encrypted migration BEFORE returning data. Incorrect/missing key, tampering or unsupported format causes a hard failure rather than resetting or overwriting state.
 - Missing key means liveness can be inspected, but `GET /health/ready` reports not ready and every state operation is denied. Encryption does not make plain HTTP safe for public access.
 - CI verifies migration, recovery with the original key, wrong-key denial, missing-key denial, tamper detection and absence of plaintext in the persisted gateway file.
-- **Remaining:** independent encrypted backups, legacy plaintext snapshot cleanup, documented key rotation, secret manager, identity, HTTPS, production desktop chat synchronization, APNs and an iPhone client.
+- **Remaining:** actual off-host encrypted backups and Windows recovery drill, legacy plaintext snapshot cleanup, automated key management/rotation activation, secret manager, identity, HTTPS, production desktop chat synchronization, APNs and an iPhone client.
 
 ### v1.7.0 bridge milestone: local phone drafts visible on Archer PC
 
@@ -222,3 +223,9 @@ CI tests disabled-default behavior, wrong bridge-key rejection, local session ca
 A new standalone `Archer.GatewayBackup` .NET 10 CLI can `verify` a saved gateway state, `backup` it to an entirely new immutable encrypted file, and `restore-new` a verified backup to a fresh state file only when the local gateway port is not listening. It reuses the EXACT gateway AES-GCM implementation, requires the owner's private 256-bit key, refuses absent/wrong keys and authenticated tag tampering, never creates plaintext output, prints no message/credential content and never overwrites an existing destination.
 
 CI builds the utility, stores a synthetic local encrypted conversation, validates a backup made while the gateway is running, rejects a live restore and overwritten targets, tests incorrect/missing keys and damaged ciphertext, restores to a new file and starts a new gateway process to confirm the same device and session message survive. No external storage, automatic backup schedule, cloud deployment, key rotation or operating-system hardening is provided. A real Windows test and off-host backup plan are still necessary.
+
+### v1.12.0 — Offline key rotation (new-file only)
+
+The standalone backup tool now supports rotate-new with an OLD authenticated AES-256-GCM key and a separately supplied NEW random 256-bit key, reading and verifying source state before producing a **new** ciphertext file. The source and all prior backups remain unchanged; old archives still require their original key. Rotation is forbidden while gateway port 5091 is serving, with any missing/equal/malformed keys, invalid ciphertext or pre-existing output. The rotated output is authenticated with the new key before the write, then can be verified and mounted as a fresh local gateway data directory after explicitly changing the key. Automated synthetic CI verifies state continuity (session sequence, message, device token), rejection cases and unchanged source.
+
+This completes a **local development utility**, not production key-vault integration, automatic backup rekeying, old-key revocation, Windows recovery testing or public/cloud access.
