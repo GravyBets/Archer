@@ -26,6 +26,8 @@ jobs:
         run: dotnet run --project tests/RemoteGatewayPolicyChecks/RemoteGatewayPolicyChecks.csproj --configuration Release
       - name: Smoke-test remote gateway fail-closed localhost boundaries
         run: python3 tests/SmokeRemoteGateway.py
+      - name: Verify signed synthetic JWT identities and authorization isolation
+        run: python3 tests/SmokeRemoteSignedIdentity.py
       - name: Restore standalone encrypted backup utility
         run: dotnet restore Archer.GatewayBackup/Archer.GatewayBackup.csproj
       - name: Build standalone encrypted backup utility
