@@ -45,6 +45,21 @@
       <p class="note">Passkeys are managed by Auth0 and your iPhone. No tokens, email addresses or account IDs are shown on this screen.</p>
     </section>
 
+    <section class="device-panel" aria-labelledby="deviceTitle">
+      <div class="section-heading">
+        <span class="section-icon" aria-hidden="true">⌁</span>
+        <div><h2 id="deviceTitle">Prepare this iPhone</h2><p>Local P-256 WebCrypto key · Owner approval required later</p></div>
+      </div>
+      <p id="deviceKeyStatus" class="identity-message" role="status" aria-live="polite">Sign in before preparing a local device key.</p>
+      <p id="deviceFingerprint" class="device-fingerprint" hidden></p>
+      <div class="device-actions">
+        <button type="button" id="devicePrepareButton" class="button primary" disabled>Create device key</button>
+        <button type="button" id="deviceSelfTestButton" class="button secondary" disabled hidden>Test local proof</button>
+        <button type="button" id="deviceEraseButton" class="button secondary" disabled hidden>Erase local key</button>
+      </div>
+      <p class="note">This stores a non-extractable signing key in this browser's local storage. Safari may delete it; hardware-backed Secure Enclave protection is not guaranteed. Creating or testing a key does NOT approve this iPhone, grant remote access, or contact Archer's server.</p>
+    </section>
+
     <section class="capability-panel" aria-labelledby="featuresTitle">
       <div class="section-heading">
         <span class="section-icon" aria-hidden="true">◇</span>
@@ -52,7 +67,7 @@
       </div>
       <ul class="capability-list">
         <li><span class="circle">1</span><span><strong>Owner sign-in</strong><small id="authCapability">Not yet verified on this device</small></span><span id="authTag" class="capability-tag">PENDING</span></li>
-        <li><span class="circle">2</span><span><strong>Approved device</strong><small>Owner-approved cryptographic pairing required</small></span><span class="capability-tag">LOCKED</span></li>
+        <li><span class="circle">2</span><span><strong>Approved device</strong><small id="deviceCapability">Owner-approved cryptographic pairing required</small></span><span id="deviceTag" class="capability-tag">LOCKED</span></li>
         <li><span class="circle">3</span><span><strong>Private messages</strong><small>Encrypted remote gateway not connected</small></span><span class="capability-tag">LOCKED</span></li>
         <li><span class="circle">4</span><span><strong>Autonomous missions</strong><small>Approvals, cost controls and audit trail required</small></span><span class="capability-tag">LOCKED</span></li>
       </ul>
@@ -71,6 +86,7 @@
   </main>
   <script src="./config.js"></script>
   <script src="https://cdn.auth0.com/js/auth0-spa-js/2.30/auth0-spa-js.production.js"></script>
+  <script src="./device-keys.js" defer></script>
   <script src="./app.js" defer></script>
 </body>
 </html>
