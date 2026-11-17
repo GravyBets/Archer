@@ -1,4 +1,4 @@
-# Archer mobile gateway — security and threat review (v1.11.0)
+# Archer mobile gateway — security and threat review (v1.12.0)
 
 **Review date:** 2026-11-16. This is an engineering threat model, NOT an independent penetration test or approval for internet exposure.
 
@@ -149,6 +149,14 @@ No preview is delivered to an Apple device; no APNs device token, push server, m
 - Cursors and visible pages are not full message-delivery receipts: history is capped and has seven-day retention. Additional privacy, encrypted backups, account separation and long-term sync rules are required before production.
 
 
+## v1.12.0 offline encryption key rotation threat model
+
+- The standalone offline tool now supports rotate-new: it authenticates the original encrypted state with ARCHER_GATEWAY_DATA_KEY_HEX and prepares a new ciphertext file using a *different* ARCHER_GATEWAY_NEW_DATA_KEY_HEX provided in the private process environment. Key values never appear as command-line arguments, program output or GitHub secrets.
+- It requires the gateway port 5091 to be offline, forbids source and output being the same path, refuses any existing destination and cannot overwrite the original state or backups. The rotated ciphertext is round-trip authenticated with the NEW key before its first write.
+- It rejects wrong/missing original keys, missing/malformed/equal replacement keys, tampering, plaintext source and invalid state. The original source is preserved on failure. Automated CI boots a gateway using the NEW key and verifies the same device bearer, owner message and conversation cursor are intact.
+- **Manual key custody remains critical.** An old backup still requires the OLD key. A new encrypted copy is not activated automatically: the operator must safely select a new data directory and new key after verifying backup/recovery. Stolen keys are NOT revoked by rotation alone; an attacker may have prior ciphertext. Old snapshots, system memory, log configuration and Windows/OS ACLs remain outside this utility.
+- No cloud deployment, remote backup scheduler, secrets vault, hardware-backed keys, production key rollover coordination, key-rotation automation or independent security audit is included.
+
 ## v1.11.0 local encrypted backups and restore risks
 
 - `Archer.GatewayBackup` is a **separate offline CLI**, not a gateway HTTP route. It cannot issue device tokens, call models, send messages, trigger GitHub writes or access the network except for a one-second localhost port check during restore.
@@ -191,4 +199,4 @@ Production deployment stays BLOCKED until all these gates pass.
 - Kestrel explicit endpoint binding: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/endpoints?view=aspnetcore-10.0
 - Kestrel proxy/forwarding security: https://learn.microsoft.com/aspnet/core/fundamentals/servers/kestrel/security-considerations
 
-This document inventories the current source at v1.11.0; revisit it when endpoints or authorization logic change.
+This document inventories the current source at v1.12.0; revisit it when endpoints or authorization logic change.
