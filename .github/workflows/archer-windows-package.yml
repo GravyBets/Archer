@@ -1,8 +1,13 @@
-name: Archer Windows — Owner-Approved Installer Package
+name: Archer Windows — Verified Owner Installer Package
 
-# Manual build only. Not triggered by merge, PR, schedule or remote command.
+# Automatically build a downloadable package ONLY after a trusted successful
+# push-to-main Archer Build. This NEVER installs, runs or deploys to a PC.
+# Manual owner dispatch is retained. No provider credentials are passed.
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Archer Build"]
+    types: [completed]
 
 permissions:
   contents: read
@@ -13,8 +18,16 @@ concurrency:
 
 jobs:
   windows-installer:
-    # Do not package unreviewed feature branches.
-    if: ${{ github.ref == 'refs/heads/main' }}
+    # A workflow_run on GitHub's default-branch definition can also be
+    # triggered by untrusted PR CI; reject those *before* running anything.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == 'GravyBets/Archer' &&
+       github.repository == 'GravyBets/Archer')
     runs-on: windows-latest
     timeout-minutes: 25
     permissions:
@@ -22,6 +35,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # For successful CI, package the exact tested trusted commit,
+          # not whatever main might point to when the packaging job starts.
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || 'main' }}
           persist-credentials: false
       - uses: actions/setup-dotnet@v4
         with:
@@ -87,7 +103,7 @@ jobs:
             ./dist/Install-Archer.ps1,./dist/Archer-Install.cmd, `
             ./dist/Archer-Rollback.cmd,./dist/HOW-TO-INSTALL.txt `
             -DestinationPath ./Archer-Windows-Installer.zip -CompressionLevel Optimal
-      - name: Upload owner-downloadable installer artifact (not a public release)
+      - name: Upload owner-downloadable installer artifact (never auto-install)
         uses: actions/upload-artifact@v4
         with:
           name: Archer-Windows-Installer
