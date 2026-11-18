@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
+    <Compile Include="../../Archer.RemoteGateway/DevicePairingContract.cs" Link="DevicePairingContract.cs" />
+    <Compile Include="../../Archer.RemoteGateway/DurableDeviceRegistry.cs" Link="DurableDeviceRegistry.cs" />
+  </ItemGroup>
+</Project>
