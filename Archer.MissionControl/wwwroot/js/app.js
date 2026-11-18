@@ -268,11 +268,13 @@ $('chatForm').addEventListener('submit', async event => {
   // A source is shareable only if the owner deliberately chose an
   // unedited mobile draft. This does not change which AI request is sent.
   const mobileSource = window.ArcherMobileDrafts?.beginChat(message);
-  window.ArcherPresence?.stopListening();
+  // A deliberate hands-free voice turn may resume listening AFTER Archer
+  // finishes speaking. Typed/manual sends end the microphone session.
+  const voiceMode = window.ArcherPresence?.prepareSend?.() === true;
   window.ArcherPresence?.stopSpeech();
   window.ArcherPresence?.setState('thinking', 'Archer is considering your message.');
   const result = await action(
-    () => api('/api/chat', { method: 'POST', body: JSON.stringify({ message }) }),
+    () => api('/api/chat', { method: 'POST', body: JSON.stringify({ message, voiceMode }) }),
     'Archer replied.');
   if (result && typeof result.answer === 'string') {
     $('chatText').value = '';

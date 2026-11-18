@@ -1,0 +1,297 @@
+name: Archer Self-Work — Approved Issues to Tested Draft PRs
+
+# No service hosting: scheduled Actions only, strictly owner opt-in.
+# Disabled by default unless repository variable ARCHER_SELF_WORK_ENABLED=true.
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Approved issue number (optional; blank selects oldest approved)"
+        required: false
+        type: string
+  schedule:
+    - cron: '15 17 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: archer-supervised-self-work
+  cancel-in-progress: false
+
+jobs:
+  claim:
+    # Intentional one-time owner opt-in. No API or GitHub write if disabled.
+    if: ${{ vars.ARCHER_SELF_WORK_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    outputs:
+      issue_number: ${{ steps.select.outputs.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Claim one explicitly approved, not-yet-attempted Archer issue
+        id: select
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        run: |
+          if [ -n "$ISSUE_NUMBER" ]; then
+            python3 tools/archer_self_work.py claim --repo "$GITHUB_REPOSITORY" \
+              --issue-number "$ISSUE_NUMBER" --output claim.json
+          else
+            python3 tools/archer_self_work.py claim --repo "$GITHUB_REPOSITORY" \
+              --output claim.json
+          fi
+          NUMBER=$(python3 -c 'import json; a=json.load(open("claim.json")); print(a["number"] if a["selected"] else "")')
+          echo "number=$NUMBER" >> "$GITHUB_OUTPUT"
+      - name: Save source issue snapshot
+        if: ${{ steps.select.outputs.number != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: archer-claimed-issue
+          path: claim.json
+          retention-days: 3
+
+  generate:
+    needs: claim
+    if: ${{ needs.claim.outputs.issue_number != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: archer-claimed-issue
+      - name: One bounded model request; no writable GitHub token in this job
+        env:
+          ARCHER_SELF_WORK_OPENAI_API_KEY: ${{ secrets.ARCHER_SELF_WORK_OPENAI_API_KEY }}
+          ARCHER_SELF_WORK_MODEL: ${{ vars.ARCHER_SELF_WORK_MODEL || 'gpt-5-mini' }}
+        run: |
+          python3 tools/archer_self_work.py generate --claim claim.json --output patch.json
+      - name: Save proposed narrow patch (never secrets or full repository)
+        uses: actions/upload-artifact@v4
+        with:
+          name: archer-proposed-patch
+          path: patch.json
+          retention-days: 3
+
+  validate:
+    needs: [claim, generate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    outputs:
+      valid: ${{ steps.check.outputs.valid }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: archer-proposed-patch
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Test proposed patch in isolated job, preserving bounded failure context
+        id: check
+        shell: bash
+        run: |
+          set +e
+          (
+            set -e
+            python3 tools/archer_self_work.py apply --patch patch.json --paths changed-paths.txt
+            node --check Archer.MissionControl/wwwroot/js/archer-home.js
+            node --check Archer.MissionControl/wwwroot/js/app.js
+            node --check Archer.MissionControl/wwwroot/js/coding.js
+            node --check Archer.MissionControl/wwwroot/js/developer.js
+            node --check Archer.MissionControl/wwwroot/js/inbox.js
+            python3 tests/ValidateUi.py
+            python3 -m unittest discover -s tests -p 'TestArcherSelfWork.py' -v
+            dotnet restore Archer.MissionControl/Archer.MissionControl.csproj
+            dotnet build Archer.MissionControl/Archer.MissionControl.csproj --configuration Release --no-restore
+          ) > check.log 2>&1
+          RESULT=$?
+          if [ "$RESULT" -eq 0 ]; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+            echo "First bounded patch passed independent validation."
+            printf '%s\n' 'All CI checks passed.' > feedback.txt
+          else
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            # No credentials are present in the test job. Still, bound and
+            # sanitise this untrusted log before using it as model context.
+            python3 - <<'PY'
+          from pathlib import Path
+          import re
+          data = Path("check.log").read_text(errors="replace")
+          data = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", data)
+          data = "".join(c if c in "\n\r\t" or ord(c) >= 32 else " " for c in data)
+          Path("feedback.txt").write_text(data[-2500:] or "Tests failed without output.")
+          PY
+            echo "First patch failed independent checks; one bounded repair is permitted."
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archer-first-validation-feedback
+          path: feedback.txt
+          retention-days: 2
+
+  repair:
+    needs: [claim, generate, validate]
+    if: ${{ needs.validate.outputs.valid == 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: archer-claimed-issue
+      - uses: actions/download-artifact@v4
+        with:
+          name: archer-proposed-patch
+      - uses: actions/download-artifact@v4
+        with:
+          name: archer-first-validation-feedback
+      - name: One additional bounded model call using untrusted failure evidence
+        env:
+          ARCHER_SELF_WORK_OPENAI_API_KEY: ${{ secrets.ARCHER_SELF_WORK_OPENAI_API_KEY }}
+          ARCHER_SELF_WORK_MODEL: ${{ vars.ARCHER_SELF_WORK_MODEL || 'gpt-5-mini' }}
+        run: |
+          python3 tools/archer_self_work.py generate --claim claim.json \
+            --previous patch.json --feedback feedback.txt --output revised-patch.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archer-revised-patch
+          path: revised-patch.json
+          retention-days: 2
+
+  validate-repair:
+    needs: repair
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    outputs:
+      valid: ${{ steps.check.outputs.valid }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: archer-revised-patch
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Test final patch with no provider key and no GitHub write token
+        id: check
+        shell: bash
+        run: |
+          set +e
+          (
+            set -e
+            python3 tools/archer_self_work.py apply --patch revised-patch.json --paths changed-paths.txt
+            node --check Archer.MissionControl/wwwroot/js/archer-home.js
+            node --check Archer.MissionControl/wwwroot/js/app.js
+            node --check Archer.MissionControl/wwwroot/js/coding.js
+            node --check Archer.MissionControl/wwwroot/js/developer.js
+            node --check Archer.MissionControl/wwwroot/js/inbox.js
+            python3 tests/ValidateUi.py
+            python3 -m unittest discover -s tests -p 'TestArcherSelfWork.py' -v
+            dotnet restore Archer.MissionControl/Archer.MissionControl.csproj
+            dotnet build Archer.MissionControl/Archer.MissionControl.csproj --configuration Release --no-restore
+          ) > second-check.log 2>&1
+          RESULT=$?
+          if [ "$RESULT" -eq 0 ]; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+            echo "Revised patch passed; ready for draft PR."
+          else
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "Revised patch failed tests; stop. No further retries or PR."
+          fi
+
+  # Explicitly fail CI if both attempts fail. An unsuccessful self-work job
+  # must never present itself as a passing autonomous software change.
+  final-status:
+    needs: [generate, validate, repair, validate-repair]
+    if: ${{ always() && needs.generate.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Ensure one independently verified patch exists
+        env:
+          FIRST_OK: ${{ needs.validate.outputs.valid }}
+          SECOND_OK: ${{ needs.validate-repair.outputs.valid }}
+        run: |
+          if [ "$FIRST_OK" = "true" ] || [ "$SECOND_OK" = "true" ]; then
+            echo "Verified bounded patch available."
+          else
+            echo "::error::Both supervised self-work attempts failed; no PR should be created."
+            exit 1
+          fi
+
+  publish:
+    needs: [claim, generate, validate, repair, validate-repair]
+    if: ${{ always() && needs.generate.result == 'success' && (needs.validate.outputs.valid == 'true' || needs.validate-repair.outputs.valid == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Download passing patch only
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.validate.outputs.valid == 'true' && 'archer-proposed-patch' || 'archer-revised-patch' }}
+      - name: Reapply EXACT verified patch (no models, scripts or tests run here)
+        env:
+          FIRST_OK: ${{ needs.validate.outputs.valid }}
+        run: |
+          if [ "$FIRST_OK" = "true" ]; then
+            PATCH="patch.json"
+          else
+            PATCH="revised-patch.json"
+          fi
+          python3 tools/archer_self_work.py apply --patch "$PATCH" --paths changed-paths.txt
+          python3 tools/archer_self_work.py pr-body --patch "$PATCH" --output pr-body.md
+      - name: Publish draft PR for owner review (never merge or deploy)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ needs.claim.outputs.issue_number }}
+        run: |
+          BRANCH="archer/self-work-${ISSUE_NUMBER}-${GITHUB_RUN_ID}"
+          git config user.name "Archer Self-Work"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          while IFS= read -r FILE; do
+            git add -- "$FILE"
+          done < changed-paths.txt
+          if git diff --cached --quiet; then
+            echo "No changes to publish."
+            exit 1
+          fi
+          git commit -m "Archer: approved issue #${ISSUE_NUMBER} bounded code change"
+          gh auth setup-git
+          git push origin "$BRANCH"
+          gh pr create --draft --base main --head "$BRANCH" \
+            --title "[Archer] Approved issue #${ISSUE_NUMBER}: tested change" \
+            --body-file pr-body.md
+          echo "Draft PR created; human review and merge required."

@@ -30,10 +30,23 @@ jobs:
           node --check web/archer-pocket/app.js
           node --check web/archer-pocket/sw.js
           node --check web/archer-pocket/config.js
+      - name: Validate unattended CI failure triage cannot approve AI fixes
+        run: |
+          python3 -m py_compile tools/archer_ci_triage.py
+          python3 -m unittest discover -s tests -p 'TestArcherCiTriage.py' -v
+      - name: Validate safe Archer self-work patch worker (no secrets)
+        run: |
+          python3 -m py_compile tools/archer_self_work.py
+          python3 -m unittest discover -s tests -p 'TestArcherSelfWork.py' -v
+      - name: Verify local Archer installer preserves data and supports rollback
+        shell: pwsh
+        run: ./tests/Test-WindowsInstaller.ps1
       - name: Check dashboard and presence JavaScript
         run: |
           node --check Archer.MissionControl/wwwroot/js/app.js
           node --check Archer.MissionControl/wwwroot/js/archer-home.js
+          node --check Archer.MissionControl/wwwroot/js/realtime-voice.js
+          node tests/VoiceConversationChecks.mjs
           node --check Archer.MissionControl/wwwroot/js/orb-field.js
           node --check Archer.MissionControl/wwwroot/js/developer.js
           node --check Archer.MissionControl/wwwroot/js/operator-context.js
@@ -67,6 +80,12 @@ jobs:
           fi
           curl -fsS http://127.0.0.1:5087/ > /tmp/archer-root.html
           curl -fsS http://127.0.0.1:5087/api/config > /tmp/archer-config.json
+          curl -fsS http://127.0.0.1:5087/api/realtime-voice/status > /tmp/archer-realtime-status.json
+          python3 -c 'import json; assert not json.load(open("/tmp/archer-realtime-status.json"))["enabled"]; print("PASS: paid realtime audio disabled by default")'
+          CODE=$(curl -sS -o /tmp/archer-realtime-rejected.json -w '%{http_code}' \
+            -H 'Origin: http://127.0.0.1:5087' -H 'Content-Type: application/sdp' \
+            --data-binary 'v=0' -X POST http://127.0.0.1:5087/api/realtime-voice/call)
+          test "$CODE" = "403"
           curl -fsS http://127.0.0.1:5087/api/usage > /tmp/archer-usage.json
           curl -fsS http://127.0.0.1:5087/api/communications > /tmp/archer-communications.json
           curl -fsS http://127.0.0.1:5087/api/mobile/capabilities > /tmp/archer-mobile.json

@@ -15,8 +15,14 @@
   const replayButton = el('voiceReplayButton');
   const note = el('voiceSupportNote');
   const voicePicker = el('voiceChoiceSelect');
+  const rateSlider = el('voiceRateSlider');
+  const rateValue = el('voiceRateValue');
   const accentStatus = el('voiceAccentStatus');
   const input = el('chatText');
+  const handsFreeToggle = el('voiceHandsFreeToggle');
+  const pauseSlider = el('voicePauseSlider');
+  const pauseValue = el('voicePauseValue');
+  const endConversationButton = el('voiceEndConversation');
 
   const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
   const hasSpeechOut = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
@@ -27,7 +33,16 @@
   let hasFailures = false;
   let stoppedByUser = false;
   let initialTranscript = '';
-  let finalTranscript = '';
+  let carriedTranscript = '';
+  let currentTranscript = '';
+  let voiceSessionActive = false; // explicit Speak action only, never auto-start on page load
+  let sendingVoiceTurn = false;
+  let sendAfterRecognitionEnd = false;
+  let waitingForVoiceReply = false;
+  let silenceTimer = null;
+  let restartTimer = null;
+  let recognitionRestarts = 0;
+  let recentVoiceError = false;
   let transientError = false;
   let lastReply = '';
   let availableVoices = [];
@@ -36,6 +51,35 @@
   const getPreference = key => { try { return window.localStorage.getItem(key); } catch { return null; } };
   const setPreference = (key, value) => { try { window.localStorage.setItem(key, value); } catch { /* privacy mode */ } };
   readToggle.checked = getPreference('archer.voice.readAloud') === 'yes';
+  handsFreeToggle.checked = getPreference('archer.voice.handsFree') === 'yes';
+  const savedPause = Number(getPreference('archer.voice.pauseSeconds'));
+  const pauseSeconds = Number.isInteger(savedPause) && savedPause >= 4 && savedPause <= 30
+    ? savedPause : 7;
+  pauseSlider.value = String(pauseSeconds);
+  pauseValue.textContent = pauseSeconds + ' sec';
+  pauseSlider.addEventListener('input', () => {
+    const value = Math.min(30, Math.max(4, Number(pauseSlider.value) || 7));
+    pauseValue.textContent = value + ' sec';
+    setPreference('archer.voice.pauseSeconds', String(value));
+    if (voiceSessionActive && recognizedVoiceText()) armSilenceTimer();
+  });
+  handsFreeToggle.addEventListener('change', () => {
+    setPreference('archer.voice.handsFree', handsFreeToggle.checked ? 'yes' : 'no');
+    if (!handsFreeToggle.checked) endVoiceConversation(false);
+  });
+
+  // Default to a conversational pace; keep the preference locally per browser.
+  // Invalid/old preferences cannot push Web Speech rate beyond the offered range.
+  const savedRate = Number(getPreference('archer.voice.rate'));
+  const speakingRate = Number.isFinite(savedRate) && savedRate >= 0.80 && savedRate <= 1.65
+    ? Math.round(savedRate * 20) / 20 : 1.25;
+  rateSlider.value = String(speakingRate);
+  rateValue.textContent = speakingRate.toFixed(2) + '×';
+  rateSlider.addEventListener('input', () => {
+    const value = Math.min(1.65, Math.max(0.80, Number(rateSlider.value) || 1.25));
+    rateValue.textContent = value.toFixed(2) + '×';
+    setPreference('archer.voice.rate', value.toFixed(2));
+  });
 
   function statusText(value, hint = '') {
     el('presenceStatus').textContent = value;
@@ -58,8 +102,9 @@
       idle: 'TEXT READY', listening: 'MIC ACTIVE', thinking: 'PROCESSING',
       responding: 'REPLY READY', speaking: 'VOICE OUTPUT', alert: 'TASK ALERT', error: 'CHECK STATUS'
     })[value] || 'TEXT READY';
-    mic.setAttribute('aria-pressed', listening ? 'true' : 'false');
-    mic.textContent = listening ? '■ Stop listening' : '🎙 Speak';
+    mic.setAttribute('aria-pressed', listening || voiceSessionActive ? 'true' : 'false');
+    mic.textContent = (listening || voiceSessionActive) ? '■ Stop listening' : '🎙 Speak';
+    endConversationButton.disabled = !(voiceSessionActive || waitingForVoiceReply || listening);
   }
 
   function settle() {
@@ -168,7 +213,7 @@
     } else {
       utterance.lang = 'en-GB';
     }
-    utterance.rate = 0.99;
+    utterance.rate = Math.min(1.65, Math.max(0.80, Number(rateSlider.value) || 1.25));
     utterance.pitch = 0.96;
     utterance.volume = 1;
     utterance.onstart = () => { speaking = true; stopButton.disabled = false; setState('speaking', 'Archer is reading the reply aloud.'); };
@@ -177,6 +222,13 @@
       stopButton.disabled = true;
       if (clipped) note.textContent = 'Only the first portion of a long reply was read; full text is shown above.';
       settle();
+      if (waitingForVoiceReply && voiceSessionActive && handsFreeToggle.checked) {
+        waitingForVoiceReply = false;
+        window.setTimeout(() => {
+          if (voiceSessionActive && !appState.busy && !document.hidden)
+            beginVoiceTurn();
+        }, 300);
+      }
     };
     utterance.onerror = event => {
       speaking = false;
@@ -185,16 +237,134 @@
         settle();
         return;
       }
+      if (voiceSessionActive) endVoiceConversation(false);
       softError('Browser voice playback failed. You can still read the reply.');
     };
     window.speechSynthesis.speak(utterance);
   }
 
-  function stopListening() {
-    if (!recognition || !listening) return;
+  function clearSilenceTimer() {
+    if (silenceTimer !== null) window.clearTimeout(silenceTimer);
+    silenceTimer = null;
+  }
+
+  function clearRestartTimer() {
+    if (restartTimer !== null) window.clearTimeout(restartTimer);
+    restartTimer = null;
+  }
+
+  function recognizedVoiceText() {
+    return [initialTranscript, carriedTranscript, currentTranscript]
+      .filter(Boolean).join(' ').trim().slice(0, 3000);
+  }
+
+  function displayVoiceText() {
+    input.value = recognizedVoiceText();
+  }
+
+  function commitCurrentTranscript() {
+    if (currentTranscript.trim()) {
+      carriedTranscript = [carriedTranscript, currentTranscript.trim()]
+        .filter(Boolean).join(' ').trim().slice(0, 3000);
+      currentTranscript = '';
+    }
+    displayVoiceText();
+  }
+
+  function armSilenceTimer() {
+    clearSilenceTimer();
+    if (!voiceSessionActive || !handsFreeToggle.checked || !recognizedVoiceText()) return;
+    silenceTimer = window.setTimeout(() => {
+      silenceTimer = null;
+      if (!voiceSessionActive || appState.busy || !handsFreeToggle.checked ||
+          !recognizedVoiceText()) return;
+      // Wait for browser's last finalized recognition event, then auto-send
+      // exactly one owner-spoken turn. No mission is executed by the mic.
+      sendAfterRecognitionEnd = true;
+      clearRestartTimer();
+      if (listening) {
+        try { recognition.stop(); }
+        catch { finishRecognizedTurn(); }
+      } else {
+        finishRecognizedTurn();
+      }
+    }, Math.min(30, Math.max(4, Number(pauseSlider.value) || 7)) * 1000);
+  }
+
+  function stopRecognition() {
     stoppedByUser = true;
-    try { recognition.stop(); }
-    catch { listening = false; settle(); }
+    clearRestartTimer();
+    if (recognition && listening) {
+      try { recognition.abort(); }
+      catch { /* already ended */ }
+    }
+    listening = false;
+  }
+
+  function endVoiceConversation(stopAudio = true) {
+    voiceSessionActive = false;
+    waitingForVoiceReply = false;
+    sendingVoiceTurn = false;
+    sendAfterRecognitionEnd = false;
+    clearSilenceTimer();
+    stopRecognition();
+    if (stopAudio) stopSpeech();
+    settle();
+    endConversationButton.disabled = true;
+    mic.setAttribute('aria-pressed', 'false');
+    mic.textContent = '🎙 Speak';
+  }
+
+  function finishRecognizedTurn() {
+    if (!sendAfterRecognitionEnd) return;
+    sendAfterRecognitionEnd = false;
+    clearSilenceTimer();
+    clearRestartTimer();
+    commitCurrentTranscript();
+    if (!voiceSessionActive || !handsFreeToggle.checked ||
+        appState.busy || !input.value.trim()) return;
+    sendingVoiceTurn = true;
+    // This calls the same local /api/chat handler as pressing Send.
+    // All existing model spending limits still apply.
+    el('chatForm').requestSubmit();
+  }
+
+  function resumeRecognition() {
+    if (!voiceSessionActive || listening || appState.busy || document.hidden ||
+        sendAfterRecognitionEnd) return;
+    if (recognitionRestarts >= 40) {
+      endVoiceConversation(false);
+      softError('Browser speech recognition kept stopping. Start again manually.');
+      return;
+    }
+    recognitionRestarts += 1;
+    currentTranscript = '';
+    try { recognition.start(); }
+    catch {
+      endVoiceConversation(false);
+      softError('Browser would not restart the microphone. Tap Speak to retry.');
+    }
+  }
+
+  function beginVoiceTurn() {
+    if (!recognition || appState.busy || document.hidden) return;
+    initialTranscript = input.value.trim();
+    carriedTranscript = '';
+    currentTranscript = '';
+    sendAfterRecognitionEnd = false;
+    sendingVoiceTurn = false;
+    recentVoiceError = false;
+    recognitionRestarts = 0;
+    stoppedByUser = false;
+    clearSilenceTimer();
+    clearRestartTimer();
+    recognition.continuous = voiceSessionActive;
+    recognition.interimResults = true;
+    try { recognition.start(); }
+    catch {
+      endVoiceConversation(false);
+      softError('The microphone could not start. Check browser microphone permissions.');
+    }
   }
 
   function startListening() {
@@ -204,15 +374,35 @@
       return;
     }
     if (appState.busy) return;
-    if (listening) { stopListening(); return; }
-    stopSpeech();
-    stoppedByUser = false;
-    initialTranscript = input.value.trim();
-    finalTranscript = '';
-    try { recognition.start(); }
-    catch {
-      softError('The microphone could not start. Check browser microphone permissions.');
+    if (listening || voiceSessionActive) {
+      endVoiceConversation();
+      return;
     }
+    stopSpeech();
+    // Hands-free is opt-in and always starts with an explicit Speak/orb tap.
+    voiceSessionActive = handsFreeToggle.checked;
+    waitingForVoiceReply = false;
+    if (voiceSessionActive && hasSpeechOut && !readToggle.checked) {
+      readToggle.checked = true;
+      setPreference('archer.voice.readAloud', 'yes');
+    }
+    beginVoiceTurn();
+  }
+
+  function prepareSend() {
+    const wasVoiceTurn = voiceSessionActive && sendingVoiceTurn;
+    clearSilenceTimer();
+    clearRestartTimer();
+    stopRecognition();
+    sendAfterRecognitionEnd = false;
+    sendingVoiceTurn = false;
+    if (wasVoiceTurn) {
+      waitingForVoiceReply = true;
+    } else if (voiceSessionActive) {
+      // Typing and manually sending does not silently resume the mic.
+      endVoiceConversation(false);
+    }
+    return wasVoiceTurn;
   }
 
   if (SpeechRecognitionCtor) {
@@ -224,34 +414,69 @@
 
     recognition.onstart = () => {
       listening = true;
-      setState('listening', 'Your microphone is active. Speak normally; review the transcript before sending.');
+      setState('listening', voiceSessionActive
+        ? 'Hands-free: speak naturally; Archer waits for your selected pause.'
+        : 'Your microphone is active. Review the transcript before sending.');
     };
     recognition.onresult = event => {
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const piece = event.results[i][0]?.transcript || '';
-        if (event.results[i].isFinal) finalTranscript += piece + ' ';
-        else interim += piece;
+      // Rebuild from the complete results list to avoid duplicating text when
+      // browsers revise a partial result or return multiple final phrases.
+      let transcript = '';
+      for (let i = 0; i < event.results.length; i++)
+        transcript += (event.results[i][0]?.transcript || '') + ' ';
+      const next = transcript.trim();
+      if (next !== currentTranscript) {
+        currentTranscript = next;
+        displayVoiceText();
+        if (voiceSessionActive && !sendAfterRecognitionEnd) {
+          recognitionRestarts = 0;
+          armSilenceTimer();
+        }
       }
-      const recognized = (finalTranscript + interim).trim();
-      input.value = [initialTranscript, recognized].filter(Boolean).join(' ').slice(0, 3000);
       input.focus({ preventScroll: true });
     };
     recognition.onerror = event => {
-      listening = false;
-      softError(event.error === 'not-allowed' || event.error === 'service-not-allowed'
-        ? 'Microphone permission was denied. Allow access in browser settings or use text.'
-        : 'Speech recognition stopped (' + (event.error || 'unknown') + '). Try again or type.');
+      if (stoppedByUser) return;
+      const code = event.error || 'unknown';
+      if (code === 'no-speech') return; // Browser sometimes ends after a pause.
+      recentVoiceError = true;
+      if (['not-allowed', 'service-not-allowed', 'audio-capture',
+           'network', 'language-not-supported'].includes(code)) {
+        endVoiceConversation(false);
+        softError(code === 'not-allowed' || code === 'service-not-allowed'
+          ? 'Microphone access was denied. Allow it in browser settings.'
+          : 'Microphone service failed (' + code + '). Tap Speak when it is ready.');
+      }
     };
     recognition.onend = () => {
       listening = false;
-      if (stoppedByUser) stoppedByUser = false;
-      settle();
-      input.focus({ preventScroll: true });
+      commitCurrentTranscript();
+      if (sendAfterRecognitionEnd) {
+        finishRecognizedTurn();
+        return;
+      }
+      if (stoppedByUser || !voiceSessionActive) {
+        settle();
+        return;
+      }
+      if (recentVoiceError) {
+        endVoiceConversation(false);
+        softError('Speech recognition ended unexpectedly. Start it again manually.');
+        return;
+      }
+      // Web Speech engines may end on brief silence regardless of continuous.
+      // Retry a bounded number of times while awaiting the longer pause.
+      clearRestartTimer();
+      restartTimer = window.setTimeout(() => {
+        restartTimer = null;
+        resumeRecognition();
+      }, 300);
+      setState('listening', 'Waiting through your pause… speak when ready.');
     };
   } else {
     mic.disabled = true;
-    mic.title = 'Speech recognition is not supported in this browser';
+    handsFreeToggle.disabled = true;
+    pauseSlider.disabled = true;
     orb.title = 'Focus the Archer chat input';
     note.textContent = 'Speech recognition is unavailable in this browser. You can type to Archer.';
   }
@@ -259,6 +484,7 @@
   if (!hasSpeechOut) {
     readToggle.disabled = true;
     voicePicker.disabled = true;
+    rateSlider.disabled = true;
     accentStatus.textContent = 'Spoken playback is unavailable in this browser.';
     readToggle.checked = false;
     if (recognition) note.textContent = 'Speech-to-text available. Speech playback is unavailable in this browser.';
@@ -268,12 +494,16 @@
     chooseVoices();
     window.speechSynthesis.addEventListener?.('voiceschanged', chooseVoices);
   }
+  endConversationButton.addEventListener('click', () => endVoiceConversation());
   mic.addEventListener('click', startListening);
   orb.addEventListener('click', () => {
     if (recognition) startListening();
     else input.focus();
   });
-  stopButton.addEventListener('click', stopSpeech);
+  stopButton.addEventListener('click', () => {
+    if (voiceSessionActive) endVoiceConversation();
+    else stopSpeech();
+  });
   replayButton.addEventListener('click', () => { if (lastReply) say(lastReply, true); });
   readToggle.addEventListener('change', () => {
     setPreference('archer.voice.readAloud', readToggle.checked ? 'yes' : 'no');
@@ -324,14 +554,22 @@
     reply: say,
     settle,
     stopSpeech,
-    stopListening,
-    failure: softError
+    stopListening: endVoiceConversation,
+    prepareSend,
+    failure: message => {
+      endVoiceConversation(false);
+      softError(message);
+    }
   };
   update(appState.data);
   settle();
 
+  // Do not leave an opted-in microphone running in a background tab.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) endVoiceConversation();
+  });
   window.addEventListener('beforeunload', () => {
-    if (listening) stopListening();
+    endVoiceConversation(false);
     if (hasSpeechOut) window.speechSynthesis.cancel();
   });
 })();
