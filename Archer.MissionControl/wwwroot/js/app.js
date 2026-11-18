@@ -265,13 +265,38 @@ $('chatForm').addEventListener('submit', async event => {
   event.preventDefault();
   const message = $('chatText').value.trim();
   if (!message || appState.busy) return;
-  // A source is shareable only if the owner deliberately chose an
-  // unedited mobile draft. This does not change which AI request is sent.
-  const mobileSource = window.ArcherMobileDrafts?.beginChat(message);
+  // Mission voice commands use a strict local parser. Never submit them
+  // to the model or authorize execution via natural-language "yes".
+  const missionCommand = window.ArcherVoiceMissions?.parse?.(message);
   // A deliberate hands-free voice turn may resume listening AFTER Archer
   // finishes speaking. Typed/manual sends end the microphone session.
   const voiceMode = window.ArcherPresence?.prepareSend?.() === true;
   window.ArcherPresence?.stopSpeech();
+  if (missionCommand) {
+    setBusy(true);
+    let spoken = '';
+    try {
+      const result = missionCommand.kind === 'list'
+        ? await window.ArcherVoiceMissions.list()
+        : await window.ArcherVoiceMissions.propose(
+            missionCommand.title, missionCommand.objective);
+      spoken = window.ArcherVoiceMissions.describe(result);
+      $('chatText').value = '';
+      await refresh();
+      notice(spoken);
+    } catch (error) {
+      spoken = 'I could not complete that mission request. ' +
+        (error?.message || 'Please try again.');
+      notice(spoken, true);
+    } finally {
+      setBusy(false);
+    }
+    // Reply only after releasing UI busy state so opt-in voice can resume.
+    if (spoken) window.ArcherPresence?.reply(spoken);
+    return;
+  }
+  // Only ordinary chat can share a manually selected phone draft.
+  const mobileSource = window.ArcherMobileDrafts?.beginChat(message);
   window.ArcherPresence?.setState('thinking', 'Archer is considering your message.');
   const result = await action(
     () => api('/api/chat', { method: 'POST', body: JSON.stringify({ message, voiceMode }) }),
@@ -285,6 +310,13 @@ $('chatForm').addEventListener('submit', async event => {
     window.ArcherPresence?.failure('The response could not be completed. Check the error banner above.');
   }
 });
+// When an on-screen approved voice command creates a local mission draft,
+ // select it in the existing dashboard without executing its plan.
+window.ArcherOnMissionDraftCreated = async id => {
+  if (typeof id !== 'string') return;
+  appState.selectedMissionId = id;
+  await refresh();
+};
 showView('archer');
 refresh().catch(error => {
   $('connectionLabel').textContent = 'Local server unavailable';

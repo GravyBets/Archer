@@ -59,7 +59,7 @@
             <button type="button" class="presence-metric" data-go-view="attention"><span class="metric-caption">NEEDS ATTENTION</span><strong id="presenceAttentionCount">0</strong><small>Failed mission tasks</small></button>
           </div>
           <section class="panel archer-conversation" aria-label="Conversation with Archer">
-            <div class="conversation-title"><div><h2>Conversation</h2><p>Text chat or opt-in hands-free voice conversation</p></div><span class="conversation-mode" id="conversationMode">TEXT READY</span></div>
+            <div class="conversation-title"><div><h2>Conversation</h2><p>Chat, ask for mission status, or propose a mission draft by voice</p></div><span class="conversation-mode" id="conversationMode">TEXT READY</span></div>
             <div id="chatMessages" class="chat-messages" aria-live="off"></div>
             <form id="chatForm" class="chat-composer">
               <textarea id="chatText" rows="2" maxlength="3000" placeholder="Ask Archer something or give him a direction…" aria-label="Message to Archer"></textarea>
@@ -486,6 +486,7 @@
     </main>
   </div>
   <dialog id="missionDialog" class="modal"><form id="missionForm" method="dialog"><div class="modal-head"><div class="eyebrow">NEW OBJECTIVE</div><h2>Assign a mission</h2><p>Tell Archer what success looks like.</p></div><label for="missionTitle">Mission name</label><input id="missionTitle" maxlength="100" required minlength="3" placeholder="Build $1,000/month in recurring revenue" /><label for="missionObjective">Objective</label><textarea id="missionObjective" maxlength="3000" minlength="10" required rows="5" placeholder="Research, compare, and validate business opportunities that could generate recurring revenue. Prioritize real customer demand and practical execution."></textarea><div class="modal-actions"><button type="button" class="button secondary" id="cancelMission">Cancel</button><button class="button primary" type="submit">Create Mission</button></div></form></dialog>
+  <script src="/js/mission-voice.js" defer></script>
   <script src="/js/app.js" defer></script>
   <script src="/js/archer-home.js" defer></script>
   <script src="/js/realtime-voice.js" defer></script>

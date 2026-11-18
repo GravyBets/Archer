@@ -46,6 +46,8 @@ jobs:
       - name: Check dashboard and presence JavaScript
         run: |
           node --check Archer.MissionControl/wwwroot/js/app.js
+          node --check Archer.MissionControl/wwwroot/js/mission-voice.js
+          node tests/MissionVoiceChecks.mjs
           node --check Archer.MissionControl/wwwroot/js/archer-home.js
           node --check Archer.MissionControl/wwwroot/js/realtime-voice.js
           node tests/VoiceConversationChecks.mjs

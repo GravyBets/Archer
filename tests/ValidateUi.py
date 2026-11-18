@@ -98,7 +98,7 @@ dynamic_ids = {"starterMission"}
 missing = referred_ids.difference(page.ids).difference(dynamic_ids)
 assert not missing, f"JavaScript references missing DOM IDs: {missing}"
 
-assert page.scripts[-12:] == ["/js/app.js", "/js/archer-home.js", "/js/realtime-voice.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js", "/js/coding.js", "/js/communications.js", "/js/inbox.js", "/js/mobile-drafts.js", "/js/mobile-sessions.js"]
+assert page.scripts[-13:] == ["/js/mission-voice.js", "/js/app.js", "/js/archer-home.js", "/js/realtime-voice.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js", "/js/coding.js", "/js/communications.js", "/js/inbox.js", "/js/mobile-drafts.js", "/js/mobile-sessions.js"]
 assert "/api/mobile/sessions" in MOBILE_SESSIONS_JS
 assert "/api/mobile/session-history" in MOBILE_SESSIONS_JS
 assert "textContent" in MOBILE_SESSIONS_JS
@@ -137,6 +137,15 @@ assert "showModal()" in DEVELOPER_JS
 assert "showView('archer');" in JS
 assert "window.ArcherPresence?.update(appState.data)" in JS
 assert "window.ArcherPresence?.reply(result.answer)" in JS
+assert (ROOT / "js" / "mission-voice.js").is_file()
+VOICE_BRIDGE_JS = (ROOT / "js" / "mission-voice.js").read_text(encoding="utf-8")
+assert "window.confirm(" in VOICE_BRIDGE_JS
+assert "/api/missions" in VOICE_BRIDGE_JS and "/api/state" in VOICE_BRIDGE_JS
+assert "/run" not in VOICE_BRIDGE_JS and "/plan" not in VOICE_BRIDGE_JS
+assert "ArcherVoiceMissions?.parse?.(message)" in JS
+assert "window.ArcherVoiceMissions.propose(" in JS
+assert "list_local_missions" in (ROOT.parent / "Services" / "RealtimeVoiceCoordinator.cs").read_text(encoding="utf-8")
+assert "propose_local_mission" in (ROOT.parent / "Services" / "RealtimeVoiceCoordinator.cs").read_text(encoding="utf-8")
 assert (ROOT / "js" / "realtime-voice.js").is_file()
 REALTIME_JS = (ROOT / "js" / "realtime-voice.js").read_text(encoding="utf-8")
 assert "getUserMedia" in REALTIME_JS and "RTCPeerConnection" in REALTIME_JS

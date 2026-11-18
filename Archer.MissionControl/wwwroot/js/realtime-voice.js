@@ -5,8 +5,10 @@
  * dedicated provider API key never reaches the browser. The localhost broker
  * uses a separately budgeted model key and conservatively counts initiations.
  * Browser 4 minute auto-stop is NOT a guaranteed provider-side cost limit.
- * Real-time voice is a separate, no-tools conversation; no audio is recorded
- * or saved in local Archer's conversation JSON by this module.
+ * Real-time voice may use two narrowly scoped local mission tools. Only
+ * draft creation is permitted and only after real on-screen owner confirmation.
+ * No planning, executing, code changes, payments or telephony.
+ * Audio/transcripts are not saved to Archer conversation JSON by this module.
  */
 (() => {
   const $ = id => document.getElementById(id);
@@ -21,11 +23,18 @@
   let stopTimer = null;
   let connecting = false;
   let manualWasDisabled = false;
+  let approvedSession = null;
+  let handledCalls = new Set();
+  let toolCalls = 0;
   const SESSION_LIMIT_MS = 4 * 60 * 1000;
 
   function announce(message) { status.textContent = message; }
 
   function release() {
+    if (approvedSession) approvedSession.abort();
+    approvedSession = null;
+    handledCalls.clear();
+    toolCalls = 0;
     if (stopTimer !== null) window.clearTimeout(stopTimer);
     stopTimer = null;
     try { channel?.close(); } catch { /* cleanup */ }
@@ -54,6 +63,52 @@
     // mic hardware AND close the model connection.
     release();
     announce(reason);
+  }
+
+  // Function call results are sent only to the active Realtime session.
+  // Model instructions cannot authorize a mutation: the local tool performs
+  // its own physical on-screen confirmation before a draft can be created.
+  async function finishFunctionCalls(items, activeConnection) {
+    if (!Array.isArray(items) || connection !== activeConnection ||
+        channel?.readyState !== 'open') return;
+    const outputs = [];
+    for (const call of items) {
+      if (call?.type !== 'function_call') continue;
+      const callId = call.call_id;
+      if (typeof callId !== 'string' || !/^[a-zA-Z0-9_-]{1,32}$/.test(callId) ||
+          handledCalls.has(callId)) continue;
+      handledCalls.add(callId);
+      toolCalls += 1;
+      let result = {status: 'rejected', message: 'Unsupported mission request.'};
+      if (toolCalls <= 3 && typeof call.arguments === 'string' &&
+          call.arguments.length <= 2500) {
+        try {
+          const args = JSON.parse(call.arguments);
+          if (args && typeof args === 'object' && !Array.isArray(args)) {
+            if (call.name === 'list_local_missions' && Object.keys(args).length === 0)
+              result = await window.ArcherVoiceMissions.list();
+            else if (call.name === 'propose_local_mission' &&
+                     Object.keys(args).length === 2 &&
+                     typeof args.title === 'string' &&
+                     typeof args.objective === 'string') {
+              result = await window.ArcherVoiceMissions.propose(
+                args.title, args.objective, {signal: approvedSession?.signal});
+            }
+          }
+        } catch {
+          result = {status: 'error', message: 'Mission operation unavailable; no unapproved action was taken.'};
+        }
+      }
+      if (connection !== activeConnection || approvedSession?.signal.aborted ||
+          channel?.readyState !== 'open') return;
+      outputs.push({
+        type: 'conversation.item.create',
+        item: {type: 'function_call_output', call_id: callId, output: JSON.stringify(result)}
+      });
+    }
+    if (outputs.length === 0) return;
+    for (const output of outputs) channel.send(JSON.stringify(output));
+    channel.send(JSON.stringify({type: 'response.create'}));
   }
 
   async function initialize() {
@@ -86,10 +141,14 @@
       'Uses your separately budgeted Realtime API key (NOT covered by the ' +
       'normal Archer chat cost ledger). Recommended maximum 4 minutes, ' +
       'with an automatic browser stop that is NOT a guaranteed billing cap.\n\n' +
-      'Voice goes directly to the AI provider. Archer cannot run missions ' +
-      'or change code in this live session. Continue?')) return;
+      'Voice goes to the AI provider. Mission titles/status may be shared ' +
+      'if you request a status check. A mission draft needs on-screen approval. ' +
+      'No mission execution, code changes or payments are permitted. Continue?')) return;
 
     connecting = true;
+    approvedSession = new AbortController();
+    handledCalls.clear();
+    toolCalls = 0;
     start.disabled = true;
     end.disabled = false;
     announce('Opening microphone and establishing encrypted WebRTC audio…');
@@ -133,8 +192,12 @@
             announce('Listening. You can interrupt Archer while he speaks.');
           if (data.type === 'response.created')
             announce('Archer is responding… speak to interrupt.');
-          if (data.type === 'response.done')
+          if (data.type === 'response.done') {
             announce('Your turn. Take your time before speaking.');
+            // The completed response contains the authoritative function-call
+            // items. Do not process partial arguments or arbitrary event data.
+            void finishFunctionCalls(data.response?.output, activeConnection);
+          }
           if (data.type === 'error')
             announce('Realtime audio reported an error. End the call and review your API configuration.');
         } catch { /* data channel messages are not trusted HTML */ }
