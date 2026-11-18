@@ -62,7 +62,7 @@ identifier, not a functional HTTPS API destination.
    Also ensure Auth0 **Allowed Callback URLs** and **Allowed Logout URLs**
    include the exact `https://gravybets.github.io/Archer/index.html` URL.
 2. Tap **Share → Add to Home Screen** (or **Open as Web App**, when offered).
-   Do this **after merging and manually republishing** the corrected manifest:
+   Do this **after verifying the latest GitHub Pages deployment** includes the corrected manifest:
    earlier versions attempted to pre-cache `/Archer/` (404), preventing service
    worker installation, and launched Home Screen icons at the broken directory.
 3. Launch Archer from the Home Screen.
@@ -90,10 +90,14 @@ properties required for Internet access.
 
 ## Publishing later
 
-A separate, **manual only**, GitHub Pages workflow is included for
-deployment **after the owner explicitly accepts that public static HTML
-will be accessible to anyone**. It uploads only this static site and no
-desktop database, API keys, prompts, logs, personal emails or tokens.
+The public Archer Pocket GitHub Pages site was already approved and hosted.
+The Pages workflow now runs on **verified `main` changes** to the public
+`web/archer-pocket` shell or its own tests, and can still be triggered
+manually. It runs Pocket security/readiness tests before uploading only
+the public static site. It does **not** upload any desktop database,
+API keys, chat history, provider credentials, device private keys or server
+components. If the Pages environment requires reviewer approval, that
+approval remains required before a deploy. Failed checks stop publishing.
 Auth0 SPA credentials and callbacks must still be explicitly configured
 on the actual deployed HTTPS origin.
 
