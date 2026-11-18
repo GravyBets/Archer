@@ -50,7 +50,9 @@
     };
   }
 
-  async function propose(title, objective) {
+  async function propose(title, objective, options = {}) {
+    if (options.signal?.aborted)
+      return {status: 'declined', message: 'Voice session ended; no mission was created.'};
     if (typeof title !== 'string' || typeof objective !== 'string' ||
         title.trim().length < 3 || title.length > 100 ||
         objective.trim().length < 10 || objective.length > 500) {
@@ -68,8 +70,11 @@
       return {status: 'declined', message: 'Owner declined. No mission was created.'};
     }
 
+    if (options.signal?.aborted)
+      return {status: 'declined', message: 'Voice session ended; no mission was created.'};
     const response = await fetch('/api/missions', {
       method: 'POST',
+      signal: options.signal,
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({title: title.trim(), objective: objective.trim()})
     });
