@@ -75,6 +75,21 @@ class SafetyTests(unittest.TestCase):
         with self.assertRaises(worker.SafeFailure):
             worker.validate_patch(self.patch(), self.allowed, self.root)
 
+    def test_independent_ui_test_gate_is_read_only(self):
+        # The model may inspect UI tests as context but cannot edit them to
+        # bypass a failing regression check, even when edits are allowlisted.
+        patch = self.patch([{
+            "path": self.allowed[1],
+            "old_text": "return 'old';",
+            "new_text": "return 'fake-pass';",
+        }])
+        with self.assertRaisesRegex(worker.SafeFailure, "test gate"):
+            worker.validate_patch(patch, self.allowed, self.root)
+        # Mixed application + test changes must also fail as a unit.
+        combined = self.patch()["edits"] + patch["edits"]
+        with self.assertRaisesRegex(worker.SafeFailure, "test gate"):
+            worker.validate_patch(self.patch(combined), self.allowed, self.root)
+
     def test_refuse_unapproved_write_path(self):
         for bad in (".github/workflows/build.yml", "../secret.env",
                     "Archer.MissionControl/Program.cs", "tests/../secret.txt"):
