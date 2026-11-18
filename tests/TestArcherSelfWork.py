@@ -121,6 +121,57 @@ class SafetyTests(unittest.TestCase):
         with self.assertRaises(worker.SafeFailure):
             worker.validate_claim(claim)
 
+    def test_repair_must_match_original_approval_without_api_call(self):
+        import argparse
+        import os
+        from unittest.mock import patch as mock_patch
+        claim = {"selected": True, "number": 19, "category": "voice",
+                 "allowedPaths": list(self.allowed), "title": "Fix speech",
+                 "body": "Allow a long pause"}
+        claim_file = self.root / "claim.json"
+        claim_file.write_text(json.dumps(claim), encoding="utf-8")
+        prior = {"issue": 20, "category": "voice",
+                 "allowedPaths": list(self.allowed),
+                 "patch": self.patch(), "attempt": 1}
+        patch_file = self.root / "first.json"
+        patch_file.write_text(json.dumps(prior), encoding="utf-8")
+        feedback = self.root / "feedback.txt"
+        feedback.write_text("Failing independent regression check.", encoding="utf-8")
+        args = argparse.Namespace(claim=str(claim_file), output=str(self.root / "revised.json"),
+                                  previous=str(patch_file), feedback=str(feedback))
+        with mock_patch.dict(os.environ, {"ARCHER_SELF_WORK_OPENAI_API_KEY": ""}):
+            with self.assertRaisesRegex(worker.SafeFailure, "not bound"):
+                worker.generate(args)
+            prior["issue"] = 19
+            prior["attempt"] = 2
+            patch_file.write_text(json.dumps(prior), encoding="utf-8")
+            with self.assertRaisesRegex(worker.SafeFailure, "not bound"):
+                worker.generate(args)
+            prior["attempt"] = 1
+            patch_file.write_text(json.dumps(prior), encoding="utf-8")
+            # A valid retry passes owner/scope checks and refuses to call
+            # OpenAI without explicit secret; no billable request occurs.
+            with self.assertRaisesRegex(worker.SafeFailure, "API key missing"):
+                worker.generate(args)
+
+    def test_repair_requires_bounded_feedback(self):
+        import argparse
+        claim = {"selected": True, "number": 2, "category": "voice",
+                 "allowedPaths": list(self.allowed)}
+        claim_file = self.root / "claim.json"
+        claim_file.write_text(json.dumps(claim), encoding="utf-8")
+        prior = {"issue": 2, "category": "voice",
+                 "allowedPaths": list(self.allowed),
+                 "patch": self.patch(), "attempt": 1}
+        previous = self.root / "prior.json"
+        previous.write_text(json.dumps(prior), encoding="utf-8")
+        feedback = self.root / "failure.txt"
+        feedback.write_text("x" * 5001, encoding="utf-8")
+        args = argparse.Namespace(claim=str(claim_file), previous=str(previous),
+                                  feedback=str(feedback), output=str(self.root / "output.json"))
+        with self.assertRaisesRegex(worker.SafeFailure, "bounded"):
+            worker.generate(args)
+
     def test_repo_validation(self):
         self.assertEqual(worker.validate_repo("GravyBets/Archer"), "GravyBets/Archer")
         for invalid in ("", "../Archer", "GravyBets/Archer/other", "github.com/x/y"):
