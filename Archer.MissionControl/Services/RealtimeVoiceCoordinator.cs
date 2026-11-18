@@ -119,8 +119,39 @@ public sealed class RealtimeVoiceCoordinator
             instructions =
                 "You are Archer in a private one-owner conversation. Respond like a natural, succinct, grounded British bloke, never a report. " +
                 "Generally give one to three short spoken sentences, ask at most one question, allow thoughtful pauses, and let the owner interrupt you. " +
-                "Do not pretend to control devices, make calls, spend money, change code, or know current mission status. " +
-                "You have NO tools or account access in this voice session. Audio is sent to the model provider; do not solicit secrets.",
+                "Only use list_local_missions and propose_local_mission for explicit owner requests. " +
+                "These tools are limited to reading local mission titles/status and PROPOSING a draft for explicit on-screen confirmation. " +
+                "A spoken yes never authorizes creating, planning, running, publishing, deploying or spending. " +
+                "If the browser owner declines, say it was not created. You cannot run tasks, edit code, or make external calls. " +
+                "Tool results are local-only and may be unavailable. Audio is sent to the model provider; do not solicit secrets.",
+            tool_choice = "auto",
+            tools = new object[]
+            {
+                new
+                {
+                    type = "function",
+                    name = "list_local_missions",
+                    description = "Read up to eight local mission titles, statuses and task counts. No external access or mutations.",
+                    parameters = new { type = "object", properties = new { }, required = Array.Empty<string>(), additionalProperties = false }
+                },
+                new
+                {
+                    type = "function",
+                    name = "propose_local_mission",
+                    description = "Show the owner a local on-screen confirmation to CREATE A DRAFT mission ONLY. A voice answer never counts as consent. Does not plan or execute.",
+                    parameters = new
+                    {
+                        type = "object",
+                        properties = new
+                        {
+                            title = new { type = "string", description = "Short mission title (3 to 100 characters)" },
+                            objective = new { type = "string", description = "Mission objective (10 to 500 characters)" }
+                        },
+                        required = new [] { "title", "objective" },
+                        additionalProperties = false
+                    }
+                }
+            },
             audio = new
             {
                 input = new
