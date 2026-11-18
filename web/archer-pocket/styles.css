@@ -53,3 +53,11 @@ footer{text-align:center;font-size:9px;line-height:1.8;letter-spacing:.12em;colo
 @media(min-width:600px){.hero{padding-top:35px}.orb-stage{height:245px}.orb{width:177px;height:177px}.intro{font-size:16px}}
 @media(max-width:360px){.app-shell{padding-left:13px;padding-right:13px}.status-pill{font-size:8px}.brand span{font-size:8px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+
+/* Device preparation is deliberately distinguished from enrolled/approved status. */
+.device-panel{border:1px solid var(--border);border-radius:20px;background:#0d1c2bd9;padding:20px;margin-bottom:17px}
+.device-actions{display:flex;flex-wrap:wrap;gap:10px}
+.device-actions .button{min-width:120px;flex:1}
+.device-fingerprint{overflow-wrap:anywhere;word-break:break-word;color:#b5e0e7;font-size:12px;font-variant-numeric:tabular-nums;background:#102c3a;border:1px solid #285365;border-radius:11px;padding:11px;margin:0 0 15px}
+.device-actions button[hidden]{display:none}
+@media(max-width:360px){.device-actions .button{flex-basis:100%}}

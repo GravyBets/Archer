@@ -101,6 +101,42 @@ We can also use a private deployment environment later, but a conventional
 free static host is not a substitute for secure authenticated message
 storage and remote API hosting.
 
+
+## Device key preparation (local only; not enrollment)
+
+After a successful Auth0 sign-in on your personal iPhone, Archer Pocket now
+shows **Prepare this iPhone → Create device key**. It uses WebCrypto to generate
+a P-256 ECDSA signing key. The private CryptoKey is **non-extractable** and
+stored by the browser's structured-clone IndexedDB capability. A public-key
+fingerprint and local-only signing self-test are available. No server calls,
+push notifications, chat, actions or actual approval happen.
+
+- A browser-generated non-extractable key is **NOT proof of a hardware-backed
+  Secure Enclave key**. Apple/iOS might delete browser website storage.
+  Clearing Safari data, switching Safari profiles or reinstalling the Home
+  Screen app may destroy the key. Don't treat this as a long-term device ID
+  until cross-session persistence has been tested on the actual phone.
+- **Create device key** and **Test local proof** require being signed in to
+  Auth0. They do not give Auth0 tokens or device proofs to a remote endpoint.
+- **Erase local key** irreversibly clears the browser copy, but **does not
+  revoke** a future server-side approval. Server revocation must remain a
+  separately authenticated operation.
+- For eventual pairing, an **authenticated server** must issue unpredictable
+  single-use `ticketId` and `nonce` bound to the *server-validated*
+  owner `sub`, send them over HTTPS, verify the public key's P-256 ECDSA
+  signature using the exact `ARCHER_DEVICE_PAIR_P256_V1` payload, and
+  require an explicit separately authenticated approval. The server must
+  persist approved public keys and check revocation / scoped device proof
+  on each protected request. Browser-provided owner strings are not trusted.
+- The current remote gateway in open PRs is **localhost test-only**, not a
+  deployment-ready host. There is deliberately no publicly callable pairing
+  endpoint. A web-origin CryptoKey is also not sufficient against XSS; future
+  staging needs audited CSP, replay-resistant requests, token lifetime checks,
+  storage security, account recovery and real-device testing.
+
+Tests: `python3 tests/ValidateArcherPocket.py`,
+`node tests/PocketDeviceKeysChecks.mjs`.
+
 ## Security contract
 
 - Auth0 login authenticates a browser session, not device possession and not

@@ -28,6 +28,8 @@ jobs:
         run: |
           python3 tests/ValidateArcherPocket.py
           node --check web/archer-pocket/app.js
+          node --check web/archer-pocket/device-keys.js
+          node tests/PocketDeviceKeysChecks.mjs
           node --check web/archer-pocket/sw.js
           node --check web/archer-pocket/config.js
       - name: Validate unattended CI failure triage cannot approve AI fixes
