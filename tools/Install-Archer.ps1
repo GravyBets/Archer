@@ -59,6 +59,7 @@ function Assert-Zip([string]$archive,[string]$destination) {
   } finally { $zip.Dispose() }
 }
 function Shortcut {
+  if ($env:ARCHER_INSTALL_TEST_MODE -eq '1') { return }
   if ($env:OS -ne 'Windows_NT') { return }
   try {
     $desktop=[Environment]::GetFolderPath('Desktop')
