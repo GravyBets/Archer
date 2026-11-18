@@ -114,13 +114,23 @@ internal sealed class DevicePairingContract
     /// Verify possession of the exact public key submitted at Begin.
     /// Failed attempts are limited and a proved ticket is one-time.
     /// </summary>
-    internal bool Prove(string ticketId, byte[] signature, DateTimeOffset now)
+    internal bool Prove(
+        string trustedOwnerSubject, string ticketId, byte[] signature,
+        DateTimeOffset now)
     {
-        if (string.IsNullOrEmpty(ticketId))
+        // The owner MUST be the identity verified by server authentication.
+        // Even possession of a ticket and private key must not let one
+        // authenticated owner complete another owner's pairing request.
+        if (string.IsNullOrWhiteSpace(trustedOwnerSubject) ||
+            trustedOwnerSubject.Length > 128 ||
+            trustedOwnerSubject.Any(char.IsControl) ||
+            string.IsNullOrEmpty(ticketId))
             return false;
         lock (_gate)
         {
             if (!_pending.TryGetValue(ticketId, out var pending) ||
+                !string.Equals(pending.OwnerSubject, trustedOwnerSubject,
+                    StringComparison.Ordinal) ||
                 now >= pending.Challenge.ExpiresAtUtc || pending.Proved)
                 return false;
 
