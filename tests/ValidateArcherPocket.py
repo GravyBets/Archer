@@ -98,7 +98,7 @@ ensure("FILES.slice(1)" in sw, "service worker allowlists only public assets")
 ensure("config.js" not in sw and "authorization" not in sw.lower() and
        "FILES.slice(1)" in sw and "if (url.search || url.hash) return;" in sw,
        "service worker caches only allowlisted assets, never OAuth redirects")
-ensure("archer-pocket-shell-v4" in sw and
+ensure("archer-pocket-shell-v5" in sw and
        "fetch(event.request)" in sw and
        ".catch(() => caches.match(event.request))" in sw,
        "mobile app fetches fresh login code after publishing fixes")
@@ -119,6 +119,8 @@ for fragment in (
     "extractable !== false", "namedCurve: 'P-256'",
     "ARCHER_DEVICE_PAIR_P256_V1",
     "ARCHER_LOCAL_KEY_SELFTEST_V1",
+    "ARCHER_DEVICE_READ_PROOF_V1",
+    "readProofPayload", "signReadChallenge",
     "const proof = await SUBTLE().sign(",
     "store.add(item, SLOT)", "store.delete(SLOT)"
 ):
