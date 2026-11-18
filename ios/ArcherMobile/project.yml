@@ -1,0 +1,33 @@
+name: ArcherMobile
+options:
+  bundleIdPrefix: com.gravybets
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "17.0"
+
+packages:
+  Auth0:
+    url: https://github.com/auth0/Auth0.swift
+    exactVersion: 3.3.1
+
+targets:
+  ArcherMobile:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    info:
+      path: App/Info.plist
+    sources:
+      - path: App
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gravybets.archer.dev
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.9"
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        CODE_SIGN_STYLE: Automatic
+    dependencies:
+      - package: Auth0
+        product: Auth0
+    scheme:
+      testTargets: []
