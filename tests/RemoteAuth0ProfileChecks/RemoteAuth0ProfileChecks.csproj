@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Archer.RemoteGateway/OidcProviderSettings.cs" Link="OidcProviderSettings.cs" />
+    <Compile Include="../../Archer.RemoteGateway/Auth0LocalProfile.cs" Link="Auth0LocalProfile.cs" />
+  </ItemGroup>
+</Project>
