@@ -139,7 +139,8 @@ class SafetyTests(unittest.TestCase):
         feedback.write_text("Failing independent regression check.", encoding="utf-8")
         args = argparse.Namespace(claim=str(claim_file), output=str(self.root / "revised.json"),
                                   previous=str(patch_file), feedback=str(feedback))
-        with mock_patch.dict(os.environ, {"ARCHER_SELF_WORK_OPENAI_API_KEY": ""}):
+        with mock_patch.dict(os.environ, {"ARCHER_SELF_WORK_OPENAI_API_KEY": ""}), \
+             mock_patch.object(worker, "ROOT", self.root):
             with self.assertRaisesRegex(worker.SafeFailure, "not bound"):
                 worker.generate(args)
             prior["issue"] = 19
@@ -156,6 +157,7 @@ class SafetyTests(unittest.TestCase):
 
     def test_repair_requires_bounded_feedback(self):
         import argparse
+        from unittest.mock import patch as mock_patch
         claim = {"selected": True, "number": 2, "category": "voice",
                  "allowedPaths": list(self.allowed)}
         claim_file = self.root / "claim.json"
@@ -169,8 +171,9 @@ class SafetyTests(unittest.TestCase):
         feedback.write_text("x" * 5001, encoding="utf-8")
         args = argparse.Namespace(claim=str(claim_file), previous=str(previous),
                                   feedback=str(feedback), output=str(self.root / "output.json"))
-        with self.assertRaisesRegex(worker.SafeFailure, "bounded"):
-            worker.generate(args)
+        with mock_patch.object(worker, "ROOT", self.root):
+            with self.assertRaisesRegex(worker.SafeFailure, "bounded"):
+                worker.generate(args)
 
     def test_repo_validation(self):
         self.assertEqual(worker.validate_repo("GravyBets/Archer"), "GravyBets/Archer")
