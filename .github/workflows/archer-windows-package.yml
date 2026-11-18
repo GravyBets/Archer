@@ -1,0 +1,96 @@
+name: Archer Windows — Owner-Approved Installer Package
+
+# Manual build only. Not triggered by merge, PR, schedule or remote command.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: archer-windows-owner-installer
+  cancel-in-progress: false
+
+jobs:
+  windows-installer:
+    # Do not package unreviewed feature branches.
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: windows-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Test installer/update/rollback on fake local packages
+        shell: pwsh
+        run: ./tests/Test-WindowsInstaller.ps1
+      - name: Publish real self-contained Windows x64 Archer
+        shell: pwsh
+        run: |
+          dotnet publish Archer.MissionControl/Archer.MissionControl.csproj `
+            -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+            -o ./archer-publish
+          if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
+      - name: Assemble hashed, reversible local installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path ./dist -Force | Out-Null
+          Copy-Item ./tools/Run-Archer.cmd ./archer-publish/Run-Archer.cmd
+          Copy-Item ./tools/Start-Archer.ps1 ./archer-publish/Start-Archer.ps1
+          if (-not (Test-Path ./archer-publish/Archer.MissionControl.exe)) {
+            throw 'Self-contained executable missing.'
+          }
+          if (-not (Test-Path ./archer-publish/wwwroot/index.html)) {
+            throw 'Dashboard static files missing.'
+          }
+          Compress-Archive -Path ./archer-publish/* `
+            -DestinationPath ./dist/archer-app.zip -CompressionLevel Optimal
+          (Get-FileHash ./dist/archer-app.zip -Algorithm SHA256).Hash |
+            Set-Content -Path ./dist/archer-app.sha256 -NoNewline
+          Copy-Item ./tools/Install-Archer.ps1 ./dist/Install-Archer.ps1
+          Copy-Item ./tools/Archer-Install.cmd ./dist/Archer-Install.cmd
+          Copy-Item ./tools/Archer-Rollback.cmd ./dist/Archer-Rollback.cmd
+          @'
+          ARCHER — WINDOWS INSTALLER
+          ==========================================================
+          1. Download this artifact from YOUR GravyBets/Archer GitHub Actions.
+          2. Extract both ZIP layers only once: GitHub's outer artifact ZIP,
+             then use Archer-Install.cmd from the extracted folder. DO NOT
+             manually extract archer-app.zip; the installer handles that.
+          3. Double-click Archer-Install.cmd. It verifies archer-app.sha256,
+             safely updates %LOCALAPPDATA%\Archer\current, and creates
+             an Archer desktop shortcut. No server purchase is required.
+          4. Open the desktop Archer shortcut. Local web UI opens at
+             http://127.0.0.1:5087/.
+          5. Before updating later, close Archer. Download the newest owner
+             approved workflow artifact and run Archer-Install.cmd again.
+          6. If needed, use Archer-Rollback.cmd from this extracted folder.
+             User data at %LOCALAPPDATA%\Archer\Data is never overwritten.
+
+          IMPORTANT:
+          - Use only YOUR private/approved GitHub Actions artifacts, not
+            arbitrary emailed packages. SHA256 proves package+hash match,
+            not the publisher's identity. These scripts are unsigned.
+          - Existing source-tree Data files are NOT moved automatically.
+            If you already have real mission history, copy it ONE TIME
+            while Archer is stopped, then verify it in the installed app.
+          - Runs on your Windows PC only; this does not enable remote
+            access, automatic deployment, or paid AI/phone activity.
+          '@ | Set-Content ./dist/HOW-TO-INSTALL.txt
+          Compress-Archive -Path ./dist/archer-app.zip,./dist/archer-app.sha256, `
+            ./dist/Install-Archer.ps1,./dist/Archer-Install.cmd, `
+            ./dist/Archer-Rollback.cmd,./dist/HOW-TO-INSTALL.txt `
+            -DestinationPath ./Archer-Windows-Installer.zip -CompressionLevel Optimal
+      - name: Upload owner-downloadable installer artifact (not a public release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Archer-Windows-Installer
+          path: Archer-Windows-Installer.zip
+          if-no-files-found: error
+          retention-days: 14
