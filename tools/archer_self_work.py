@@ -182,7 +182,11 @@ def validate_claim(doc: dict) -> tuple[str, tuple[str, str]]:
 
 
 def validate_patch(patch: dict, allowed: tuple[str, str],
-                   source_root: Path = ROOT) -> dict[str, str]:
+                   source_root: Path | None = None) -> dict[str, str]:
+    # Resolve the actual trusted checkout at call time, which also lets
+    # isolated fixture tests use their own synthetic source trees.
+    if source_root is None:
+        source_root = ROOT
     if not isinstance(patch, dict) or set(patch) != {"summary", "tests", "edits"}:
         raise SafeFailure("Unexpected patch format.")
     if not isinstance(patch["summary"], str) or len(patch["summary"]) not in range(8, 801):
