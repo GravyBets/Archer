@@ -53,6 +53,7 @@ required = {
     "archerPresence", "orbButton", "orbParticleField", "presenceStatus", "presenceActiveMissions",
     "presenceTasksToday", "presenceAttentionCount", "chatMessages", "chatForm",
     "chatText", "voiceInputButton", "voiceReadToggle", "voiceReplayButton",
+    "realtimeVoiceStart", "realtimeVoiceEnd", "realtimeVoiceStatus",
     "voiceStopButton", "voiceSupportNote", "voiceChoiceSelect", "voiceRateSlider", "voiceRateValue",
     "voiceHandsFreeToggle", "voicePauseSlider", "voicePauseValue", "voiceEndConversation",
     "voiceAccentStatus", "missionList", "missionDetail",
@@ -97,7 +98,7 @@ dynamic_ids = {"starterMission"}
 missing = referred_ids.difference(page.ids).difference(dynamic_ids)
 assert not missing, f"JavaScript references missing DOM IDs: {missing}"
 
-assert page.scripts[-11:] == ["/js/app.js", "/js/archer-home.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js", "/js/coding.js", "/js/communications.js", "/js/inbox.js", "/js/mobile-drafts.js", "/js/mobile-sessions.js"]
+assert page.scripts[-12:] == ["/js/app.js", "/js/archer-home.js", "/js/realtime-voice.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js", "/js/coding.js", "/js/communications.js", "/js/inbox.js", "/js/mobile-drafts.js", "/js/mobile-sessions.js"]
 assert "/api/mobile/sessions" in MOBILE_SESSIONS_JS
 assert "/api/mobile/session-history" in MOBILE_SESSIONS_JS
 assert "textContent" in MOBILE_SESSIONS_JS
@@ -136,6 +137,18 @@ assert "showModal()" in DEVELOPER_JS
 assert "showView('archer');" in JS
 assert "window.ArcherPresence?.update(appState.data)" in JS
 assert "window.ArcherPresence?.reply(result.answer)" in JS
+assert (ROOT / "js" / "realtime-voice.js").is_file()
+REALTIME_JS = (ROOT / "js" / "realtime-voice.js").read_text(encoding="utf-8")
+assert "getUserMedia" in REALTIME_JS and "RTCPeerConnection" in REALTIME_JS
+assert "Start realtime conversation" in HTML
+assert "window.confirm(" in REALTIME_JS
+assert "stopSession(" in REALTIME_JS
+assert "getTracks().forEach(track => track.stop())" in REALTIME_JS
+assert "document.addEventListener('visibilitychange'" in REALTIME_JS
+assert "/api/realtime-voice/call" in REALTIME_JS
+assert "const SESSION_LIMIT_MS = 4 * 60 * 1000" in REALTIME_JS
+assert "OPENAI_API_KEY" not in REALTIME_JS
+
 assert "SpeechRecognitionCtor" in HOME_JS
 assert "speechSynthesis" in HOME_JS
 assert "prefers-reduced-motion" in CSS
