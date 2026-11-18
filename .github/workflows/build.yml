@@ -20,6 +20,12 @@ jobs:
         run: dotnet restore Archer.MobileGateway/Archer.MobileGateway.csproj
       - name: Build standalone mobile gateway
         run: dotnet build Archer.MobileGateway/Archer.MobileGateway.csproj --configuration Release --no-restore
+      - name: Build isolated remote gateway contract skeleton
+        run: dotnet build Archer.RemoteGateway/Archer.RemoteGateway.csproj --configuration Release
+      - name: Run synthetic owner/device authorization contract checks
+        run: dotnet run --project tests/RemoteGatewayPolicyChecks/RemoteGatewayPolicyChecks.csproj --configuration Release
+      - name: Smoke-test remote gateway fail-closed localhost boundaries
+        run: python3 tests/SmokeRemoteGateway.py
       - name: Restore standalone encrypted backup utility
         run: dotnet restore Archer.GatewayBackup/Archer.GatewayBackup.csproj
       - name: Build standalone encrypted backup utility
