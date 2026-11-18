@@ -141,6 +141,22 @@ push notifications, chat, actions or actual approval happen.
 Tests: `python3 tests/ValidateArcherPocket.py`,
 `node tests/PocketDeviceKeysChecks.mjs`.
 
+## Future device-bound read request proof (not connected yet)
+
+The Pocket key module now includes a **local-only** P-256 signer for a
+server-issued, one-time `ARCHER_DEVICE_READ_PROOF_V1` challenge. The signed
+payload binds the validated owner, enrolled device ID, exact GET resource,
+short-lived ticket and nonce. Only the future read-only conversation and inbox
+paths are allowlisted; the signer does not authorize mission execution,
+GitHub changes, sending messages or payments.
+
+The .NET remote gateway has a matching local-only verifier that checks the
+stored public-key fingerprint and current revocation state before consuming a
+one-time proof. This is **not a public phone service**, and the current
+Pocket UI does not make network pairing requests. The owner must complete
+server-side approval and secure HTTPS deployment before any private inbox
+can become available. Never paste an access token or private key into chat.
+
 ## Security contract
 
 - Auth0 login authenticates a browser session, not device possession and not
