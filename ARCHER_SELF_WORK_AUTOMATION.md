@@ -7,7 +7,7 @@
 1. The owner creates a focused **GitHub Issue** in `GravyBets/Archer` describing one small bug or feature, e.g. "Voice reply is too wordy."
 2. The owner adds the GitHub issue label `archer-approved`. This is a **human approval for one bounded issue with up to two model attempts**, not consent to change the server, expose secrets or merge.
 3. Once the owner has opted in, GitHub Actions' **Archer Self-Work** workflow can run daily or manually. It selects only an open, `archer-approved` issue without `archer-attempted`, blocks another pending Archer self-work PR, and marks the issue `archer-attempted` *before spending money*.
-4. The unprivileged model job reads **only one allowlisted pair of files** for the selected task type. It can generate at most four unique, exact-text replacements. The model cannot choose workflows, hidden files, secrets, server authentication, billing files or arbitrary tool calls.
+4. The unprivileged model job reads **only one allowlisted pair of files** for the selected task type. It can generate at most four unique, exact-text replacements. The model cannot choose workflows, hidden files, secrets, server authentication, billing files or arbitrary tool calls. The existing `tests/ValidateUi.py` suite is supplied as **read-only** context and cannot be edited by the model; this prevents a patch from weakening its own UI validation.
 5. A separate, unprivileged GitHub Actions job applies the patch, runs JavaScript syntax/UI/safety tests and builds the .NET 10 Mission Control application. It receives **no OpenAI key and no GitHub write token**.
 6. If the first patch fails isolated CI, Archer may use **one additional** billable model request with bounded failure feedback to propose a replacement patch against the original approved files. The second patch is independently tested with no model or GitHub write secrets. There are **no further automatic retries**; the issue remains attempted even on failure.\n7. Only if either attempt passes does the publishing job, which has repository-scoped GitHub permission but no model key, apply the same bounded patch and create a **draft pull request**. It never merges, releases, deploys, or grants authorization.
 8. The owner reviews the actual diff, checks CI, and decides whether to merge. A failed issue remains attempted; future retries need fresh owner approval.
@@ -47,8 +47,9 @@ there is no unlimited free autonomous model processing.
 | developer / repository browsing | `Archer.MissionControl/wwwroot/js/developer.js` and optionally `tests/ValidateUi.py` |
 | inbox / alerts | `Archer.MissionControl/wwwroot/js/inbox.js` and optionally `tests/ValidateUi.py` |
 
-A worker may edit application code only or code plus validation tests. It
-may **not publish a test-only change**. Unsupported, ambiguous or oversized
+A worker may edit the application source file only. Existing UI regression
+tests are read-only, cannot be removed or weakened by the model, and must still
+pass in the isolated validation job. Unsupported, ambiguous or oversized
 tasks should fail without touching source. This starter worker will not
 implement complex cross-file features or fix its own workflow implementation;
 those will require additional engineering and a separately audited privilege
