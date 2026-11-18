@@ -1,5 +1,15 @@
-name: Archer Pocket Static Site — Manual Publish
+name: Archer Pocket Static Site — Verified Publish
 on:
+  # The owner already approved public static GitHub Pages hosting. Only
+  # changes to the explicitly public Pocket shell and its own tests trigger
+  # an automatic redeploy. No desktop state or private backend is uploaded.
+  push:
+    branches: [main]
+    paths:
+      - 'web/archer-pocket/**'
+      - '.github/workflows/pocket-pages.yml'
+      - 'tests/ValidateArcherPocket.py'
+      - 'tests/PocketDeviceKeysChecks.mjs'
   workflow_dispatch:
 
 permissions:
@@ -13,7 +23,7 @@ concurrency:
 
 jobs:
   publish:
-    name: Owner-triggered static-only GitHub Pages deploy
+    name: Test and deploy public Archer Pocket static assets
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -32,6 +42,6 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: web/archer-pocket
-      - name: Publish static pages from manual approval only
+      - name: Deploy validated public static Pages artifact
         id: deployment
         uses: actions/deploy-pages@v4
