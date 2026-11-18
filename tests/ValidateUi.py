@@ -147,7 +147,7 @@ assert "getTracks().forEach(track => track.stop())" in REALTIME_JS
 assert "document.addEventListener('visibilitychange'" in REALTIME_JS
 assert "/api/realtime-voice/call" in REALTIME_JS
 assert "const SESSION_LIMIT_MS = 4 * 60 * 1000" in REALTIME_JS
-assert "OPENAI_API_KEY" not in REALTIME_JS
+assert "Authorization:" not in REALTIME_JS and "Bearer " not in REALTIME_JS
 
 assert "SpeechRecognitionCtor" in HOME_JS
 assert "speechSynthesis" in HOME_JS
