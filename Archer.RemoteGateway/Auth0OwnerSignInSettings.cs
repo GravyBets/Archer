@@ -9,7 +9,7 @@ namespace Archer.RemoteGateway;
 /// </summary>
 internal sealed record Auth0OwnerSignInSettings(
     string Issuer, string Audience, string NativeClientId,
-    string OwnerSubject)
+    string OwnerSubject, string? PocketSpaClientId = null)
 {
     private const string Prefix = "ARCHER_REMOTE_AUTH0_SIGNIN_";
 
@@ -20,7 +20,7 @@ internal sealed record Auth0OwnerSignInSettings(
         var names = new[]
         {
             "ENABLED", "DOMAIN", "API_AUDIENCE",
-            "NATIVE_CLIENT_ID", "OWNER_SUBJECT"
+            "NATIVE_CLIENT_ID", "POCKET_SPA_CLIENT_ID", "OWNER_SUBJECT"
         };
         if (!names.Any(name => Read(name) is not null))
             return null;
@@ -59,6 +59,18 @@ internal sealed record Auth0OwnerSignInSettings(
             throw new InvalidOperationException(
                 "Invalid Native app client ID for Auth0 owner sign-in.");
 
+        // Browser Pocket is an Auth0 Single Page Application, NOT the Native
+        // iOS client. Explicitly allow it only after an operator sets its
+        // exact public Client ID in server configuration. Never trust a
+        // browser-supplied client ID or a wildcard; default is Native only.
+        var pocketClientId = Read("POCKET_SPA_CLIENT_ID");
+        if (pocketClientId is not null &&
+            (!Regex.IsMatch(pocketClientId, @"^[A-Za-z0-9_-]{12,128}$",
+                RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)) ||
+             string.Equals(pocketClientId, clientId, StringComparison.Ordinal)))
+            throw new InvalidOperationException(
+                "The optional Pocket SPA client ID must be valid and distinct from Native.");
+
         var ownerSubject = Required("OWNER_SUBJECT", 128);
         if (!ownerSubject.StartsWith("auth0|", StringComparison.Ordinal) ||
             ownerSubject.Length <= "auth0|".Length ||
@@ -74,6 +86,6 @@ internal sealed record Auth0OwnerSignInSettings(
 
         return new Auth0OwnerSignInSettings(
             "https://" + domain.ToLowerInvariant() + "/",
-            audience, clientId, ownerSubject);
+            audience, clientId, ownerSubject, pocketClientId);
     }
 }
