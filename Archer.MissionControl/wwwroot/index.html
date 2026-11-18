@@ -90,6 +90,15 @@
               <span id="voiceSupportNote" role="status">Speech recognition is browser dependent. Your microphone starts only when you tap Speak, and End conversation stops it.</span>
               <span id="voiceAccentStatus" role="status">British male voice availability depends on your installed browser voices.</span>
             </div>
+            <div class="realtime-voice-box" aria-label="Optional real-time voice">
+              <strong>Realtime voice · natural interruptions</strong>
+              <p>Experimental opt-in WebRTC conversation using the model provider. Billable, separate from standard chat; no Archer tools, no transcript saved to Archer. Uses semantic pause detection (up to about 8 seconds).</p>
+              <div class="realtime-voice-actions">
+                <button id="realtimeVoiceStart" type="button" class="button secondary" disabled>Start realtime conversation</button>
+                <button id="realtimeVoiceEnd" type="button" class="button secondary" disabled>End live call</button>
+              </div>
+              <p id="realtimeVoiceStatus" role="status" aria-live="polite">Checking optional realtime voice availability…</p>
+            </div>
           </section>
           <section class="panel mobile-draft-card" aria-labelledby="mobileDraftHeading">
             <div class="panel-header">
@@ -479,6 +488,7 @@
   <dialog id="missionDialog" class="modal"><form id="missionForm" method="dialog"><div class="modal-head"><div class="eyebrow">NEW OBJECTIVE</div><h2>Assign a mission</h2><p>Tell Archer what success looks like.</p></div><label for="missionTitle">Mission name</label><input id="missionTitle" maxlength="100" required minlength="3" placeholder="Build $1,000/month in recurring revenue" /><label for="missionObjective">Objective</label><textarea id="missionObjective" maxlength="3000" minlength="10" required rows="5" placeholder="Research, compare, and validate business opportunities that could generate recurring revenue. Prioritize real customer demand and practical execution."></textarea><div class="modal-actions"><button type="button" class="button secondary" id="cancelMission">Cancel</button><button class="button primary" type="submit">Create Mission</button></div></form></dialog>
   <script src="/js/app.js" defer></script>
   <script src="/js/archer-home.js" defer></script>
+  <script src="/js/realtime-voice.js" defer></script>
   <script src="/js/orb-field.js" defer></script>
   <script src="/js/developer.js" defer></script>
   <script src="/js/operator-context.js" defer></script>

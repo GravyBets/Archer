@@ -38,6 +38,18 @@ builder.Services.AddHostedService<CommunicationWorker>();
 builder.Services.AddHttpClient("github-reader", client => client.Timeout = TimeSpan.FromSeconds(90));
 builder.Services.AddSingleton<GitHubRepositoryReader>(service =>
     new GitHubRepositoryReader(service.GetRequiredService<IHttpClientFactory>().CreateClient("github-reader")));
+// Separate local-only opt-in realtime audio integration. This NEVER exposes
+// OPENAI_API_KEY to the browser and does not use desktop admin permissions.
+builder.Services.AddSingleton<RealtimeVoiceCoordinator>();
+builder.Services.AddHttpClient("openai-realtime", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(40);
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    AllowAutoRedirect = false,
+    UseCookies = false,
+    UseProxy = false
+});
 builder.Services.AddHttpClient<ArcherAiService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(240);
@@ -816,6 +828,15 @@ app.MapPost("/api/missions/{id:guid}/tasks/{taskId:guid}/retry", async Task<IRes
     }, ct);
     return updated ? Results.Ok(new { message = "Task queued for retry." }) : Results.Conflict(new { error = "Task cannot be retried." });
 });
+
+// Optional billable, no-tools, low-latency WebRTC voice trial.
+// This API remains bound ONLY to 127.0.0.1 by app.Run below; never publish
+// MissionControl as a remote or cloud endpoint.
+app.MapGet("/api/realtime-voice/status",
+    (RealtimeVoiceCoordinator voice) => Results.Ok(voice.Status()));
+app.MapPost("/api/realtime-voice/call",
+    async (HttpContext context, RealtimeVoiceCoordinator voice, CancellationToken ct) =>
+        await voice.StartAsync(context, ct));
 
 app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore store, ArcherAiService ai, CancellationToken ct) =>
 {

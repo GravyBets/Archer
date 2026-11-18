@@ -53,6 +53,7 @@ required = {
     "archerPresence", "orbButton", "orbParticleField", "presenceStatus", "presenceActiveMissions",
     "presenceTasksToday", "presenceAttentionCount", "chatMessages", "chatForm",
     "chatText", "voiceInputButton", "voiceReadToggle", "voiceReplayButton",
+    "realtimeVoiceStart", "realtimeVoiceEnd", "realtimeVoiceStatus",
     "voiceStopButton", "voiceSupportNote", "voiceChoiceSelect", "voiceRateSlider", "voiceRateValue",
     "voiceHandsFreeToggle", "voicePauseSlider", "voicePauseValue", "voiceEndConversation",
     "voiceAccentStatus", "missionList", "missionDetail",
@@ -97,7 +98,7 @@ dynamic_ids = {"starterMission"}
 missing = referred_ids.difference(page.ids).difference(dynamic_ids)
 assert not missing, f"JavaScript references missing DOM IDs: {missing}"
 
-assert page.scripts[-11:] == ["/js/app.js", "/js/archer-home.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js", "/js/coding.js", "/js/communications.js", "/js/inbox.js", "/js/mobile-drafts.js", "/js/mobile-sessions.js"]
+assert page.scripts[-12:] == ["/js/app.js", "/js/archer-home.js", "/js/realtime-voice.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js", "/js/coding.js", "/js/communications.js", "/js/inbox.js", "/js/mobile-drafts.js", "/js/mobile-sessions.js"]
 assert "/api/mobile/sessions" in MOBILE_SESSIONS_JS
 assert "/api/mobile/session-history" in MOBILE_SESSIONS_JS
 assert "textContent" in MOBILE_SESSIONS_JS
@@ -136,6 +137,40 @@ assert "showModal()" in DEVELOPER_JS
 assert "showView('archer');" in JS
 assert "window.ArcherPresence?.update(appState.data)" in JS
 assert "window.ArcherPresence?.reply(result.answer)" in JS
+assert (ROOT / "js" / "realtime-voice.js").is_file()
+REALTIME_JS = (ROOT / "js" / "realtime-voice.js").read_text(encoding="utf-8")
+assert "getUserMedia" in REALTIME_JS and "RTCPeerConnection" in REALTIME_JS
+assert "Start realtime conversation" in HTML
+assert "window.confirm(" in REALTIME_JS
+assert "stopSession(" in REALTIME_JS
+assert "getTracks().forEach(track => track.stop())" in REALTIME_JS
+assert "document.addEventListener('visibilitychange'" in REALTIME_JS
+assert "/api/realtime-voice/call" in REALTIME_JS
+assert "const SESSION_LIMIT_MS = 4 * 60 * 1000" in REALTIME_JS
+assert "Authorization:" not in REALTIME_JS and "Bearer " not in REALTIME_JS
+
+# Guard the server's SDP gate against accidentally comparing literal
+# backslash-r/backslash-n text instead of WebRTC's real CRLF/LF line endings.
+# This previously made every legitimate browser offer fail before the API call.
+REALTIME_COORDINATOR = (ROOT.parent / "Services" / "RealtimeVoiceCoordinator.cs").read_text(encoding="utf-8")
+for expected_sdp_literal in (
+    r'offer.StartsWith("v=0\r\n"',
+    r'offer.StartsWith("v=0\n"',
+    r'offer.Contains("\nm=audio "',
+    r'offer.Contains("\r\nm=audio "',
+    r'body.StartsWith("v=0\r\n"',
+    r'body.StartsWith("v=0\n"',
+):
+    assert expected_sdp_literal in REALTIME_COORDINATOR, (
+        f"Expected real SDP line ending validator missing: {expected_sdp_literal}"
+    )
+for invalid_sdp_literal in (
+    r'"v=0\\r\\n"', r'"v=0\\n"', r'"\\nm=audio "', r'"\\r\\nm=audio "'
+):
+    assert invalid_sdp_literal not in REALTIME_COORDINATOR, (
+        f"SDP validator wrongly matches a literal backslash sequence: {invalid_sdp_literal}"
+    )
+
 assert "SpeechRecognitionCtor" in HOME_JS
 assert "speechSynthesis" in HOME_JS
 assert "prefers-reduced-motion" in CSS
