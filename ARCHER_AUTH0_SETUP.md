@@ -60,6 +60,26 @@ An iOS SwiftUI source target now lives under [`ios/ArcherMobile`](ios/ArcherMobi
 
 Native compilation requires macOS/Xcode, with a GitHub macOS Simulator compilation workflow for review. A physical device requires legitimate personal Apple signing, and TestFlight distribution generally requires paid Apple Developer membership.
 
+## Archer Pocket SPA authorized-party preflight (still localhost-only)
+
+Archer Pocket (the already deployed iPhone Home Screen web app) uses a
+**separate Auth0 Single Page Application client ID**, not the Native iOS
+application ID. The local-only Auth0 owner proof can now explicitly pin this
+second `azp` authorized party via the optional server environment variable:
+
+```text
+ARCHER_REMOTE_AUTH0_SIGNIN_POCKET_SPA_CLIENT_ID=<EXACT_POCKET_SPA_CLIENT_ID>
+```
+
+This value is a public OAuth client identifier, not a secret, but the server
+must use its own pinned configuration—not a value supplied by the phone. If
+absent, only the native client is accepted. The exact owner `sub`, signed
+issuer/JWKS, audience, RS256 and delegated `conversation:read` checks remain
+required. Unknown or duplicate `azp` claims fail closed. This is **only an
+Auth0 sign-in proof**; it cannot enroll or authorize a device, retrieve
+private messages, run missions or unlock a public endpoint. Real connectivity
+remains disabled.
+
 ## Local owner-token verification without pretending a phone is enrolled
 
 An additional **development-only** `Auth0OwnerSignInProbe` mode allows a future real Auth0 access token to prove the configured owner logged in even before secure per-device claims are implemented. It must run in isolation and NEVER grants device access or exposes conversations. Variables (all values must stay private in personal developer environment, never in public GitHub):

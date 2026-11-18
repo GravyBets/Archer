@@ -31,6 +31,28 @@ var r = Scope("openid profile email conversation:read conversation:write");
 Expect(true, "valid signed owner/native client/read scope", a, c, r);
 Expect(true, "read-only signed scope passes owner identity probe", a, c,
     Scope("conversation:read"));
+var pocket = Client("PocketSynthetic123456789");
+Expect(false, "browser SPA client is not trusted by Native-only default", a, pocket, r);
+var pocketSettings = settings with { PocketSpaClientId = "PocketSynthetic123456789" };
+assertions++;
+if (!Auth0OwnerClaimPolicy.AcceptValidatedClaims(
+        Principal(a, pocket, Scope("conversation:read")), pocketSettings))
+    throw new InvalidOperationException("Explicitly pinned Pocket SPA signed owner token rejected");
+assertions++;
+if (Auth0OwnerClaimPolicy.AcceptValidatedClaims(
+        Principal(Sub("auth0|different-owner"), pocket, Scope("conversation:read")),
+        pocketSettings))
+    throw new InvalidOperationException("Pocket SPA must not bypass owner isolation");
+assertions++;
+if (Auth0OwnerClaimPolicy.AcceptValidatedClaims(
+        Principal(a, Client("UnknownPublicClientABC123"), Scope("conversation:read")),
+        pocketSettings))
+    throw new InvalidOperationException("Unknown SPA client accepted");
+assertions++;
+if (Auth0OwnerClaimPolicy.AcceptValidatedClaims(
+        Principal(a, pocket, Client("NativeSynthetic123456789"), r),
+        pocketSettings))
+    throw new InvalidOperationException("Multiple signed azp claims accepted");
 Expect(true, "Auth0 dialect with scp instead of scope", a, c,
     Scp("conversation:read"));
 Expect(false, "missing sub", c, r);
