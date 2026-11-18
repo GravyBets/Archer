@@ -20,6 +20,30 @@ jobs:
         run: dotnet restore Archer.MobileGateway/Archer.MobileGateway.csproj
       - name: Build standalone mobile gateway
         run: dotnet build Archer.MobileGateway/Archer.MobileGateway.csproj --configuration Release --no-restore
+      - name: Build isolated remote gateway contract skeleton
+        run: dotnet build Archer.RemoteGateway/Archer.RemoteGateway.csproj --configuration Release
+      - name: Run synthetic owner/device authorization contract checks
+        run: dotnet run --project tests/RemoteGatewayPolicyChecks/RemoteGatewayPolicyChecks.csproj --configuration Release
+      - name: Smoke-test remote gateway fail-closed localhost boundaries
+        run: python3 tests/SmokeRemoteGateway.py
+      - name: Verify signed synthetic JWT identities and authorization isolation
+        run: python3 tests/SmokeRemoteSignedIdentity.py
+      - name: Verify offline P-256 owner-approved device pairing and revocation
+        run: dotnet run --project tests/RemoteDevicePairingChecks/RemoteDevicePairingChecks.csproj --configuration Release
+      - name: Validate persisted device enrollment, owner isolation and atomic revocation
+        run: dotnet run --project tests/RemoteDeviceRegistryChecks/RemoteDeviceRegistryChecks.csproj --configuration Release
+      - name: Ensure signed JWT authorization tracks live SQLite revocation across restarts
+        run: python3 tests/SmokeRemotePersistentAuth.py
+      - name: Validate pinned OIDC provider configuration fails closed
+        run: dotnet run --project tests/RemoteOidcSettingsChecks/RemoteOidcSettingsChecks.csproj --configuration Release
+      - name: Smoke-test independent OIDC local validation probe and unsafe settings
+        run: python3 tests/SmokeRemoteOidcBoundary.py
+      - name: Test Auth0 tenant client audience and namespaced device claim preflight
+        run: dotnet run --project tests/RemoteAuth0ProfileChecks/RemoteAuth0ProfileChecks.csproj --configuration Release
+      - name: Smoke-test Auth0 local-only validation profile and conflicting identity refusal
+        run: python3 tests/SmokeRemoteAuth0Boundary.py
+      - name: Validate Archer iPhone Auth0 PKCE source, Keychain boundaries and callback settings
+        run: python3 tests/ValidateArcherIosAuth.py
       - name: Restore standalone encrypted backup utility
         run: dotnet restore Archer.GatewayBackup/Archer.GatewayBackup.csproj
       - name: Build standalone encrypted backup utility
