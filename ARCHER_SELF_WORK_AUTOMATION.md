@@ -5,12 +5,12 @@
 ## Concrete end-to-end workflow
 
 1. The owner creates a focused **GitHub Issue** in `GravyBets/Archer` describing one small bug or feature, e.g. "Voice reply is too wordy."
-2. The owner adds the GitHub issue label `archer-approved`. This is a **human approval for one bounded attempt**, not consent to change the server, expose secrets or merge.
+2. The owner adds the GitHub issue label `archer-approved`. This is a **human approval for one bounded issue with up to two model attempts**, not consent to change the server, expose secrets or merge.
 3. Once the owner has opted in, GitHub Actions' **Archer Self-Work** workflow can run daily or manually. It selects only an open, `archer-approved` issue without `archer-attempted`, blocks another pending Archer self-work PR, and marks the issue `archer-attempted` *before spending money*.
 4. The unprivileged model job reads **only one allowlisted pair of files** for the selected task type. It can generate at most four unique, exact-text replacements. The model cannot choose workflows, hidden files, secrets, server authentication, billing files or arbitrary tool calls.
 5. A separate, unprivileged GitHub Actions job applies the patch, runs JavaScript syntax/UI/safety tests and builds the .NET 10 Mission Control application. It receives **no OpenAI key and no GitHub write token**.
-6. Only if tests pass does the publishing job, which has repository-scoped GitHub permission but no model key, apply the same bounded patch and create a **draft pull request**. It never merges, releases, deploys, or grants authorization.
-7. The owner reviews the actual diff, checks CI, and decides whether to merge. A failed job is left attempted (no automatic retry that costs money).
+6. If the first patch fails isolated CI, Archer may use **one additional** billable model request with bounded failure feedback to propose a replacement patch against the original approved files. The second patch is independently tested with no model or GitHub write secrets. There are **no further automatic retries**; the issue remains attempted even on failure.\n7. Only if either attempt passes does the publishing job, which has repository-scoped GitHub permission but no model key, apply the same bounded patch and create a **draft pull request**. It never merges, releases, deploys, or grants authorization.
+8. The owner reviews the actual diff, checks CI, and decides whether to merge. A failed issue remains attempted; future retries need fresh owner approval.
 
 ## How to enable (only when ready)
 
@@ -56,10 +56,10 @@ boundary.
 
 ## What's next before genuine self-development autonomy
 
-The current workflow can own a **single bounded change** from approved issue
+The current workflow can own a **single bounded change (up to two model calls per owner-approved issue)** from approved issue
 through independent tests to a draft PR. It still cannot decide its own
 roadmap, generate arbitrary new files, read the full architecture, interact
-with deployed Archer, or debug failing CI and retry. Those are separate
+with deployed Archer, or autonomously diagnose arbitrary CI failures. It can retry one bounded patch after failure, but broader debugging remains a separate
 milestones and must have strong resource, permissions and review policies.
 
 No remote server should be purchased merely to turn on this workflow.
