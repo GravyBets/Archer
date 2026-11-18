@@ -1,16 +1,18 @@
 # Archer on Windows — no Visual Studio required to run
 
-**Review-only. The Windows installer has NOT been published, downloaded, or run on the owner's computer.**
-The packaging workflow is a GitHub Actions artifact builder, not a deployment
-to your PC. This change does **not** create a server, phone integration, or
-automatic self-updater.
+**The installer has NOT been installed or tested on the owner's own computer.**
+After green `Archer Build` on a trusted push to `main`, a separate GitHub
+Actions job now automatically builds an owner-downloadable package. Manual
+`workflow_dispatch` remains available. Packaging is not deployment and
+does not create a server, phone connection, or automatic PC updater.
 
 ## First approved installation
 
-1. Review and merge the installer PR to the `main` branch.
-2. Open GitHub → Actions → **Archer Windows — Owner-Approved Installer Package**
-   → **Run workflow** on `main`.
-3. Download the workflow artifact named **Archer-Windows-Installer**.
+1. Open GitHub → Actions → **Archer Windows — Verified Owner Installer Package**
+   and choose the newest **successful** run for a trusted `main` commit.
+   The package is built automatically after the main CI succeeds. If needed,
+   you can also choose **Run workflow** on `main` manually.
+2. Download the workflow artifact named **Archer-Windows-Installer**.
 4. Extract the GitHub artifact ZIP once, then extract the contained
    `Archer-Windows-Installer.zip` if present. You should see
    `Archer-Install.cmd`, `Install-Archer.ps1`, `archer-app.zip`,
@@ -29,9 +31,9 @@ automatic self-updater.
 
 ## Subsequent updates
 
-1. Review/merge the code change you want.
-2. Manually run the same owner-approved Windows package workflow on `main`.
-3. Download and extract the artifact. **Close Archer before installing**; the
+1. Review/merge the code change you want and confirm `Archer Build` passes.
+2. Download and extract the artifact from the matching successful
+   `Archer Windows — Verified Owner Installer Package` workflow run. **Close Archer before installing**; the
    installer refuses to replace a running localhost server.
 4. Double-click `Archer-Install.cmd`. The old app is moved into
    `%LOCALAPPDATA%\Archer\previous`, and the new app replaces only
@@ -72,7 +74,8 @@ API keys remain user environment variables, never in ZIP artifacts.
 
 ## Security and scope
 
-This is an **owner-approved manual package distribution**. It intentionally
+This is an **owner-installed package distribution** with automatic build
+artifacts after trusted green `main` CI. It intentionally
 does NOT:
 - auto-fetch releases, auto-install GitHub code, merge PRs, deploy a server,
   grant Archer developer-admin permissions, or bypass local model budgets;
