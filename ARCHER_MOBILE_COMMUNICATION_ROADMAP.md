@@ -3,6 +3,34 @@
 Working plan: 2026-11-16. Target: one Archer across Windows, iPhone, text, phone, and (if approved) CarPlay.
 Current baseline: Archer v1.13.0 is LOCALHOST-ONLY. It supports guarded AI, source review/code drafts, site checks, opt-in outbound SMS/one-way calls and manually selected coarse presence. Native iOS, real push, inbound voice/text conversation and cloud hosting DO NOT exist yet.
 
+## November 17, 2026 — confirmed real iPhone milestone
+
+- [x] **Mac-free Archer Pocket PWA** built, published at
+  `https://gravybets.github.io/Archer/index.html` and tested on the
+  owner's iPhone.
+- [x] **Auth0 Single Page Application** registered with corrected tenant,
+  public client ID, API audience, and read-only `conversation:read`
+  user-delegated permission. Owner completed a real mobile Auth0 sign-in.
+- [x] The iPhone web app deliberately shows **Auth0 signed in** separately
+  from **device approved**. Conversations and commands are still disabled.
+- [x] Fix Home Screen start URL and service-worker 404 caching bug merged.
+- [x] **Browser P-256 key preparation** implemented in review
+  [PR #39](https://github.com/GravyBets/Archer/pull/39), with a signing
+  self-test and no remote enrollment. Its persistence and Safari behavior
+  still require a physical iPhone test after owner-approved publication.
+- [x] **Render staging evaluation and cost/security gates** drafted in
+  [ARCHER_REMOTE_HOSTING_STAGING.md](ARCHER_REMOTE_HOSTING_STAGING.md),
+  review [PR #40](https://github.com/GravyBets/Archer/pull/40).
+- [ ] Real server-side Auth0 owner JWT verification + persistent
+  cryptographically approved device enrollment/revocation.
+- [ ] Actual hosted TLS mobile gateway, encrypted cloud message store,
+  strict owner isolation, reliable backup/restore and secure outbox.
+- [ ] Real remote read/write messaging, mission approval UI, and controlled
+  outbound worker. No networked Archer or AI spending was enabled by
+  completing Auth0 sign-in.
+- [ ] Native iOS remains optional. No Mac or Apple developer subscription
+  is needed for the current PWA route.
+
 ## Product decisions
 
 - App first, phone number as backup. iPhone is the primary chat, voice, business dashboard, alerts and approval surface. Phone/SMS cover hands-free or fallback access.
@@ -109,7 +137,8 @@ DONE WHEN: owner can text or call Archer naturally, with one session, accurate r
 ### P6: Always-on cloud readiness
 
 - [ ] Separate mobile gateway, background workers, credentialed admin, database and GeoShift production failure domains.
-- [ ] Choose secure hosting and database/backup plans; do not migrate before P0 security gate.
+- [x] Recommend a candidate hosted architecture (**Render paid web service + managed PostgreSQL**, initial ballpark ~$13/month before extras); **no purchase or deployment has occurred**. See [staging plan](ARCHER_REMOTE_HOSTING_STAGING.md).
+- [ ] Approve actual paid host, region, database, backup, spend cap and remote exposure; do not migrate before P0 security gate.
 - [ ] Deployment pipeline with staged rollout, health checks, rollback and owner-approved production deploy.
 - [ ] Durable queues and scheduled jobs for delivered daily briefing and urgent escalation.
 - [ ] Monitor voice, push, SMS, job queues, uptime, spend and missed incidents independently.
