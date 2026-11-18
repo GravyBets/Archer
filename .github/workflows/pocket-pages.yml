@@ -1,8 +1,6 @@
 name: Archer Pocket Static Site — Verified Publish
 on:
-  # The owner already approved public static GitHub Pages hosting. Only
-  # changes to the explicitly public Pocket shell and its own tests trigger
-  # an automatic redeploy. No desktop state or private backend is uploaded.
+  # Public static assets only; never desktop state, API secrets or phone tokens.
   push:
     branches: [main]
     paths:
@@ -14,23 +12,22 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: archer-pocket-pages
   cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Test and deploy public Archer Pocket static assets
+  build:
+    name: Validate and upload public Pocket static shell
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
-      - name: Validate static SPA/PWA boundaries before publishing
+        with:
+          persist-credentials: false
+      - name: Validate public SPA/PWA boundaries before artifact upload
         run: |
           python3 tests/ValidateArcherPocket.py
           node --check web/archer-pocket/app.js
@@ -42,6 +39,22 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: web/archer-pocket
-      - name: Deploy validated public static Pages artifact
+
+  deploy:
+    name: Publish uploaded, validated static Pocket artifact
+    needs: build
+    if: ${{ needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # Separate jobs ensure the upload has finished before the Pages API
+      # looks for the named artifact. No rebuild or secret data access here.
+      - name: Deploy validated Pages artifact
         id: deployment
         uses: actions/deploy-pages@v4
