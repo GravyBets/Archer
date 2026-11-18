@@ -34,6 +34,13 @@ jobs:
         run: |
           python3 -m py_compile tools/archer_ci_triage.py
           python3 -m unittest discover -s tests -p 'TestArcherCiTriage.py' -v
+      - name: Validate safe Archer self-work patch worker (no secrets)
+        run: |
+          python3 -m py_compile tools/archer_self_work.py
+          python3 -m unittest discover -s tests -p 'TestArcherSelfWork.py' -v
+      - name: Verify local Archer installer preserves data and supports rollback
+        shell: pwsh
+        run: ./tests/Test-WindowsInstaller.ps1
       - name: Check dashboard and presence JavaScript
         run: |
           node --check Archer.MissionControl/wwwroot/js/app.js
