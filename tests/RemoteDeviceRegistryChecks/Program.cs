@@ -32,7 +32,7 @@ DevicePairingContract.DeviceSummary Approve(
         DevicePairingContract.ProofPayload(owner, challenge),
         HashAlgorithmName.SHA256,
         DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
-    Check(inMemory.Prove(challenge.TicketId, signature, now),
+    Check(inMemory.Prove(owner, challenge.TicketId, signature, now),
         "device private key possession demonstrated offline");
     var approved = inMemory.Approve(owner, challenge.TicketId, scopes, now);
     Check(approved is not null, "trusted synthetic owner approved enrollment");
