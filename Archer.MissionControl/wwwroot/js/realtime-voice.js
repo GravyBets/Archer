@@ -38,10 +38,11 @@
       speaker.remove();
     }
     speaker = null;
-    if (connection) {
-      try { connection.close(); } catch { /* cleanup */ }
-    }
+    const oldConnection = connection;
     connection = null;
+    if (oldConnection) {
+      try { oldConnection.close(); } catch { /* cleanup */ }
+    }
     manualMic.disabled = manualWasDisabled;
     connecting = false;
     end.disabled = true;
@@ -104,7 +105,11 @@
       microphone = await navigator.mediaDevices.getUserMedia({
         audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true}
       });
-      if (!connecting) return; // user cancelled while permissions were open
+      if (!connecting) {
+        microphone.getTracks().forEach(track => track.stop());
+        microphone = null;
+        return; // user cancelled during microphone permission prompt
+      }
       connection = new RTCPeerConnection();
       const activeConnection = connection;
       speaker = document.createElement('audio');
