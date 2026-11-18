@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Archer.RemoteGateway/Auth0OwnerSignInSettings.cs" Link="Auth0OwnerSignInSettings.cs" />
+    <Compile Include="../../Archer.RemoteGateway/Auth0OwnerClaimPolicy.cs" Link="Auth0OwnerClaimPolicy.cs" />
+  </ItemGroup>
+</Project>
