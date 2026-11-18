@@ -32,6 +32,8 @@ jobs:
         run: dotnet run --project tests/RemoteDevicePairingChecks/RemoteDevicePairingChecks.csproj --configuration Release
       - name: Verify owner-bound phone proof, separate approval and durable revocation
         run: dotnet run --project tests/RemoteEnrollmentPipelineChecks/RemoteEnrollmentPipelineChecks.csproj --configuration Release
+      - name: Verify enrolled phone read request signature, anti-replay and revocation
+        run: dotnet run --project tests/RemoteDeviceReadProofChecks/RemoteDeviceReadProofChecks.csproj --configuration Release
       - name: Validate persisted device enrollment, owner isolation and atomic revocation
         run: dotnet run --project tests/RemoteDeviceRegistryChecks/RemoteDeviceRegistryChecks.csproj --configuration Release
       - name: Ensure signed JWT authorization tracks live SQLite revocation across restarts

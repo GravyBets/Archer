@@ -118,6 +118,35 @@ internal sealed class DurableDeviceRegistry
     /// survives a revocation made by another process. Database faults propagate
     /// to the caller, which MUST fail closed, never fall back to JWT scopes.
     /// </summary>
+    /// <summary>
+    /// Retrieve only the pinned PUBLIC key fingerprint for an active,
+    /// owner-scoped device. Caller must additionally verify fresh scopes and
+    /// a one-time signed request proof before any protected data access.
+    /// </summary>
+    internal string? CurrentActiveKeyFingerprint(
+        string authenticatedOwnerSubject, string deviceId)
+    {
+        if (!ValidText(authenticatedOwnerSubject, 128) ||
+            !IsHex(deviceId, 48)) return null;
+
+        using var db = Open();
+        using var command = db.CreateCommand();
+        command.CommandText = """
+            SELECT public_key_sha256 FROM approved_devices
+            WHERE device_id = @device AND owner_subject = @owner
+              AND revoked_at_utc IS NULL
+            LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("@device", deviceId);
+        command.Parameters.AddWithValue("@owner", authenticatedOwnerSubject);
+        var fingerprint = command.ExecuteScalar() as string;
+        if (fingerprint is null) return null;
+        if (!IsHex(fingerprint, 64))
+            throw new InvalidOperationException(
+                "Malformed stored device fingerprint; deny request.");
+        return fingerprint;
+    }
+
     internal IReadOnlySet<string>? CurrentScopes(
         string authenticatedOwnerSubject, string deviceId)
     {

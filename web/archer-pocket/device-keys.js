@@ -146,6 +146,36 @@
       ownerSubject + '\n' + ticketId + '\n' + nonce);
   }
 
+  // Future read-only remote gateway proof. This signs a fresh SERVER-issued
+  // ticket for exactly one GET path, owner and enrolled device identifier.
+  // The existing Pocket UI never calls it until authenticated remote
+  // enrollment and trusted HTTPS ingress are independently enabled.
+  function readProofPayload(ownerSubject, deviceId, requestPath, ticketId, nonce) {
+    if (typeof ownerSubject !== 'string' ||
+        !ownerSubject.trim() || ownerSubject.length > 128 ||
+        /[\r\n\0]/.test(ownerSubject) ||
+        typeof deviceId !== 'string' || !/^[A-F0-9]{48}$/.test(deviceId) ||
+        !['/v1/conversation/messages', '/v1/inbox'].includes(requestPath) ||
+        typeof ticketId !== 'string' || !/^[A-F0-9]{48}$/.test(ticketId) ||
+        typeof nonce !== 'string' || !/^[A-F0-9]{64}$/.test(nonce))
+      throw new Error('Invalid authenticated read request challenge.');
+    return encoder.encode(
+      'ARCHER_DEVICE_READ_PROOF_V1\n' +
+      ownerSubject + '\n' + deviceId + '\nGET\n' +
+      requestPath + '\n' + ticketId + '\n' + nonce);
+  }
+
+  async function signReadChallenge(
+    record, ownerSubject, deviceId, requestPath, ticketId, nonce) {
+    checkStored(record);
+    const proof = await SUBTLE().sign(
+      {name:'ECDSA',hash:'SHA-256'}, record.privateKey,
+      readProofPayload(ownerSubject, deviceId, requestPath, ticketId, nonce));
+    if (proof.byteLength !== 64)
+      throw new Error('Expected P-256 raw 64-byte read proof.');
+    return base64url(proof);
+  }
+
   async function signServerChallenge(record, ownerSubject, ticketId, nonce) {
     checkStored(record);
     const proof = await SUBTLE().sign(
@@ -181,6 +211,7 @@
 
   globalThis.ArcherPocketDeviceKeys = Object.freeze({
     create, read, erase, fingerprint, selfTest,
-    pairingPayload, signServerChallenge, publicDescription
+    pairingPayload, signServerChallenge, readProofPayload,
+    signReadChallenge, publicDescription
   });
 })();

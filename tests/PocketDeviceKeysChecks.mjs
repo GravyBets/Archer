@@ -154,6 +154,43 @@ await test('no hardcoded account subject in signed proof', async () => {
   assert.notEqual(proofA,proofB);
 });
 
+await test('phone signs only one exact read-only GET challenge for its enrolled key', async () => {
+  const record = await vault.read();
+  const owner = 'auth0|owner';
+  const deviceId = 'A'.repeat(48);
+  const ticketId = 'B'.repeat(48);
+  const nonce = 'C'.repeat(64);
+  const resource = '/v1/conversation/messages';
+  const bytes = vault.readProofPayload(owner, deviceId, resource, ticketId, nonce);
+  assert.equal(Buffer.from(bytes).toString('utf8'),
+    'ARCHER_DEVICE_READ_PROOF_V1\n' + owner + '\n' + deviceId +
+    '\nGET\n' + resource + '\n' + ticketId + '\n' + nonce);
+  const signature = Buffer.from(await vault.signReadChallenge(
+    record, owner, deviceId, resource, ticketId, nonce), 'base64url');
+  assert.equal(signature.byteLength, 64);
+  const key = createPublicKey({key:Buffer.from(record.publicSpki),format:'der',type:'spki'});
+  assert.equal(verifyNode('sha256',Buffer.from(bytes),
+    {key,dsaEncoding:'ieee-p1363'},signature),true);
+  const otherNonce = vault.readProofPayload(
+    owner, deviceId, resource, ticketId, 'D'.repeat(64));
+  assert.equal(verifyNode('sha256',Buffer.from(otherNonce),
+    {key,dsaEncoding:'ieee-p1363'},signature),false);
+  const otherOwner = vault.readProofPayload(
+    'auth0|different', deviceId, resource, ticketId, nonce);
+  assert.equal(verifyNode('sha256',Buffer.from(otherOwner),
+    {key,dsaEncoding:'ieee-p1363'},signature),false);
+  for(const illegal of ['/v1/missions/run','/v1/conversation/messages?admin=true',
+                        '/api/chat']) {
+    assert.throws(() => vault.readProofPayload(owner,deviceId,illegal,ticketId,nonce));
+  }
+  assert.throws(() => vault.readProofPayload(
+    owner,deviceId,resource,ticketId,'bad nonce'));
+  assert.throws(() => vault.readProofPayload(
+    'owner\nimposter',deviceId,resource,ticketId,nonce));
+  assert.throws(() => vault.readProofPayload(
+    owner,'not-an-enrolled-id',resource,ticketId,nonce));
+});
+
 await test('explicit erase confirms no key remains', async () => {
   await vault.erase();
   assert.equal(await vault.read(),null);
