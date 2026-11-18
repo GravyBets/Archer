@@ -33,6 +33,16 @@ Check(valid!.Issuer == "https://dev-owner.us.auth0.com/", "exact Auth0 slash-ter
 Check(valid.Audience == "https://archer.example/api/dev", "immutable custom API audience");
 Check(valid.NativeClientId == "NativeSynthetic123456789", "native app ID pinned");
 Check(valid.OwnerSubject == "auth0|synthetic-private-account", "exact Auth0 database identity");
+Check(valid.PocketSpaClientId is null, "Pocket SPA client not accepted unless explicitly pinned");
+var pocketConfig = new Dictionary<string, string?>(configuration, StringComparer.Ordinal)
+{
+    ["ARCHER_REMOTE_AUTH0_SIGNIN_POCKET_SPA_CLIENT_ID"] = "PocketSynthetic123456789"
+};
+var pocket = Parse(pocketConfig);
+Check(pocket?.PocketSpaClientId == "PocketSynthetic123456789",
+    "optional Pocket SPA OAuth client explicitly pinned independently of Native");
+Check(pocket?.NativeClientId == valid.NativeClientId,
+    "Native client trust is not replaced by Pocket SPA");
 Check(Parse(new Dictionary<string, string?>()) is null, "disabled by default");
 
 void Bad(string key, string? value, string label)
@@ -63,6 +73,14 @@ Bad("ARCHER_REMOTE_AUTH0_SIGNIN_API_AUDIENCE", "https://manage.auth0.com/api/v2/
 Bad("ARCHER_REMOTE_AUTH0_SIGNIN_NATIVE_CLIENT_ID", null, "missing Native client ID");
 Bad("ARCHER_REMOTE_AUTH0_SIGNIN_NATIVE_CLIENT_ID", "abc", "short Native client ID");
 Bad("ARCHER_REMOTE_AUTH0_SIGNIN_NATIVE_CLIENT_ID", "Native id with spaces", "invalid client ID");
+Bad("ARCHER_REMOTE_AUTH0_SIGNIN_POCKET_SPA_CLIENT_ID", "",
+    "empty SPA client fails closed");
+Bad("ARCHER_REMOTE_AUTH0_SIGNIN_POCKET_SPA_CLIENT_ID", "malformed id",
+    "whitespace in SPA client is forbidden");
+Bad("ARCHER_REMOTE_AUTH0_SIGNIN_POCKET_SPA_CLIENT_ID", "NativeSynthetic123456789",
+    "Native and Pocket may not share client identity");
+Bad("ARCHER_REMOTE_AUTH0_SIGNIN_POCKET_SPA_CLIENT_ID", "pocket.client.domain",
+    "client ID must not be a domain");
 Bad("ARCHER_REMOTE_AUTH0_SIGNIN_OWNER_SUBJECT", null, "missing owner subject");
 Bad("ARCHER_REMOTE_AUTH0_SIGNIN_OWNER_SUBJECT", "", "empty owner subject");
 Bad("ARCHER_REMOTE_AUTH0_SIGNIN_OWNER_SUBJECT", "someone@example.com", "email is not a trusted Auth0 user ID");
