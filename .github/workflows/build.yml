@@ -30,6 +30,10 @@ jobs:
           node --check web/archer-pocket/app.js
           node --check web/archer-pocket/sw.js
           node --check web/archer-pocket/config.js
+      - name: Validate safe Archer self-work patch worker (no secrets)
+        run: |
+          python3 -m py_compile tools/archer_self_work.py
+          python3 -m unittest discover -s tests -p 'TestArcherSelfWork.py' -v
       - name: Check dashboard and presence JavaScript
         run: |
           node --check Archer.MissionControl/wwwroot/js/app.js
