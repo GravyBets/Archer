@@ -149,6 +149,28 @@ assert "/api/realtime-voice/call" in REALTIME_JS
 assert "const SESSION_LIMIT_MS = 4 * 60 * 1000" in REALTIME_JS
 assert "Authorization:" not in REALTIME_JS and "Bearer " not in REALTIME_JS
 
+# Guard the server's SDP gate against accidentally comparing literal
+# backslash-r/backslash-n text instead of WebRTC's real CRLF/LF line endings.
+# This previously made every legitimate browser offer fail before the API call.
+REALTIME_COORDINATOR = (ROOT.parent / "Services" / "RealtimeVoiceCoordinator.cs").read_text(encoding="utf-8")
+for expected_sdp_literal in (
+    r'offer.StartsWith("v=0\r\n"',
+    r'offer.StartsWith("v=0\n"',
+    r'offer.Contains("\nm=audio "',
+    r'offer.Contains("\r\nm=audio "',
+    r'body.StartsWith("v=0\r\n"',
+    r'body.StartsWith("v=0\n"',
+):
+    assert expected_sdp_literal in REALTIME_COORDINATOR, (
+        f"Expected real SDP line ending validator missing: {expected_sdp_literal}"
+    )
+for invalid_sdp_literal in (
+    r'"v=0\\r\\n"', r'"v=0\\n"', r'"\\nm=audio "', r'"\\r\\nm=audio "'
+):
+    assert invalid_sdp_literal not in REALTIME_COORDINATOR, (
+        f"SDP validator wrongly matches a literal backslash sequence: {invalid_sdp_literal}"
+    )
+
 assert "SpeechRecognitionCtor" in HOME_JS
 assert "speechSynthesis" in HOME_JS
 assert "prefers-reduced-motion" in CSS
