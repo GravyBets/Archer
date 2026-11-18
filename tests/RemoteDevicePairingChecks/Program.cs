@@ -37,15 +37,19 @@ Check(first.ExpiresAtUtc == now.AddMinutes(5), "five-minute challenge expiry");
 Check(contract.ListOwnDevices(ownerA).Count == 0, "pairing request is not enrollment");
 Check(contract.Approve(ownerA, first.TicketId, readWrite, now) is null,
     "approval denied before device proves key possession");
-Check(!contract.Prove("not-a-ticket", Sign(keyA, ownerA, first), now),
+Check(!contract.Prove(ownerA, "not-a-ticket", Sign(keyA, ownerA, first), now),
     "unknown challenge denied");
-Check(!contract.Prove(first.TicketId, Sign(keyB, ownerA, first), now),
+Check(!contract.Prove(ownerB, first.TicketId, Sign(keyA, ownerA, first), now),
+    "different authenticated owner cannot prove the actual phone key");
+Check(!contract.Prove("", first.TicketId, Sign(keyA, ownerA, first), now),
+    "missing verified owner cannot prove the phone key");
+Check(!contract.Prove(ownerA, first.TicketId, Sign(keyB, ownerA, first), now),
     "signature from different device rejected");
-Check(!contract.Prove(first.TicketId, Sign(keyA, ownerB, first), now),
+Check(!contract.Prove(ownerA, first.TicketId, Sign(keyA, ownerB, first), now),
     "signature bound to exact owner, not another subject");
-Check(contract.Prove(first.TicketId, Sign(keyA, ownerA, first), now),
+Check(contract.Prove(ownerA, first.TicketId, Sign(keyA, ownerA, first), now),
     "correct P-256 proof accepted");
-Check(!contract.Prove(first.TicketId, Sign(keyA, ownerA, first), now),
+Check(!contract.Prove(ownerA, first.TicketId, Sign(keyA, ownerA, first), now),
     "key proof cannot be replayed");
 Check(contract.Approve(ownerB, first.TicketId, readWrite, now) is null,
     "cross-owner approval refused without consuming ticket");
@@ -90,9 +94,9 @@ Check(contract.ListOwnDevices(ownerA)[0].Revoked,
 // A third failed proof burns the ticket, including any later correct proof.
 var wrong = contract.Begin(ownerA, "Failed proof", pub, now);
 for (var i = 0; i < 3; i++)
-    Check(!contract.Prove(wrong.TicketId, Sign(keyB, ownerA, wrong), now),
+    Check(!contract.Prove(ownerA, wrong.TicketId, Sign(keyB, ownerA, wrong), now),
         "incorrect proof denied at attempt " + (i + 1));
-Check(!contract.Prove(wrong.TicketId, Sign(keyA, ownerA, wrong), now),
+Check(!contract.Prove(ownerA, wrong.TicketId, Sign(keyA, ownerA, wrong), now),
     "ticket killed after three invalid signatures");
 Check(contract.Approve(ownerA, wrong.TicketId, read, now) is null,
     "burned ticket cannot be approved");
@@ -100,18 +104,18 @@ Check(contract.Approve(ownerA, wrong.TicketId, read, now) is null,
 // Incorrect signature lengths also count against the three-attempt cap.
 var malformed = contract.Begin(ownerA, "Malformed signatures", pub, now);
 for (var i = 0; i < 3; i++)
-    Check(!contract.Prove(malformed.TicketId, new byte[] { 0x01 }, now),
+    Check(!contract.Prove(ownerA, malformed.TicketId, new byte[] { 0x01 }, now),
         "short signature denied and counted " + (i + 1));
-Check(!contract.Prove(malformed.TicketId, Sign(keyA, ownerA, malformed), now),
+Check(!contract.Prove(ownerA, malformed.TicketId, Sign(keyA, ownerA, malformed), now),
     "malformed proof flood cannot bypass attempt cap");
 
 // Expiry is enforced for both proof and approval.
 var timedOut = contract.Begin(ownerA, "Expired", pub, now);
-Check(!contract.Prove(timedOut.TicketId, Sign(keyA, ownerA, timedOut),
+Check(!contract.Prove(ownerA, timedOut.TicketId, Sign(keyA, ownerA, timedOut),
         now.Add(DevicePairingContract.ChallengeLifetime)),
     "proof fails exactly at expiry");
 var approvedTooLate = contract.Begin(ownerA, "Proved then expired", pub, now);
-Check(contract.Prove(approvedTooLate.TicketId,
+Check(contract.Prove(ownerA, approvedTooLate.TicketId,
         Sign(keyA, ownerA, approvedTooLate), now), "proof before expiry works");
 Check(contract.Approve(ownerA, approvedTooLate.TicketId, read,
         now.Add(DevicePairingContract.ChallengeLifetime)) is null,
@@ -136,14 +140,14 @@ var active = new List<string>();
 for (var i = 0; i < DevicePairingContract.MaxActiveDevices; i++)
 {
     var challenge = contract.Begin(ownerA, "Phone " + i, pub, now);
-    Check(contract.Prove(challenge.TicketId, Sign(keyA, ownerA, challenge), now),
+    Check(contract.Prove(ownerA, challenge.TicketId, Sign(keyA, ownerA, challenge), now),
         "device " + i + " proved");
     var item = contract.Approve(ownerA, challenge.TicketId, read, now);
     Check(item is not null, "device " + i + " approved");
     active.Add(item!.DeviceId);
 }
 var extra = contract.Begin(ownerA, "Phone beyond cap", pub, now);
-Check(contract.Prove(extra.TicketId, Sign(keyA, ownerA, extra), now),
+Check(contract.Prove(ownerA, extra.TicketId, Sign(keyA, ownerA, extra), now),
     "extra device proof allowed but not enrolled");
 Check(contract.Approve(ownerA, extra.TicketId, read, now) is null,
     "nine simultaneous active devices denied");
@@ -154,7 +158,7 @@ Check(contract.Approve(ownerA, extra.TicketId, read, now) is not null,
 // Concurrent owner approvals must consume the same ticket exactly once.
 var parallelRegistry = new DevicePairingContract();
 var parallel = parallelRegistry.Begin(ownerA, "Concurrent phone", pub, now);
-Check(parallelRegistry.Prove(parallel.TicketId, Sign(keyA, ownerA, parallel), now),
+Check(parallelRegistry.Prove(ownerA, parallel.TicketId, Sign(keyA, ownerA, parallel), now),
     "concurrent ticket proved");
 var accepted = 0;
 Parallel.For(0, 32, _ =>
