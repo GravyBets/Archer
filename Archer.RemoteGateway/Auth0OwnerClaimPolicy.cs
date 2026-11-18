@@ -16,9 +16,17 @@ internal static class Auth0OwnerClaimPolicy
         var authorizedParty = ExactlyOne(validatedPrincipal, "azp");
         var oauthScope = ExactlyOne(validatedPrincipal, "scope");
         var delegatedScope = ExactlyOne(validatedPrincipal, "scp");
-        if (subject is null || authorizedParty is null ||
+        // A signed token must name exactly one server-pinned public OAuth
+        // client. Native and Pocket SPA are separate registrations; adding
+        // Pocket is opt-in and never inferred from an arbitrary `azp`.
+        var knownClient = authorizedParty is not null &&
+            (string.Equals(authorizedParty, config.NativeClientId,
+                StringComparison.Ordinal) ||
+             (config.PocketSpaClientId is not null &&
+              string.Equals(authorizedParty, config.PocketSpaClientId,
+                  StringComparison.Ordinal)));
+        if (subject is null || !knownClient ||
             !string.Equals(subject, config.OwnerSubject, StringComparison.Ordinal) ||
-            !string.Equals(authorizedParty, config.NativeClientId, StringComparison.Ordinal) ||
             (oauthScope is null) == (delegatedScope is null))
             return false;
 
