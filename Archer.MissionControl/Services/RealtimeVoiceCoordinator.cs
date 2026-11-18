@@ -97,8 +97,10 @@ public sealed class RealtimeVoiceCoordinator
             if (read > 16384) return Results.StatusCode(413);
             offer = new string(chars, 0, read);
         }
-        if (offer.Length < 20 || !offer.StartsWith("v=0\n", StringComparison.Ordinal)
-            || !offer.Contains("\nm=audio ", StringComparison.Ordinal)
+        if (offer.Length < 20 || !(offer.StartsWith("v=0\\r\\n", StringComparison.Ordinal) ||
+                offer.StartsWith("v=0\\n", StringComparison.Ordinal))
+            || !(offer.Contains("\\nm=audio ", StringComparison.Ordinal) ||
+                offer.Contains("\\r\\nm=audio ", StringComparison.Ordinal))
             || !offer.Contains("a=fingerprint:", StringComparison.Ordinal))
             return Results.BadRequest(new { error = "Invalid WebRTC audio offer." });
 
@@ -158,7 +160,8 @@ public sealed class RealtimeVoiceCoordinator
                 }, statusCode: 502);
             var body = await response.Content.ReadAsStringAsync(ct);
             if (body.Length is < 20 or > 32768 ||
-                !body.StartsWith("v=0\n", StringComparison.Ordinal))
+                !(body.StartsWith("v=0\\r\\n", StringComparison.Ordinal) ||
+                  body.StartsWith("v=0\\n", StringComparison.Ordinal)))
                 return Results.Json(new { error = "Realtime provider returned an invalid SDP answer." },
                     statusCode: 502);
             return Results.Text(body, "application/sdp");
