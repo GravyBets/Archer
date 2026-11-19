@@ -22,6 +22,8 @@ jobs:
         run: dotnet build Archer.MobileGateway/Archer.MobileGateway.csproj --configuration Release --no-restore
       - name: Build isolated remote gateway contract skeleton
         run: dotnet build Archer.RemoteGateway/Archer.RemoteGateway.csproj --configuration Release
+      - name: Check fail-closed HTTPS ingress preflight
+        run: python3 tests/ValidateRemoteIngress.py
       - name: Run synthetic owner/device authorization contract checks
         run: dotnet run --project tests/RemoteGatewayPolicyChecks/RemoteGatewayPolicyChecks.csproj --configuration Release
       - name: Smoke-test remote gateway fail-closed localhost boundaries

@@ -1,0 +1,25 @@
+# Archer Remote Gateway — REVIEW-ONLY ingress template.
+# NEVER serve this example domain, point DNS at it, or use in production.
+# The upstream is deliberately NOT connected while remote /v1 APIs are absent.
+# A functioning proxy requires independent owner approval, approved device
+# pairing, signed per-request proof, encryption, audit and infrastructure review.
+#
+# When eventually deployed use an owner-controlled FQDN and Caddy's managed
+# HTTPS certificate, then separately document trusted proxy hops. Do NOT
+# replace this 503 block with reverse_proxy before the gateway is audited.
+
+https://gateway.example.invalid {
+    encode zstd gzip
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+        X-Frame-Options DENY
+        Cache-Control "no-store"
+        Strict-Transport-Security "max-age=31536000"
+        -Server
+    }
+
+    @gateway_api path /v1/* /_local/* /health/* /api/*
+    respond @gateway_api "Archer remote gateway not enabled." 503
+    respond "Archer remote gateway not enabled." 503
+}
