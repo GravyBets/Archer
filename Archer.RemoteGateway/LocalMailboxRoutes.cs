@@ -27,7 +27,8 @@ internal static class LocalMailboxRoutes
         {
             if (!Auth0OwnerSignInProbe.IsValidatedOwner(context))
                 return Results.Forbid();
-            if (request.DeviceId is not { Length: 48 } deviceId)
+            var deviceId = request.DeviceId;
+            if (deviceId is null || deviceId.Length != 48)
                 return Results.BadRequest(new { error = "Invalid device identifier." });
             var challenge = guard.Begin(
                 owner.OwnerSubject, deviceId, "GET", "/v1/conversation/messages",
@@ -52,7 +53,8 @@ internal static class LocalMailboxRoutes
             if (!Auth0OwnerSignInProbe.IsValidatedOwner(context) ||
                 !AuthorizedOperator(context, pairing.OperatorSecret))
                 return Results.Forbid();
-            if (request.Content is not { Length: >= 1 and <= 1200 } content)
+            var content = request.Content;
+            if (content is null || content.Length is < 1 or > 1200)
                 return Results.BadRequest(new { error = "Invalid message length." });
             try
             {
