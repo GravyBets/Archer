@@ -38,6 +38,10 @@ jobs:
         run: dotnet run --project tests/RemoteLocalPairingSettingsChecks/RemoteLocalPairingSettingsChecks.csproj --configuration Release
       - name: Smoke-test localhost Auth0 owner pairing API (no real credentials)
         run: python3 tests/SmokeLocalPairingRoutes.py
+      - name: Test encrypted, owner-scoped private mailbox and integrity failures
+        run: dotnet run --project tests/RemoteEncryptedMailboxChecks/RemoteEncryptedMailboxChecks.csproj --configuration Release
+      - name: Smoke-test authenticated, device-gated localhost message read API
+        run: python3 tests/SmokeLocalMailboxRoutes.py
       - name: Verify enrolled phone read request signature, anti-replay and revocation
         run: dotnet run --project tests/RemoteDeviceReadProofChecks/RemoteDeviceReadProofChecks.csproj --configuration Release
       - name: Validate persisted device enrollment, owner isolation and atomic revocation
