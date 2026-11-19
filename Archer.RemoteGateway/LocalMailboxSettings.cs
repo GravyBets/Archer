@@ -41,7 +41,7 @@ internal sealed class LocalMailboxSettings
                 "Encrypted mailbox requires an existing absolute private directory.");
         if (hex is null || hex.Length != 64 ||
             !hex.All(Uri.IsHexDigit) ||
-            hex.Distinct(StringComparer.OrdinalIgnoreCase).Count() < 8)
+            hex.ToUpperInvariant().Distinct().Count() < 8)
             throw new InvalidOperationException(
                 "Encrypted mailbox requires a distinct 256-bit server key (64 hexadecimal characters).");
 
