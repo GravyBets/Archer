@@ -14,6 +14,9 @@ var auth0Profile = Auth0LocalProfile.FromEnvironment(
     builder.Environment.IsDevelopment(), Environment.GetEnvironmentVariable);
 var ownerSignInOnly = Auth0OwnerSignInSettings.FromEnvironment(
     builder.Environment.IsDevelopment(), Environment.GetEnvironmentVariable);
+var localPairing = LocalPairingSettings.FromEnvironment(
+    builder.Environment.IsDevelopment(), ownerSignInOnly is not null,
+    Environment.GetEnvironmentVariable);
 var activeAuthenticationModes = (identityFixture is null ? 0 : 1) +
     (oidcSettings is null ? 0 : 1) + (auth0Profile is null ? 0 : 1) +
     (ownerSignInOnly is null ? 0 : 1);
@@ -87,6 +90,7 @@ app.MapGet("/health/live", () => Results.Ok(new
     oidcLocalValidationProbeEnabled = oidcSettings is not null,
     auth0LocalValidationProbeEnabled = auth0Profile is not null,
     auth0OwnerSignInOnlyProbeEnabled = ownerSignInOnly is not null,
+    localOwnerPairingEnabled = localPairing is not null,
     conversationEndpointsEnabled = false,
     pushEnabled = false,
     aiEnabled = false,
@@ -154,7 +158,13 @@ if (ownerSignInOnly is not null)
         .RequireAuthorization();
 }
 
-// No devices, messages, admin operations, push registration, model or
+// Local-only pairing endpoints are disabled unless BOTH verified owner
+// authentication and explicit development-only pairing options are configured.
+// They do not create a public API, voice actions, or remote messaging.
+if (ownerSignInOnly is not null && localPairing is not null)
+    LocalPairingRoutes.Map(app, ownerSignInOnly, localPairing);
+
+// No public devices, message data, push registration, model, GitHub or
 // Twilio routes. All other paths (including /v1/*) return 404.
 app.MapFallback(() => Results.NotFound());
 

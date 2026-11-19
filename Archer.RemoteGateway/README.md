@@ -26,6 +26,66 @@ This is a separate .NET 10 ASP.NET Core project for **synthetic testing only**. 
 - No real user tokens or personal information are needed. NuGet's official JWT bearer verifier is used; no external OIDC server, real user, API account or paid provider calls are introduced.
 - AccessPolicy.cs is a **non-networked, internal policy contract** for future validated identities. It cannot validate a JWT, OIDC provider, device hardware key or revocation state by itself. The tests link the same source file and use synthetic principal snapshots.
 
+## Explicit local-only device enrollment API (owner proof mode)
+
+When all of these are configured by the owner in a **personal development
+environment**—and only when the gateway is still hard-bound to
+`127.0.0.1:5093`—Archer registers separate pairing endpoints:
+
+```text
+ASPNETCORE_ENVIRONMENT=Development
+ARCHER_REMOTE_GATEWAY_MODE=local-test
+ARCHER_REMOTE_AUTH0_SIGNIN_ENABLED=local-proof
+ARCHER_REMOTE_AUTH0_SIGNIN_DOMAIN=<PERSONAL_AUTH0_TENANT>
+ARCHER_REMOTE_AUTH0_SIGNIN_API_AUDIENCE=https://archer.example/api/dev
+ARCHER_REMOTE_AUTH0_SIGNIN_NATIVE_CLIENT_ID=<APPROVED_PUBLIC_CLIENT_ID>
+ARCHER_REMOTE_AUTH0_SIGNIN_OWNER_SUBJECT=<EXACT_VERIFIED_SUB>
+ARCHER_REMOTE_AUTH0_SIGNIN_POCKET_SPA_CLIENT_ID=<OPTIONAL_PINNED_WEB_CLIENT_ID>
+ARCHER_REMOTE_PAIRING_ENABLED=local-only
+ARCHER_REMOTE_PAIRING_REGISTRY_FILE=<ABSOLUTE_PRIVATE_SQLITE_PATH>
+ARCHER_REMOTE_PAIRING_OPERATOR_SECRET=<DEDICATED_HIGH_ENTROPY_LOCAL_APPROVAL_SECRET>
+```
+
+Never put operator secrets, real Auth0 owner subjects or bearer credentials
+into GitHub, browser JavaScript, chat, curl history, screenshots, CI logs or
+the public Pages site. The local-only operator secret is *separate* from
+Auth0, and should be available only to a physically authorized local
+operator. Missing, partial, weak or production-mode configuration refuses
+startup rather than silently disabling approval checks.
+
+All four routes require an official signed and valid Auth0 owner access
+token (issuer, audience, exact signed `sub`, pinned `azp`, RS256, expiry
+and delegated read scope) and the existing no-Origin/no-proxy loopback
+security gate.
+
+- `POST /_local/pairing/begin` with
+  `{"label":"Personal iPhone","publicSpkiBase64Url":"..."}` returns a
+  five-minute, random `ticketId`, `nonce`, expiry and server-verified
+  `ownerSubject`. This is *not* approval.
+- `POST /_local/pairing/prove` with `{"ticketId":"...", "signatureBase64Url":"..."}`
+  verifies the exact browser-generated P-256 signature over the canonical
+  owner/ticket/nonce payload. Other owners, wrong keys, replay and expired
+  challenges are denied. A valid proof is *not* approval.
+- `POST /_local/pairing/approve` with `{"ticketId":"..."}` requires
+  the **additional local operator secret** in the
+  `X-Archer-Operator-Secret` header. It grants *only*
+  `conversation:read`, never `conversation:write`, action execution,
+  GitHub, finance, AI or calling; stores a revocable fingerprint and audit
+  record in the private SQLite fixture.
+- `POST /_local/pairing/revoke` with `{"deviceId":"..."}` also requires
+  the separate local operator secret and immediately persists revocation.
+
+This is a **single-instance local integration**. Pending challenges are
+memory-only, the registry holds synthetic/private *metadata*, and the
+upcoming public gateway still needs authenticated HTTPS ingress, encrypted
+storage at rest, nonce replay durability, per-request device proof, rate
+limits and independent security review. No phone can reach these endpoints
+from outside the PC. `/health/ready` remains 503 and `/v1/*` remains 404.
+
+Tests: `dotnet run --project tests/RemoteLocalPairingSettingsChecks`,
+`python3 tests/SmokeLocalPairingRoutes.py`,
+`dotnet run --project tests/RemoteEnrollmentPipelineChecks`.
+
 ## Safe local verification
 
 ```bash
