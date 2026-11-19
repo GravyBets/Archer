@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
+    <Compile Include="../../Archer.RemoteGateway/Auth0OwnerSignInSettings.cs" Link="Auth0OwnerSignInSettings.cs" />
+    <Compile Include="../../Archer.RemoteGateway/Auth0OwnerClaimPolicy.cs" Link="Auth0OwnerClaimPolicy.cs" />
+    <Compile Include="../../Archer.RemoteGateway/LocalPairingSettings.cs" Link="LocalPairingSettings.cs" />
+    <Compile Include="../../Archer.RemoteGateway/DevicePairingContract.cs" Link="DevicePairingContract.cs" />
+    <Compile Include="../../Archer.RemoteGateway/DurableDeviceRegistry.cs" Link="DurableDeviceRegistry.cs" />
+    <Compile Include="../../Archer.RemoteGateway/OwnerEnrollmentCoordinator.cs" Link="OwnerEnrollmentCoordinator.cs" />
+    <Compile Include="../../Archer.RemoteGateway/ReadOnlyDeviceProofGuard.cs" Link="ReadOnlyDeviceProofGuard.cs" />
+    <Compile Include="../../Archer.RemoteGateway/LocalMailboxSettings.cs" Link="LocalMailboxSettings.cs" />
+    <Compile Include="../../Archer.RemoteGateway/EncryptedRemoteMailbox.cs" Link="EncryptedRemoteMailbox.cs" />
+  </ItemGroup>
+</Project>
