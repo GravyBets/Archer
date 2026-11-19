@@ -33,7 +33,8 @@ internal static class LocalPairingRoutes
         {
             if (!Auth0OwnerSignInProbe.IsValidatedOwner(context))
                 return Results.Forbid();
-            if (request.Label is not { Length: >= 2 and <= 80 } label ||
+            var label = request.Label;
+            if (string.IsNullOrWhiteSpace(label) || label.Length is < 2 or > 80 ||
                 label.Any(char.IsControl) ||
                 !TryDecode(request.PublicSpkiBase64Url, 64, 256, out var spki))
                 return Results.BadRequest(new { error = "Invalid pairing request." });
@@ -64,8 +65,8 @@ internal static class LocalPairingRoutes
         {
             if (!Auth0OwnerSignInProbe.IsValidatedOwner(context))
                 return Results.Forbid();
-            if (request.TicketId is not { Length: 48 } ticket ||
-                !IsHex(ticket, 48) ||
+            var ticket = request.TicketId;
+            if (ticket is null || !IsHex(ticket, 48) ||
                 !TryDecode(request.SignatureBase64Url, 64, 64, out var signature))
                 return Results.BadRequest(new { error = "Invalid pairing proof." });
             var success = coordinator.Prove(
@@ -78,8 +79,8 @@ internal static class LocalPairingRoutes
         {
             if (!Auth0OwnerSignInProbe.IsValidatedOwner(context))
                 return Results.Forbid();
-            if (request.TicketId is not { Length: 48 } ticket ||
-                !IsHex(ticket, 48) ||
+            var ticket = request.TicketId;
+            if (ticket is null || !IsHex(ticket, 48) ||
                 !TryOperatorSecret(context, out var secret))
                 return Results.Forbid();
 
@@ -101,8 +102,8 @@ internal static class LocalPairingRoutes
         {
             if (!Auth0OwnerSignInProbe.IsValidatedOwner(context))
                 return Results.Forbid();
-            if (request.DeviceId is not { Length: 48 } device ||
-                !IsHex(device, 48) ||
+            var device = request.DeviceId;
+            if (device is null || !IsHex(device, 48) ||
                 !TryOperatorSecret(context, out var secret))
                 return Results.Forbid();
             var revoked = coordinator.Revoke(
@@ -118,7 +119,9 @@ internal static class LocalPairingRoutes
         secret = "";
         if (!context.Request.Headers.TryGetValue(
                 "X-Archer-Operator-Secret", out var values) ||
-            values.Count != 1 || values[0] is not { Length: >= 48 and <= 256 } value ||
+            values.Count != 1) return false;
+        var value = values[0];
+        if (value is null || value.Length is < 48 or > 256 ||
             value.Any(char.IsControl))
             return false;
         secret = value;
