@@ -86,6 +86,62 @@ Tests: `dotnet run --project tests/RemoteLocalPairingSettingsChecks`,
 `python3 tests/SmokeLocalPairingRoutes.py`,
 `dotnet run --project tests/RemoteEnrollmentPipelineChecks`.
 
+## Encrypted, device-signed local mailbox (read-only milestone)
+
+The optional **single-machine only** private mailbox requires ALL of:
+the signed Auth0 owner-only login fixture, the independently approved local
+P-256 pairing registry, the local pairing operator secret, and these
+additional environment values (never commit real values):
+
+```text
+ARCHER_REMOTE_MAILBOX_ENABLED=local-readonly
+ARCHER_REMOTE_MAILBOX_FILE=<ABSOLUTE_PRIVATE_SQLITE_FILE>
+ARCHER_REMOTE_MAILBOX_KEY_HEX=<RANDOM_32_BYTE_AES_KEY_AS_64_HEX_CHARACTERS>
+```
+
+A partial setting, Production mode, missing pairing permission, weak key,
+relative storage path, or missing private directory refuses startup.
+Keep the AES-256 key in a **server-side secret store**, not GitHub, the PWA,
+chat, curl shell history, screenshots or public environment variables.
+The private SQLite metadata file is local, unencrypted *metadata*; message
+**bodies** are AES-256-GCM encrypted and tied to the owner, message ID and
+timestamp as authenticated associated data. Use full-disk encryption and
+encrypted off-host backups before any actual personal conversations.
+Key loss makes existing messages permanently unreadable; never regenerate
+an existing live key silently.
+
+In this local mode only:
+
+- `POST /_local/mailbox/enqueue` allows a signed, validated Auth0 owner
+  with the **additional separate local operator credential** to store one
+  bounded message. The caller cannot connect an AI model or send an SMS.
+  This is local operator-generated content only.
+- `POST /_local/mailbox/challenge` requires the owner access token and
+  an actively approved `conversation:read` device. It issues a 90-second
+  single-use challenge for the exact GET route.
+- `GET /v1/conversation/messages` requires a new signed owner bearer
+  token **and** four device proof headers:
+  `X-Archer-Device-Id`, `X-Archer-Device-Ticket`,
+  `X-Archer-Public-Key` (public SPKI, Base64url),
+  `X-Archer-Device-Proof` (64-byte P-256 signature, Base64url).
+  The canonical signature binds the signed Auth0 owner, approved device,
+  GET method, exact route, random ticket and nonce; live durable
+  revocation and scope are re-checked before any message is returned.
+  The read cursor and limit are bounded and the test store has seven-day
+  read retention. There is NO device write route.
+
+No iPhone can reach this local gateway directly. Public DNS/TLS,
+per-request proof replay coordination across server replicas,
+operator/identity recovery, message-key rotation, audited encrypted backups,
+persistent device authentication and a full security review are still
+required before any Internet access or real conversation history. The
+existing `/health/ready` remains 503; the new local readiness flag must
+not be mistaken for production capability.
+
+Tests: `dotnet run --project tests/RemoteEncryptedMailboxChecks`,
+`python3 tests/SmokeLocalMailboxRoutes.py`,
+`dotnet run --project tests/RemoteDeviceReadProofChecks`.
+
 ## Safe local verification
 
 ```bash
