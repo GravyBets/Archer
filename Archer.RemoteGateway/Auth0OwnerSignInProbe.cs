@@ -62,6 +62,11 @@ internal static class Auth0OwnerSignInProbe
         services.AddAuthorization();
     }
 
+    // Set only by JwtBearer OnTokenValidated after exact signed Auth0 owner
+    // identity, authorized party and scope checks; never from JSON/header.
+    internal static bool IsValidatedOwner(HttpContext context) =>
+        context.Items[OwnerVerifiedItem] is true;
+
     internal static IResult Probe(HttpContext context)
     {
         if (context.Items[OwnerVerifiedItem] is not true)
