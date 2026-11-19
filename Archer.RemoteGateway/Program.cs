@@ -17,6 +17,10 @@ var ownerSignInOnly = Auth0OwnerSignInSettings.FromEnvironment(
 var localPairing = LocalPairingSettings.FromEnvironment(
     builder.Environment.IsDevelopment(), ownerSignInOnly is not null,
     Environment.GetEnvironmentVariable);
+var localMailbox = LocalMailboxSettings.FromEnvironment(
+    builder.Environment.IsDevelopment(),
+    ownerSignInOnly is not null && localPairing is not null,
+    Environment.GetEnvironmentVariable);
 var activeAuthenticationModes = (identityFixture is null ? 0 : 1) +
     (oidcSettings is null ? 0 : 1) + (auth0Profile is null ? 0 : 1) +
     (ownerSignInOnly is null ? 0 : 1);
@@ -91,6 +95,7 @@ app.MapGet("/health/live", () => Results.Ok(new
     auth0LocalValidationProbeEnabled = auth0Profile is not null,
     auth0OwnerSignInOnlyProbeEnabled = ownerSignInOnly is not null,
     localOwnerPairingEnabled = localPairing is not null,
+    localEncryptedReadOnlyMailboxEnabled = localMailbox is not null,
     conversationEndpointsEnabled = false,
     pushEnabled = false,
     aiEnabled = false,
@@ -163,6 +168,11 @@ if (ownerSignInOnly is not null)
 // They do not create a public API, voice actions, or remote messaging.
 if (ownerSignInOnly is not null && localPairing is not null)
     LocalPairingRoutes.Map(app, ownerSignInOnly, localPairing);
+// A local-only message journal can be opened ONLY when signed owner login
+// and separately approved device enrollment have both been configured.
+if (ownerSignInOnly is not null && localPairing is not null &&
+    localMailbox is not null)
+    LocalMailboxRoutes.Map(app, ownerSignInOnly, localPairing, localMailbox);
 
 // No public devices, message data, push registration, model, GitHub or
 // Twilio routes. All other paths (including /v1/*) return 404.
