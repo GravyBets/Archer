@@ -44,6 +44,8 @@ jobs:
         run: python3 tests/SmokeLocalMailboxRoutes.py
       - name: Verify enrolled phone read request signature, anti-replay and revocation
         run: dotnet run --project tests/RemoteDeviceReadProofChecks/RemoteDeviceReadProofChecks.csproj --configuration Release
+      - name: Simulate Pocket pairing through encrypted read and device revocation
+        run: dotnet run --project tests/PocketEndToEndChecks/PocketEndToEndChecks.csproj --configuration Release
       - name: Validate persisted device enrollment, owner isolation and atomic revocation
         run: dotnet run --project tests/RemoteDeviceRegistryChecks/RemoteDeviceRegistryChecks.csproj --configuration Release
       - name: Ensure signed JWT authorization tracks live SQLite revocation across restarts
