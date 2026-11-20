@@ -326,3 +326,29 @@ jobs:
         shell: bash
         run: |
           python3 tests/SmokeGatewayBackups.py
+
+  windows-voice-contract:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Windows PowerShell 5.1 speech and tray companion
+        shell: powershell
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path ./tools/Archer-Voice.ps1).Path,
+            [ref]$tokens, [ref]$parseErrors)
+          if ($parseErrors.Count -gt 0) {
+            throw ($parseErrors | Out-String)
+          }
+          Add-Type -AssemblyName System.Speech
+          Add-Type -AssemblyName System.Windows.Forms
+          Add-Type -AssemblyName System.Drawing
+          Write-Host 'PASS: native Windows speech and tray companion compiles in PowerShell 5.1.'
+          # CI has no trusted physical microphone: do not open the input,
+          # connect to the internet, record audio, or call AI.
+      - name: Exercise install/update/rollback with native voice package
+        shell: powershell
+        run: ./tests/Test-WindowsInstaller.ps1
