@@ -838,6 +838,12 @@ app.MapPost("/api/realtime-voice/call",
     async (HttpContext context, RealtimeVoiceCoordinator voice, CancellationToken ct) =>
         await voice.StartAsync(context, ct));
 
+// Owner-initiated local spoken mission status. This is a read-only mission
+// command with a local transcript record: no model call, provider bill,
+// mission mutation or client-supplied assistant response is involved.
+app.MapPost("/api/voice/mission-list", async (JsonFileStore store, CancellationToken ct) =>
+    Results.Ok(await store.UpdateAsync(ArcherVoiceMissionJournal.RecordStatus, ct)));
+
 app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore store, ArcherAiService ai, CancellationToken ct) =>
 {
     if (!ai.IsConfigured) return MissingApiKey();
