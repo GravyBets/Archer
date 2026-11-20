@@ -29,6 +29,47 @@ does not create a server, phone connection, or automatic PC updater.
    approved Archer repository.** A matching SHA256 guards accidental
    corruption but is **not** cryptographic proof of who published the ZIP.
 
+## Native, no-button "Hey Archer" voice
+
+When you launch the **Archer desktop shortcut** on Windows, it starts a
+separate owner-session **Archer desktop voice** tray process using Microsoft's
+installed local Windows Speech Recognition engine (SAPI). The voice listener
+starts with Archer; **you do not click Speak or the orb**. Say **"Hey Archer"**
+alone, listen for the Windows wake chime, then ask your question normally.
+During the conversation, subsequent questions require no wake phrase.
+After **two minutes without speech**, Archer returns to wake-only mode.
+A **two-second pause** ends each spoken request.
+
+The listener remains available if the browser tab is closed while the local
+Archer server is still running. It does **not** autostart at Windows sign-in.
+Open the desktop shortcut once after signing in. The microphone is used in
+your Windows session, and an Archer system-tray icon appears while listening;
+right-click it to **Pause microphone**, **Resume microphone**, or **Exit Archer
+voice**. Closing Archer's server also stops the companion after health checks.
+
+**Windows requirements:** an installed English Windows Speech Recognition
+engine (legacy System.Speech), the selected default microphone, and desktop
+app microphone permission. If no compatible speech recognizer is installed,
+Archer shows **Desktop microphone unavailable** with a diagnostic message.
+Windows Speech Recognition availability and dictation accuracy depend on
+the PC's language packs/Windows version; this isn't the same browser voice
+engine. The native voice uses installed Windows TTS voices, preferring British
+English when present; its rate approximates your 1.25× browser preference
+rather than exactly matching it.
+
+**Privacy:** Before wake, only the offline two-word recognition grammar is
+loaded—no ambient transcription or audio is sent to Archer/OpenAI or saved.
+After wake, locally recognized requests are sent to Archer's existing
+loopback API, so normal AI chat can incur the same model usage as typed chat
+and remains subject to configured budget controls. The status file stores
+only microphone state, timestamp and process ID, **not recordings**.
+Mission creation, execution, account actions and payments still require
+existing explicit on-screen approval; native voice does not approve them.
+
+The browser Speak controls remain available as a fallback if the native
+Windows speech engine fails, but they are hidden when the tray listener
+is active to avoid competing microphone sessions.
+
 ## Subsequent updates
 
 1. Review/merge the code change you want and confirm `Archer Build` passes.
