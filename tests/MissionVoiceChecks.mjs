@@ -17,6 +17,7 @@ const fakeFetch = async (path, options = {}) => {
   network.push({path, options});
   if (path === '/api/voice/mission-list') {
     assert.equal(options.method, 'POST');
+    assert.equal(options.headers['Content-Type'], 'application/json');
     return {ok: true, json: async () => ({
       status: 'ok', count: 1,
       reply: "You've got one mission: GeoShift audit. Its status is Ready.",
