@@ -102,5 +102,33 @@ Check(copy is not null &&
         .Last().Content == "And then?",
     "same bounded continuity works on reloaded persisted data");
 
+var appDirectory = Path.Combine(Path.GetTempPath(), "archer-source-project");
+var persistentDirectory = Path.Combine(Path.GetTempPath(), "archer-user-data");
+string? Env(Dictionary<string, string> env, string key) =>
+    env.TryGetValue(key, out var value) ? value : null;
+var persistedEnv = new Dictionary<string, string>
+{
+    ["ARCHER_DATA_DIR"] = persistentDirectory
+};
+Check(ArcherConversationFlow.ResolveKnowledgePath(
+    appDirectory, name => Env(persistedEnv, name)) ==
+    Path.Combine(persistentDirectory, "archer-knowledge.md"),
+    "installed Archer reads private notes alongside persistent Data instead of replaceable app binaries");
+Check(ArcherConversationFlow.ResolveKnowledgePath(
+    appDirectory, _ => null) ==
+    Path.Combine(appDirectory, "Data", "archer-knowledge.md"),
+    "development source-tree default stays compatible");
+persistedEnv["ARCHER_KNOWLEDGE_FILE"] = Path.Combine(
+    persistentDirectory, "owner-selected-notes.md");
+Check(ArcherConversationFlow.ResolveKnowledgePath(
+    appDirectory, name => Env(persistedEnv, name)) ==
+    persistedEnv["ARCHER_KNOWLEDGE_FILE"],
+    "explicit owner-managed knowledge-file override wins");
+persistedEnv["ARCHER_KNOWLEDGE_FILE"] = "local/notes.md";
+Check(ArcherConversationFlow.ResolveKnowledgePath(
+    appDirectory, name => Env(persistedEnv, name)) ==
+    Path.GetFullPath(Path.Combine(appDirectory, "local/notes.md")),
+    "explicit relative note path stays relative to the app root");
+
 Console.WriteLine($"PASS: {count} natural concise reply and role-separated local " +
     "conversation continuity checks; no AI provider, tokens or external calls.");
