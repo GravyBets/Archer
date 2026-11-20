@@ -70,7 +70,7 @@
             </form>
             <div class="voice-preferences">
               <label class="voice-toggle"><input type="checkbox" id="voiceHandsFreeToggle" /> Hands-free</label>
-              <label class="voice-toggle"><input type="checkbox" id="voiceWakeToggle" /> Wake with “Hey Archer” · 2-min idle</label>
+              <label class="voice-toggle"><input type="checkbox" id="voiceWakeToggle" /> Browser wake (fallback)</label>
               <span id="voiceWakeIndicator" class="voice-wake-indicator" role="status" aria-live="polite">Voice off</span>
               <label class="voice-rate-control" for="voicePauseSlider">Wait after I pause
                 <input id="voicePauseSlider" type="range" min="2" max="30" step="1" value="7" aria-label="Seconds of silence before Archer replies" />
@@ -501,6 +501,7 @@
   <script src="/js/mission-voice.js" defer></script>
   <script src="/js/app.js" defer></script>
   <script src="/js/archer-home.js?v=20261120-wakefix2" defer></script>
+   <script src="/js/desktop-voice.js?v=20261120-native1" defer></script>
   <script src="/js/realtime-voice.js" defer></script>
   <script src="/js/orb-field.js" defer></script>
   <script src="/js/developer.js" defer></script>
