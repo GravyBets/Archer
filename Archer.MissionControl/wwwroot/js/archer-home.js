@@ -280,7 +280,7 @@
     // Ignore all non-wake speech. Strip the activation phrase so it is never
     // sent as part of the chat/mission command. Handle interim revisions and
     // fragments carried across browser recognition restarts.
-    const wake = /\\bhey[\\s,.!?:;-]+archer\\b[\\s,.!?:;-]*/i.exec(raw);
+    const wake = /\bhey[\s,.!?:;-]+archer\b[\s,.!?:;-]*/i.exec(raw);
     return wake ? raw.slice(wake.index + wake[0].length).trim() : '';
   }
 
@@ -462,7 +462,7 @@
           recognitionRestarts = 0;
           armSilenceTimer();
           if (wakeEnabled() && !recognizedVoiceText()) {
-            setState('listening', /\\bhey[\\s,.!?:;-]+archer\\b/i.test(rawVoiceText())
+            setState('listening', /\bhey[\s,.!?:;-]+archer\b/i.test(rawVoiceText())
               ? 'Hey Archer heard. What would you like me to do?'
               : 'Waiting for “Hey Archer”…');
           }
