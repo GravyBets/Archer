@@ -34,7 +34,8 @@
     // Owner-started local status call records the verified question/answer in
     // Archer's already-private conversation history. No AI model runs.
     const response = await fetch('/api/voice/mission-list', {
-      method: 'POST', cache: 'no-store'
+      method: 'POST', cache: 'no-store',
+      headers: {'Content-Type': 'application/json'}
     });
     if (!response.ok) throw new Error('Mission status is unavailable.');
     const data = await response.json();
