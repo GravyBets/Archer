@@ -102,6 +102,52 @@ Check(copy is not null &&
         .Last().Content == "And then?",
     "same bounded continuity works on reloaded persisted data");
 
+// A voice command handled without the model must still be remembered during
+// subsequent chat follow-ups, using only real server-side mission state.
+var voiceState = new ArcherState();
+voiceState.Missions.Add(new Mission
+{
+    Title = "Finish GeoShift",
+    Status = "Ready",
+    Tasks = new List<MissionTask>
+    {
+        new() { Status = "Completed" },
+        new() { Status = "Pending" }
+    }
+});
+var localResult = ArcherVoiceMissionJournal.RecordStatus(voiceState);
+Check(localResult.Status == "ok" && localResult.Count == 1,
+    "local mission command reads actual state without model tools");
+Check(localResult.Missions[0].TasksCompleted == 1 &&
+    localResult.Missions[0].TasksTotal == 2,
+    "only grounded mission summary metadata is returned");
+Check(localResult.Reply.Contains("one mission") &&
+    !localResult.Reply.Contains("1 missions"),
+    "natural, short and grammatically correct spoken mission status");
+Check(voiceState.Conversation.Count == 2 &&
+    voiceState.Conversation[0].Role == "user" &&
+    voiceState.Conversation[1].Role == "assistant",
+    "read-only mission query is saved as a real conversation pair");
+var subsequentChat = ArcherConversationFlow.BuildInput(
+    voiceState, "CURRENT MISSIONS: Finish GeoShift", "What's that mission about?");
+Check(subsequentChat[^2].Content == localResult.Reply &&
+    subsequentChat[^1].Content == "What's that mission about?",
+    "next ordinary chat knows what Archer just said in local voice");
+var restoredVoiceState = JsonSerializer.Deserialize<ArcherState>(
+    JsonSerializer.Serialize(voiceState))!;
+Check(ArcherConversationFlow.BuildInput(
+    restoredVoiceState, "", "And what next?")[^2].Content == localResult.Reply,
+    "spoken mission reply survives local application restart");
+Check(voiceState.Missions[0].Tasks[1].Status == "Pending",
+    "voice status does not start, plan or mutate a mission");
+var noMissionState = new ArcherState();
+var emptyList = ArcherVoiceMissionJournal.RecordStatus(noMissionState);
+Check(emptyList.Count == 0 &&
+    emptyList.Reply.Contains("don't have any missions"),
+    "empty local mission list is answered without hallucinations");
+Check(noMissionState.Missions.Count == 0 && noMissionState.Conversation.Count == 2,
+    "empty status logs only chat, never creates a mission");
+
 var appDirectory = Path.Combine(Path.GetTempPath(), "archer-source-project");
 var persistentDirectory = Path.Combine(Path.GetTempPath(), "archer-user-data");
 string? Env(Dictionary<string, string> env, string key) =>
