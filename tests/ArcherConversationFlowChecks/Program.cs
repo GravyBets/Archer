@@ -47,7 +47,7 @@ using (var parsed = JsonDocument.Parse(serialized))
 {
     Check(parsed.RootElement[1].GetProperty("role").GetString() == "user",
         "Responses API user role serializes correctly");
-    Check(parsed.RootElement[^2].GetProperty("role").GetString() == "assistant",
+    Check(parsed.RootElement[parsed.RootElement.GetArrayLength() - 2].GetProperty("role").GetString() == "assistant",
         "Responses API assistant role serializes correctly");
 }
 
