@@ -193,4 +193,70 @@ check('microphone denial fails closed',()=>{
   assert.equal(requests.length,2);
   assert.equal(elt('voiceInputButton').textContent,'🎙 Speak');
 });
-console.log('PASS:',cases,'handsfree opt-in, silence, restart, auto-send once, playback, privacy and failure scenarios');
+check('wake phrase mode is opt-in and changing it does not silently start microphone',()=>{
+  elt('voiceWakeToggle').checked=true;
+  elt('voiceWakeToggle').dispatch('change');
+  assert.equal(rec.active,false);
+  assert.equal(store.get('archer.voice.wake'),'yes');
+});
+check('two-second wait can be selected without changing the 1.25x speaking pace',()=>{
+  elt('voicePauseSlider').value='2';
+  elt('voicePauseSlider').dispatch('input');
+  assert.equal(elt('voicePauseValue').textContent,'2 sec');
+  assert.equal(store.get('archer.voice.pauseSeconds'),'2');
+  assert.equal(elt('voiceRateSlider').value,'1.25');
+});
+check('non-wake background words never enter chat nor trigger sending',()=>{
+  elt('voiceHandsFreeToggle').checked=true;
+  elt('voiceHandsFreeToggle').dispatch('change');
+  elt('voiceInputButton').dispatch('click');
+  assert.equal(rec.active,true);
+  rec.push('please create a mission to pay a bill');
+  assert.equal(elt('chatText').value,'');
+  advance(7000);
+  assert.equal(requests.length,2);
+});
+check('saying only Hey Archer never submits a blank command',()=>{
+  rec.push('Hey Archer');
+  assert.equal(elt('chatText').value,'');
+  advance(3500);
+  assert.equal(requests.length,2);
+});
+check('wake phrase followed by request strips wake and waits exactly 2 seconds',()=>{
+  rec.push('Hey Archer, list my missions');
+  assert.equal(elt('chatText').value,'list my missions');
+  advance(1999);
+  assert.equal(requests.length,2);
+  advance(1);
+  assert.equal(requests.length,3);
+  assert.equal(requests[2].message,'list my missions');
+  assert.equal(requests[2].voiceMode,true);
+  advance(9000);
+  assert.equal(requests.length,3);
+});
+check('after reply a new utterance also requires Hey Archer',()=>{
+  elt('chatText').value='';
+  presence.reply('Your missions are ready.');
+  assert.ok(pendingUtterance);
+  assert.equal(pendingUtterance.rate,1.25);
+  speechSynthesis.finish();
+  advance(300);
+  assert.equal(rec.active,true);
+  rec.push('start a mission without the activation phrase');
+  advance(5000);
+  assert.equal(requests.length,3);
+  assert.equal(elt('chatText').value,'');
+  rec.push('Hey Archer create a mission to research GeoShift competitors');
+  advance(2000);
+  assert.equal(requests.length,4);
+  assert.equal(requests[3].message,'create a mission to research GeoShift competitors');
+});
+check('End conversation stops wake monitoring and prevents unattended auto-restart',()=>{
+  elt('voiceEndConversation').dispatch('click');
+  const starts=rec.starts;
+  advance(16000);
+  assert.equal(rec.starts,starts);
+  assert.equal(rec.active,false);
+});
+
+console.log('PASS:',cases,'handsfree, 2-second pause, Hey Archer wake, repeat turn, privacy and failure scenarios');
