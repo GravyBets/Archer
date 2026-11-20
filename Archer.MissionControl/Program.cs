@@ -854,7 +854,7 @@ app.MapPost("/api/voice/mission-list", async Task<IResult> (
     if (origin.Length > 0 &&
         origin != "http://127.0.0.1:5087" &&
         origin != "http://localhost:5087")
-        return Results.Forbid();
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
 
     return Results.Ok(await store.UpdateAsync(
         ArcherVoiceMissionJournal.RecordStatus, ct));
