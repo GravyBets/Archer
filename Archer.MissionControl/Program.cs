@@ -66,7 +66,16 @@ var app = builder.Build();
 await app.Services.GetRequiredService<JsonFileStore>().RecoverInterruptedTasksAsync();
 
 app.UseDefaultFiles();
-app.UseStaticFiles();
+// Local desktop assets change frequently between owner-installed builds.
+// Do not let a previous release's JS stay active after a browser refresh.
+// This has no bearing on the user's separately persisted Data folder.
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = context =>
+    {
+        context.Context.Response.Headers.CacheControl = "no-store, max-age=0";
+    }
+});
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok", application = "Archer", version = "1.13.0" }));
 
