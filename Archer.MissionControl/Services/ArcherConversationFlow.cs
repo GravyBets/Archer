@@ -12,6 +12,26 @@ internal static class ArcherConversationFlow
     internal const int MaxRecentTurns = 24;
     internal const int MaxHistoryCharactersPerTurn = 1200;
 
+    // In an installed Archer package, the running binaries are replaceable,
+    // but private user notes belong beside the persistent mission history.
+    // Retain the established source-tree fallback during development.
+    internal static string ResolveKnowledgePath(
+        string contentRoot, Func<string, string?> getenv)
+    {
+        var explicitFile = getenv("ARCHER_KNOWLEDGE_FILE");
+        if (!string.IsNullOrWhiteSpace(explicitFile))
+            return Path.IsPathRooted(explicitFile)
+                ? explicitFile
+                : Path.GetFullPath(Path.Combine(contentRoot, explicitFile));
+
+        var dataDirectory = getenv("ARCHER_DATA_DIR");
+        return Path.Combine(
+            string.IsNullOrWhiteSpace(dataDirectory)
+                ? Path.Combine(contentRoot, "Data")
+                : Path.GetFullPath(dataDirectory),
+            "archer-knowledge.md");
+    }
+
     // Keep real user and assistant roles separate instead of concatenating a
     // transcript with "user:"/"assistant:" delimiters. That makes small
     // follow-ups ("what about the second one?") much easier to resolve and
