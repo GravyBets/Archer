@@ -70,7 +70,7 @@
             </form>
             <div class="voice-preferences">
               <label class="voice-toggle"><input type="checkbox" id="voiceHandsFreeToggle" /> Hands-free</label>
-              <label class="voice-toggle"><input type="checkbox" id="voiceWakeToggle" /> Require “Hey Archer”</label>
+              <label class="voice-toggle"><input type="checkbox" id="voiceWakeToggle" /> Wake with “Hey Archer” · 2-min idle</label>
               <label class="voice-rate-control" for="voicePauseSlider">Wait after I pause
                 <input id="voicePauseSlider" type="range" min="2" max="30" step="1" value="7" aria-label="Seconds of silence before Archer replies" />
                 <output id="voicePauseValue" for="voicePauseSlider" aria-live="off">7 sec</output>
@@ -91,7 +91,7 @@
                   </label>
                   <button type="button" class="voice-stop" id="voiceReplayButton" disabled>Read last reply</button>
                   <button type="button" class="voice-stop" id="voiceStopButton" data-allow-busy="true" disabled>Stop speaking</button>
-                  <p id="voiceSupportNote" role="status">Select Speak to start the microphone. “Hey Archer” only works during an active browser listening session; recognition may use your browser's speech provider.</p>
+                  <p id="voiceSupportNote" role="status">Select Speak once to activate hands-free listening. Say “Hey Archer” to start a conversation, then talk normally. After 2 minutes without speech, say “Hey Archer” again. Browser mic stops when you end the session or leave this tab; recognition may use your browser's speech provider.</p>
                   <p id="voiceAccentStatus" role="status">British voice availability depends on installed browser voices.</p>
                   <div class="realtime-voice-box" aria-label="Optional paid real-time voice">
                     <strong>Experimental realtime voice (optional, billable)</strong>
