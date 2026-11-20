@@ -553,6 +553,7 @@
           if (!wakeConversationActive && WAKE_PHRASE.test(rawVoiceText())) {
             wakeConversationActive = true;
             wakePrefixPending = true;
+            setState('listening', 'Awake. Talk normally until two minutes after your last exchange.');
           }
           // The idle clock resets only for actual speech while awake, not
           // browser recognition restarts or ambient words while in standby.
