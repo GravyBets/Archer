@@ -222,7 +222,7 @@ assert 'id="voicePauseValue"' in HTML
 assert 'id="voiceEndConversation"' in HTML
 assert "voiceSessionActive = handsFreeToggle.checked" in HOME_JS
 assert "recognition.continuous = voiceSessionActive" in HOME_JS
-assert "recognitionRestarts >= 40" in HOME_JS
+assert "recognitionRestarts >= 200" in HOME_JS  # still bounded; supports long hotword standby
 assert "sendAfterRecognitionEnd = true" in HOME_JS
 assert "el('chatForm').requestSubmit()" in HOME_JS
 assert "window.ArcherPresence?.prepareSend?.()" in JS
