@@ -281,7 +281,8 @@ check('two minutes of silence after a reply requires Hey Archer again',()=>{
   speechSynthesis.finish();
   advance(300);
   assert.equal(rec.active,true);
-  advance(119999);
+  // The idle clock started at speech end, 300 ms before this assertion.
+  advance(119699);
   assert.equal(rec.active,true);
   advance(1);
   // Flush recognizer so its previously detected wake cannot falsely
