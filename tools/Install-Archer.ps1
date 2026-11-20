@@ -33,7 +33,7 @@ function Assert-NotRunning {
   } finally { $client.Close() }
 }
 function Assert-App([string]$at) {
-  foreach($file in @('Archer.MissionControl.exe','wwwroot/index.html','Run-Archer.cmd','Start-Archer.ps1')) {
+  foreach($file in @('Archer.MissionControl.exe','wwwroot/index.html','Run-Archer.cmd','Start-Archer.ps1','Archer-Voice.ps1')) {
     if (-not (Test-Path -LiteralPath (Join-Path $at $file) -PathType Leaf)) {
       throw ('Incomplete Archer package: '+$file)
     }
