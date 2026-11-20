@@ -281,6 +281,7 @@
       .replace(/^\s*(?:[-*•]|\d+[.)])\s+/gm, '')
       .replace(/[\x60*_]+/g, '')
       .replace(/\r?\n+/g, '; ')
+      .replace(/:\s*;/g, ': ')
       .replace(/\s+/g, ' ')
       .trim();
   }
@@ -305,7 +306,12 @@
       carriedTranscript = '';
       currentTranscript = '';
       input.value = '';
-      if (listening) setState('listening', 'Two minutes idle. Say “Hey Archer” to talk again.');
+      // Abort/restart Web Speech to flush any retained recognition results,
+      // including an old "Hey Archer" that must not reactivate the session.
+      if (listening && recognition) {
+        try { recognition.abort(); } catch { /* recognition already ending */ }
+      }
+      setState('listening', 'Two minutes idle. Say “Hey Archer” to talk again.');
     }, WAKE_IDLE_MS);
   }
 
@@ -334,7 +340,9 @@
     // strip that phrase itself. Later turns need no wake phrase at all.
     if (wakePrefixPending) {
       const wake = WAKE_PHRASE.exec(raw);
-      return wake ? raw.slice(wake.index + wake[0].length).trim() : '';
+      // Some browser engines replace their recognition result buffer between
+      // "Hey Archer" and the rest of the sentence, rather than appending it.
+      return wake ? raw.slice(wake.index + wake[0].length).trim() : raw;
     }
     return raw.replace(/^\s*hey[\s,.!?:;-]+archer\b[\s,.!?:;-]*/i, '').trim();
   }
