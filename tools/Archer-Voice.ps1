@@ -10,7 +10,7 @@ localhost chat endpoint. The tray menu can Pause or Exit at any time.
 No login autostart, service installation, elevated rights or cloud wake API.
 #>
 [CmdletBinding()]
-param([string]$DataDir = '')
+param([string]$DataDir = '', [string]$SessionToken = '')
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -21,6 +21,8 @@ if (-not $DataDir) {
 }
 New-Item -ItemType Directory -Path $DataDir -Force | Out-Null
 $script:statusFile = Join-Path $DataDir 'desktop-voice-status.json'
+$script:sessionFile = Join-Path $DataDir 'desktop-voice-session.txt'
+$script:expectedSession = $SessionToken
 $script:state = 'starting'
 $script:detail = 'Preparing local Windows speech recognizer.'
 $script:stopVoice = $false
@@ -141,7 +143,8 @@ function Ask-Archer([string]$words) {
     $answer = $answer -replace 'https?://\S+', 'a link'
     $answer = $answer -replace '(?m)^\s{0,3}#{1,6}\s+', ''
     $answer = $answer -replace '(?m)^\s*(?:[-*•]|\d+[.)])\s+', ''
-    $answer = $answer -replace '[*_' + [char]96 + ']+', ''
+    $formatting = '[*_' + [char]96 + ']+'
+    $answer = $answer -replace $formatting, ''
     $answer = $answer -replace '\s*[\r\n]+\s*', '; '
     Speak-Reply $answer
   } catch {
@@ -229,6 +232,13 @@ try {
   $script:lastHealth = [DateTime]::UtcNow
 
   while (-not $script:stopVoice) {
+    if ($script:expectedSession -and (Test-Path -LiteralPath $script:sessionFile) -and
+        (Get-Content -LiteralPath $script:sessionFile -Raw).Trim() -ne $script:expectedSession) {
+      # A new Archer Windows binary has been launched. Give up the microphone
+      # and named mutex so that release can start its own tray listener.
+      $script:stopVoice = $true
+      break
+    }
     [System.Windows.Forms.Application]::DoEvents()
     $event = Wait-Event -SourceIdentifier 'ArcherDesktopVoiceRecognized' -Timeout 1
     if ($null -ne $event) {
