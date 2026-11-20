@@ -26,6 +26,8 @@ jobs:
         run: python3 tests/ValidateRemoteIngress.py
       - name: Validate natural concise Archer chat and persisted conversation context
         run: dotnet run --project tests/ArcherConversationFlowChecks/ArcherConversationFlowChecks.csproj --configuration Release
+      - name: Validate native desktop voice heartbeat (no microphone or AI)
+        run: dotnet run --project tests/DesktopVoiceStatusChecks/DesktopVoiceStatusChecks.csproj --configuration Release
       - name: Run synthetic owner/device authorization contract checks
         run: dotnet run --project tests/RemoteGatewayPolicyChecks/RemoteGatewayPolicyChecks.csproj --configuration Release
       - name: Smoke-test remote gateway fail-closed localhost boundaries
