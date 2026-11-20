@@ -11,6 +11,7 @@ internal static class ArcherConversationFlow
 {
     internal const int MaxRecentTurns = 24;
     internal const int MaxHistoryCharactersPerTurn = 1200;
+    internal const int MaxHistoryCharacters = 14000;
 
     // In an installed Archer package, the running binaries are replaceable,
     // but private user notes belong beside the persistent mission history.
@@ -56,18 +57,28 @@ internal static class ArcherConversationFlow
         // Keep the most recent persisted conversation entries from earlier
         // exchanges, across application restarts. Ignore malformed roles;
         // never let an arbitrary stored role become a privileged API role.
-        foreach (var entry in state.Conversation.TakeLast(MaxRecentTurns))
+        // Prefer the newest exchanges when a long transcript exceeds the
+        // total prompt-context budget. More history should not silently
+        // multiply billed input tokens compared with the old 8-entry limit.
+        var history = new List<Turn>();
+        var remaining = MaxHistoryCharacters;
+        foreach (var entry in state.Conversation.TakeLast(MaxRecentTurns).Reverse())
         {
             if (entry is null || string.IsNullOrWhiteSpace(entry.Content) ||
                 (entry.Role != "user" && entry.Role != "assistant"))
                 continue;
+            if (remaining == 0) break;
 
             var content = entry.Content.Trim();
-            if (content.Length > MaxHistoryCharactersPerTurn)
-                content = content[..MaxHistoryCharactersPerTurn] +
-                    " [earlier message truncated]";
-            turns.Add(new Turn(entry.Role, content));
+            var take = Math.Min(content.Length,
+                Math.Min(MaxHistoryCharactersPerTurn, remaining));
+            var excerpt = content[..take];
+            if (take < content.Length) excerpt += " [earlier message truncated]";
+            history.Add(new Turn(entry.Role, excerpt));
+            remaining -= take;
         }
+        history.Reverse();
+        turns.AddRange(history);
 
         turns.Add(new Turn("user", userMessage));
         return turns;
