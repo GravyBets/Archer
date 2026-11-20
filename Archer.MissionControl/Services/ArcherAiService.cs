@@ -38,12 +38,8 @@ public sealed class ArcherAiService(
     // It is user-supplied context, not evidence that external facts are correct.
     private string WithLocalKnowledge(string requestInstructions)
     {
-        var customPath = Environment.GetEnvironmentVariable("ARCHER_KNOWLEDGE_FILE");
-        var path = string.IsNullOrWhiteSpace(customPath)
-            ? Path.Combine(environment.ContentRootPath, "Data", "archer-knowledge.md")
-            : Path.IsPathRooted(customPath)
-                ? customPath
-                : Path.GetFullPath(Path.Combine(environment.ContentRootPath, customPath));
+        var path = ArcherConversationFlow.ResolveKnowledgePath(
+            environment.ContentRootPath, Environment.GetEnvironmentVariable);
 
         if (!File.Exists(path)) return SafetyInstructions + "\n" + requestInstructions;
 
