@@ -122,6 +122,9 @@ function Ask-Archer([string]$words) {
   $text = $words.Trim()
   if (-not $text) { return }
   if ($text.Length -gt 3000) { $text = $text.Substring(0,3000) }
+  # Do not collect additional ambient speech or Archer's own speaker
+  # output while a billable API request is in flight.
+  $script:dictation.Enabled = $false
   Write-VoiceStatus 'thinking' 'Archer is processing the latest spoken request.'
   try {
     # No mission creation/execution is enabled from unattended microphone
@@ -302,6 +305,9 @@ try {
       if ($script:engineRunning) { $script:recognizer.RecognizeAsyncCancel() }
       $script:recognizer.Dispose()
     } catch {}
+  }
+  if ($script:state -ne 'error' -and $script:state -ne 'stopped') {
+    Write-VoiceStatus 'stopped' 'Windows desktop voice exited. Launch Archer to restart.'
   }
   if ($script:synth) { try { $script:synth.Dispose() } catch {} }
   if ($script:eventRegistration) {
