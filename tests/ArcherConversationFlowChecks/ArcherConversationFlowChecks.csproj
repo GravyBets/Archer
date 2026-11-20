@@ -8,5 +8,6 @@
   <ItemGroup>
     <Compile Include="../../Archer.MissionControl/Domain/Models.cs" Link="Domain/Models.cs" />
     <Compile Include="../../Archer.MissionControl/Services/ArcherConversationFlow.cs" Link="ArcherConversationFlow.cs" />
+    <Compile Include="../../Archer.MissionControl/Services/ArcherVoiceMissionJournal.cs" Link="ArcherVoiceMissionJournal.cs" />
   </ItemGroup>
 </Project>
