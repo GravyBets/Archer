@@ -13,6 +13,14 @@ try {
   $web=Invoke-WebRequest 'http://127.0.0.1:5087/api/health' -UseBasicParsing -TimeoutSec 2
   $running=($web.StatusCode -eq 200)
 } catch { }
+# The listener follows one Archer server launch. A later app update
+# replaces the token so a companion from the previous version quits.
+$sessionFile=Join-Path $env:ARCHER_DATA_DIR 'desktop-voice-session.txt'
+if (-not $running -or -not (Test-Path -LiteralPath $sessionFile)) {
+  [guid]::NewGuid().ToString('N') |
+    Set-Content -LiteralPath $sessionFile -Encoding Ascii -NoNewline
+}
+$launchToken=(Get-Content -LiteralPath $sessionFile -Raw).Trim()
 if (-not $running) {
   $proc=Start-Process -FilePath $exe -WorkingDirectory $PSScriptRoot -PassThru
   $ready=$false
@@ -27,5 +35,26 @@ if (-not $running) {
     } catch { }
   }
   if (-not $ready) { throw 'Archer did not answer on localhost:5087. Check permissions/firewall and console output.' }
+}
+# Archer Voice is a separate *visible tray* companion, not a browser
+# microphone permission or an invisible Windows service. It starts when the
+# owner launches Archer and works with or without an open browser tab.
+$voiceScript=Join-Path $PSScriptRoot 'Archer-Voice.ps1'
+if (Test-Path -LiteralPath $voiceScript -PathType Leaf) {
+  if (-not $running) {
+    # Give the previous version's companion time to notice the changed
+    # session token and relinquish its per-owner microphone mutex.
+    Start-Sleep -Milliseconds 1600
+  }
+  try {
+    $powershell=Join-Path $PSHOME 'powershell.exe'
+    $voiceArgs='-NoLogo -NoProfile -STA -ExecutionPolicy Bypass ' +
+      '-File "'+$voiceScript+'" -DataDir "'+$env:ARCHER_DATA_DIR+
+      '" -SessionToken "'+$launchToken+'"'
+    Start-Process -FilePath $powershell -ArgumentList $voiceArgs `
+      -WorkingDirectory $PSScriptRoot -WindowStyle Hidden | Out-Null
+  } catch {
+    Write-Warning ('Desktop voice could not be started: '+$_.Exception.Message)
+  }
 }
 Start-Process 'http://127.0.0.1:5087/'
