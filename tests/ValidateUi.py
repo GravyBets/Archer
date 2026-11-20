@@ -55,7 +55,7 @@ required = {
     "chatText", "voiceInputButton", "voiceReadToggle", "voiceReplayButton",
     "realtimeVoiceStart", "realtimeVoiceEnd", "realtimeVoiceStatus",
     "voiceStopButton", "voiceSupportNote", "voiceChoiceSelect", "voiceRateSlider", "voiceRateValue",
-    "voiceHandsFreeToggle", "voicePauseSlider", "voicePauseValue", "voiceEndConversation",
+    "voiceHandsFreeToggle", "voiceWakeToggle", "voicePauseSlider", "voicePauseValue", "voiceEndConversation",
     "voiceAccentStatus", "missionList", "missionDetail",
     "usageMonthCost", "usageLifetimeCost", "attentionFailures", "attentionIssueCount",
     "developerRepository", "developerLoad", "developerFiles", "developerFilter",
@@ -203,8 +203,15 @@ assert 'id="voiceRateSlider"' in HTML
 assert 'value="1.25"' in HTML
 assert 'id="voiceRateValue"' in HTML
 assert 'id="voiceHandsFreeToggle"' in HTML
+assert 'id="voiceWakeToggle"' in HTML
 assert 'id="voicePauseSlider"' in HTML
-assert 'max="30" step="1" value="7"' in HTML
+assert 'min="2" max="30" step="1" value="7"' in HTML
+assert '<details class="archer-voice-more">' in HTML
+assert '<details class="archer-extra-tools">' in HTML
+assert HTML.index('class="archer-voice-more"') < HTML.index('class="realtime-voice-box"')
+assert 'archer.voice.wake' in HOME_JS
+assert 'Hey Archer' in HTML
+assert 'Math.max(2, Number(pauseSlider.value)' in HOME_JS
 assert 'id="voicePauseValue"' in HTML
 assert 'id="voiceEndConversation"' in HTML
 assert "voiceSessionActive = handsFreeToggle.checked" in HOME_JS
