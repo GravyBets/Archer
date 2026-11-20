@@ -319,4 +319,37 @@ check('manually ending prevents all idle-timer and browser auto-restarts',()=>{
   assert.equal(elt('voiceInputButton').textContent,'🎙 Speak');
 });
 
+check('visible status shows off then standby then awake during a newly started session',()=>{
+  assert.equal(elt('voiceWakeIndicator').textContent,'Voice off');
+  elt('voiceInputButton').dispatch('click');
+  assert.equal(rec.active,true);
+  assert.equal(elt('voiceWakeIndicator').textContent,'Standby · say “Hey Archer”');
+  rec.push('Hey Archer list my missions');
+  assert.equal(elt('voiceWakeIndicator').textContent,'Awake · talk normally');
+  advance(2000);
+  assert.equal(requests.length,7);
+  assert.equal(requests[6].message,'list my missions');
+});
+check('browser spontaneously ending recognition does not rearm Hey Archer after a reply',()=>{
+  elt('chatText').value='';
+  presence.reply('One is ready, and one is waiting for your approval.');
+  speechSynthesis.finish();
+  advance(300);
+  assert.equal(rec.active,true);
+  assert.equal(elt('voiceWakeIndicator').textContent,'Awake · talk normally');
+  // Browsers routinely end a speech-recognition session and restart it,
+  // even with continuous:true. The user must stay awake across that cycle.
+  rec.spontaneousEnd();
+  advance(300);
+  assert.equal(rec.active,true);
+  assert.equal(elt('voiceWakeIndicator').textContent,'Awake · talk normally');
+  rec.push('Which one should I do next');
+  advance(2000);
+  assert.equal(requests.length,8);
+  assert.equal(requests[7].message,'Which one should I do next');
+  assert.equal(elt('voiceWakeIndicator').textContent,'Awake · talk normally');
+  elt('voiceEndConversation').dispatch('click');
+  assert.equal(elt('voiceWakeIndicator').textContent,'Voice off');
+});
+
 console.log('PASS:',cases,'one-time wake, normal followups, 2-minute idle reactivation, speech formatting, privacy and failure scenarios');
