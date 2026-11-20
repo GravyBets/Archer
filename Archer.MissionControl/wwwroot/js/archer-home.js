@@ -22,6 +22,7 @@
   const handsFreeToggle = el('voiceHandsFreeToggle');
   const wakeToggle = el('voiceWakeToggle');
   const wakeIndicator = el('voiceWakeIndicator');
+  let desktopVoice = null; // status only; native speech is owned by the Windows tray process
   const pauseSlider = el('voicePauseSlider');
   const pauseValue = el('voicePauseValue');
   const endConversationButton = el('voiceEndConversation');
@@ -139,6 +140,52 @@
       awake: 'Awake · talk normally',
       standby: 'Standby · say “Hey Archer”'
     })[wakeState];
+    if (desktopVoice?.running) renderDesktopVoice();
+  }
+
+  function renderDesktopVoice() {
+    if (!desktopVoice?.running) return;
+    const captions = {
+      starting: 'Desktop voice starting',
+      standby: 'Desktop · Say “Hey Archer”',
+      awake: 'Desktop · Awake, talk normally',
+      thinking: 'Desktop · Thinking',
+      speaking: 'Desktop · Speaking',
+      paused: 'Desktop · Microphone paused'
+    };
+    const state = desktopVoice.status || 'starting';
+    wakeIndicator.dataset.state = state === 'awake' ? 'awake' :
+      state === 'standby' ? 'standby' : state === 'paused' ? 'off' : 'reconnecting';
+    wakeIndicator.textContent = captions[state] || 'Desktop voice active';
+    wakeIndicator.title = desktopVoice.detail || '';
+  }
+
+  function setDesktopVoiceStatus(status) {
+    desktopVoice = status || null;
+    const nativeActive = !!status?.running;
+    // Native voice handles the microphone and text-to-speech directly.
+    // Do not expose duplicate browser microphone controls that need clicking
+    // or pretend the browser pause/rate sliders configure native SAPI.
+    mic.hidden = nativeActive;
+    endConversationButton.hidden = nativeActive;
+    for (const control of [handsFreeToggle, wakeToggle, pauseSlider]) {
+      const label = control.closest('label');
+      if (label) label.hidden = nativeActive;
+    }
+    if (nativeActive && voiceSessionActive) endVoiceConversation(false);
+    if (nativeActive) {
+      note.textContent = 'Windows voice starts with Archer. Just say “Hey Archer”. ' +
+        'Right-click the Archer tray icon to pause or exit the microphone. ' +
+        'Native Windows recognition and voice playback may differ from browser voices.';
+      renderDesktopVoice();
+    } else if (status?.status === 'error') {
+      wakeIndicator.dataset.state = 'error';
+      wakeIndicator.textContent = 'Desktop microphone unavailable';
+      wakeIndicator.title = status.detail || '';
+      note.textContent = status.detail || 'Windows desktop voice needs attention.';
+    } else {
+      setState('idle');
+    }
   }
 
   function settle() {
@@ -486,6 +533,7 @@
   }
 
   function startListening() {
+    if (desktopVoice?.running) return; // No Speak button needed for Windows companion.
     if (!recognition) {
       input.focus();
       softError('Speech recognition is not available in this browser. Type your message instead.');
@@ -709,6 +757,7 @@
 
   window.ArcherPresence = {
     setState,
+    setDesktopVoiceStatus,
     update,
     reply: say,
     settle,
