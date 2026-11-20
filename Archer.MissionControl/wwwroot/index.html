@@ -71,6 +71,7 @@
             <div class="voice-preferences">
               <label class="voice-toggle"><input type="checkbox" id="voiceHandsFreeToggle" /> Hands-free</label>
               <label class="voice-toggle"><input type="checkbox" id="voiceWakeToggle" /> Wake with “Hey Archer” · 2-min idle</label>
+              <span id="voiceWakeIndicator" class="voice-wake-indicator" role="status" aria-live="polite">Voice off</span>
               <label class="voice-rate-control" for="voicePauseSlider">Wait after I pause
                 <input id="voicePauseSlider" type="range" min="2" max="30" step="1" value="7" aria-label="Seconds of silence before Archer replies" />
                 <output id="voicePauseValue" for="voicePauseSlider" aria-live="off">7 sec</output>
@@ -499,7 +500,7 @@
   <dialog id="missionDialog" class="modal"><form id="missionForm" method="dialog"><div class="modal-head"><div class="eyebrow">NEW OBJECTIVE</div><h2>Assign a mission</h2><p>Tell Archer what success looks like.</p></div><label for="missionTitle">Mission name</label><input id="missionTitle" maxlength="100" required minlength="3" placeholder="Build $1,000/month in recurring revenue" /><label for="missionObjective">Objective</label><textarea id="missionObjective" maxlength="3000" minlength="10" required rows="5" placeholder="Research, compare, and validate business opportunities that could generate recurring revenue. Prioritize real customer demand and practical execution."></textarea><div class="modal-actions"><button type="button" class="button secondary" id="cancelMission">Cancel</button><button class="button primary" type="submit">Create Mission</button></div></form></dialog>
   <script src="/js/mission-voice.js" defer></script>
   <script src="/js/app.js" defer></script>
-  <script src="/js/archer-home.js" defer></script>
+  <script src="/js/archer-home.js?v=20261120-wakefix1" defer></script>
   <script src="/js/realtime-voice.js" defer></script>
   <script src="/js/orb-field.js" defer></script>
   <script src="/js/developer.js" defer></script>
