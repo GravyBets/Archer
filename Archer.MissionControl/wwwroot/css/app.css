@@ -504,3 +504,5 @@
 .voice-wake-indicator[data-state="standby"]{color:#f4c28f}
 .voice-wake-indicator[data-state="open"]{color:#9bd5e0}
 @media(max-width:650px){.voice-wake-indicator{width:100%;padding-left:1px}}
+
+.voice-wake-indicator[data-state="reconnecting"]{color:#f7b978}

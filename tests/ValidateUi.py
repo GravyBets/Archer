@@ -99,7 +99,7 @@ missing = referred_ids.difference(page.ids).difference(dynamic_ids)
 assert not missing, f"JavaScript references missing DOM IDs: {missing}"
 
 assert [src.split("?")[0] for src in page.scripts[-13:]] == ["/js/mission-voice.js", "/js/app.js", "/js/archer-home.js", "/js/realtime-voice.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js", "/js/coding.js", "/js/communications.js", "/js/inbox.js", "/js/mobile-drafts.js", "/js/mobile-sessions.js"]
-assert "/js/archer-home.js?v=20261120-wakefix1" in page.scripts
+assert "/js/archer-home.js?v=20261120-wakefix2" in page.scripts
 assert "no-store, max-age=0" in (ROOT.parent / "Program.cs").read_text(encoding="utf-8")
 assert "/api/mobile/sessions" in MOBILE_SESSIONS_JS
 assert "/api/mobile/session-history" in MOBILE_SESSIONS_JS
@@ -211,6 +211,8 @@ assert 'id="voiceWakeToggle"' in HTML
 assert 'id="voiceWakeIndicator"' in HTML
 assert "'Awake · talk normally'" in HOME_JS
 assert "'Standby · say “Hey Archer”'" in HOME_JS
+assert "'Microphone starting / reconnecting'" in HOME_JS
+assert "recognition.maxAlternatives = 3" in HOME_JS
 assert 'Wake with “Hey Archer” · 2-min idle' in HTML
 assert 'WAKE_IDLE_MS = 2 * 60 * 1000' in HOME_JS
 assert 'wakeConversationActive' in HOME_JS
