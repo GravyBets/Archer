@@ -252,10 +252,10 @@ check('after reply the next turn does NOT require Hey Archer again',()=>{
 });
 check('spoken Markdown markers are sanitized before browser playback',()=>{
   elt('chatText').value='';
-  presence.reply('Two options:\\n- **$49 self-serve**\\n- **$299 managed**');
+  presence.reply('Two options:\n- **$49 self-serve**\n- **$299 managed**');
   assert.ok(pendingUtterance);
   assert.ok(!pendingUtterance.text.includes('**'));
-  assert.ok(!pendingUtterance.text.includes('\\n'));
+  assert.ok(!pendingUtterance.text.includes('\n'));
   assert.ok(pendingUtterance.text.includes('$49 self-serve'));
   assert.ok(pendingUtterance.text.includes('$299 managed'));
   assert.equal(pendingUtterance.rate,1.25);
