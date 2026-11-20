@@ -21,6 +21,7 @@
   const input = el('chatText');
   const handsFreeToggle = el('voiceHandsFreeToggle');
   const wakeToggle = el('voiceWakeToggle');
+  const wakeIndicator = el('voiceWakeIndicator');
   const pauseSlider = el('voicePauseSlider');
   const pauseValue = el('voicePauseValue');
   const endConversationButton = el('voiceEndConversation');
@@ -124,6 +125,17 @@
     mic.setAttribute('aria-pressed', listening || voiceSessionActive ? 'true' : 'false');
     mic.textContent = (listening || voiceSessionActive) ? '■ Stop listening' : '🎙 Speak';
     endConversationButton.disabled = !(voiceSessionActive || waitingForVoiceReply || listening);
+    // This visible state distinguishes 'mic is on but waiting for wake'
+    // from 'conversation active'; browser speech events are not infallible.
+    const wakeState = !voiceSessionActive ? 'off' :
+      !wakeEnabled() ? 'open' : wakeConversationActive ? 'awake' : 'standby';
+    wakeIndicator.dataset.state = wakeState;
+    wakeIndicator.textContent = ({
+      off: 'Voice off',
+      open: 'Listening · no wake phrase',
+      awake: 'Awake · talk normally',
+      standby: 'Standby · say “Hey Archer”'
+    })[wakeState];
   }
 
   function settle() {
