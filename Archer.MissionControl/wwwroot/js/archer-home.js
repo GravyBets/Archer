@@ -128,10 +128,13 @@
     // This visible state distinguishes 'mic is on but waiting for wake'
     // from 'conversation active'; browser speech events are not infallible.
     const wakeState = !voiceSessionActive ? 'off' :
+      !listening && !speaking && !appState.busy && !waitingForVoiceReply
+        ? 'reconnecting' :
       !wakeEnabled() ? 'open' : wakeConversationActive ? 'awake' : 'standby';
     wakeIndicator.dataset.state = wakeState;
     wakeIndicator.textContent = ({
       off: 'Voice off',
+      reconnecting: 'Microphone starting / reconnecting',
       open: 'Listening · no wake phrase',
       awake: 'Awake · talk normally',
       standby: 'Standby · say “Hey Archer”'
@@ -528,7 +531,7 @@
     recognition.lang = navigator.language || 'en-US';
     recognition.continuous = false;
     recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
+    recognition.maxAlternatives = 3;
 
     recognition.onstart = () => {
       listening = true;
@@ -541,12 +544,29 @@
         : 'Your microphone is active. Review the transcript before sending.');
     };
     recognition.onresult = event => {
-      // Rebuild from the complete results list to avoid duplicating text when
-      // browsers revise a partial result or return multiple final phrases.
-      let transcript = '';
+      // Web Speech may mishear "Archer" in its *first* transcript choice.
+      // Before activation, look at up to three provider-supplied alternatives.
+      // Never turn a generic non-wake transcript into a command, and never
+      // treat an AI-generated reply as a voice activation.
+      const words = [];
       for (let i = 0; i < event.results.length; i++)
-        transcript += (event.results[i][0]?.transcript || '') + ' ';
-      const next = transcript.trim();
+        words.push(event.results[i][0]?.transcript || '');
+      let next = words.join(' ').trim();
+      if (wakeEnabled() && !wakeConversationActive &&
+          !WAKE_PHRASE.test([initialTranscript, carriedTranscript, next].filter(Boolean).join(' '))) {
+        searchAlternatives:
+        for (let i = 0; i < event.results.length; i++) {
+          for (let j = 1; j < Math.min(3, event.results[i].length || 0); j++) {
+            const alternate = words.slice();
+            alternate[i] = event.results[i][j]?.transcript || '';
+            const candidate = alternate.join(' ').trim();
+            if (WAKE_PHRASE.test([initialTranscript, carriedTranscript, candidate].filter(Boolean).join(' '))) {
+              next = candidate;
+              break searchAlternatives;
+            }
+          }
+        }
+      }
       if (next !== currentTranscript) {
         currentTranscript = next;
         if (wakeEnabled()) {
@@ -566,7 +586,7 @@
           if (wakeEnabled() && !recognizedVoiceText()) {
             setState('listening', wakeConversationActive
               ? 'Awake. Just talk normally; I’m listening.'
-              : 'Standby. Say “Hey Archer” to begin.');
+              : 'Speech detected, but not “Hey Archer”. Try the wake phrase again.');
           }
         }
       }
@@ -601,16 +621,15 @@
         softError('Speech recognition ended unexpectedly. Start it again manually.');
         return;
       }
-      // Web Speech engines may end on brief silence regardless of continuous.
-      // Retry a bounded number of times while awaiting the longer pause.
+      // Web Speech engines can end on brief silence. We must distinguish an
+      // active microphone from a recognizer that is currently reconnecting.
+      // No activation is possible while recognition has ended.
       clearRestartTimer();
       restartTimer = window.setTimeout(() => {
         restartTimer = null;
         resumeRecognition();
       }, 300);
-      setState('listening', wakeEnabled()
-        ? (wakeConversationActive ? 'Awake. Speak normally when ready.' : 'Standby. Say “Hey Archer” to begin.')
-        : 'Waiting through your pause… speak when ready.');
+      setState('listening', 'Microphone reconnecting. Speech cannot be heard until it restarts.');
     };
   } else {
     mic.disabled = true;
