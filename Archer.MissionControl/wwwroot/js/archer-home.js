@@ -40,6 +40,11 @@
   let sendingVoiceTurn = false;
   let sendAfterRecognitionEnd = false;
   let waitingForVoiceReply = false;
+  let wakeConversationActive = false; // 'Hey Archer' activates normal conversation until idle
+  let wakePrefixPending = false; // strip the activation phrase from the first turn only
+  let wakeInactivityTimer = null;
+  const WAKE_IDLE_MS = 2 * 60 * 1000;
+  const WAKE_PHRASE = /\bhey[\s,.!?:;-]+archer\b[\s,.!?:;-]*/i;
   let silenceTimer = null;
   let restartTimer = null;
   let recognitionRestarts = 0;
@@ -199,6 +204,17 @@
       : 'Selected voice unavailable; system default will be used.';
   });
 
+  function continueConversationAfterReply() {
+    if (!(waitingForVoiceReply && voiceSessionActive && handsFreeToggle.checked)) return;
+    waitingForVoiceReply = false;
+    // Idle time begins after Archer finishes answering, never mid-response.
+    resetWakeInactivityTimer();
+    window.setTimeout(() => {
+      if (voiceSessionActive && !appState.busy && !document.hidden)
+        beginVoiceTurn();
+    }, 300);
+  }
+
   function stopSpeech() {
     if (hasSpeechOut) window.speechSynthesis.cancel();
     speaking = false;
@@ -211,11 +227,14 @@
     replayButton.disabled = !lastReply || !hasSpeechOut;
     if ((!readToggle.checked && !forcePlayback) || !hasSpeechOut || !text) {
       setState('responding', 'Archer replied. Read the conversation below.');
-      window.setTimeout(settle, 1600);
+      window.setTimeout(() => {
+        settle();
+        continueConversationAfterReply();
+      }, 300);
       return;
     }
     stopSpeech();
-    const clean = text.replace(/https?:\/\/\S+/g, 'a link').replace(/[*#_]+/g, '').trim();
+    const clean = spokenText(text);
     if (!clean) { settle(); return; }
     // Browser TTS engines can truncate very long utterances.
     const clipped = clean.length > 1800;
@@ -230,19 +249,20 @@
     utterance.rate = Math.min(1.65, Math.max(0.80, Number(rateSlider.value) || 1.25));
     utterance.pitch = 0.96;
     utterance.volume = 1;
-    utterance.onstart = () => { speaking = true; stopButton.disabled = false; setState('speaking', 'Archer is reading the reply aloud.'); };
+    utterance.onstart = () => {
+      speaking = true;
+      clearWakeInactivityTimer();
+      stopButton.disabled = false;
+      setState('speaking', 'Archer is speaking.');
+    };
     utterance.onend = () => {
       speaking = false;
       stopButton.disabled = true;
       if (clipped) note.textContent = 'Only the first portion of a long reply was read; full text is shown above.';
       settle();
-      if (waitingForVoiceReply && voiceSessionActive && handsFreeToggle.checked) {
-        waitingForVoiceReply = false;
-        window.setTimeout(() => {
-          if (voiceSessionActive && !appState.busy && !document.hidden)
-            beginVoiceTurn();
-        }, 300);
-      }
+      if (voiceSessionActive && wakeConversationActive && !waitingForVoiceReply)
+        resetWakeInactivityTimer();
+      continueConversationAfterReply();
     };
     utterance.onerror = event => {
       speaking = false;
@@ -255,6 +275,51 @@
       softError('Browser voice playback failed. You can still read the reply.');
     };
     window.speechSynthesis.speak(utterance);
+  }
+
+  // The model is instructed to speak plain prose. This is a conservative
+  // text-to-speech fallback when it accidentally returns written formatting;
+  // the original answer remains visible and saved unchanged.
+  function spokenText(text) {
+    return String(text)
+      .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1')
+      .replace(/https?:\/\/\S+/g, 'a link')
+      .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+      .replace(/^\s*(?:[-*•]|\d+[.)])\s+/gm, '')
+      .replace(/[\x60*_]+/g, '')
+      .replace(/\r?\n+/g, '; ')
+      .replace(/:\s*;/g, ': ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function clearWakeInactivityTimer() {
+    if (wakeInactivityTimer !== null) window.clearTimeout(wakeInactivityTimer);
+    wakeInactivityTimer = null;
+  }
+
+  function resetWakeInactivityTimer() {
+    clearWakeInactivityTimer();
+    if (!voiceSessionActive || !wakeEnabled() || !wakeConversationActive) return;
+    wakeInactivityTimer = window.setTimeout(() => {
+      wakeInactivityTimer = null;
+      if (!voiceSessionActive || !wakeEnabled() || !wakeConversationActive) return;
+      if (appState.busy || sendingVoiceTurn || waitingForVoiceReply || speaking) return;
+      wakeConversationActive = false;
+      wakePrefixPending = false;
+      clearSilenceTimer();
+      // Do not submit partial, abandoned text after Archer returns to standby.
+      initialTranscript = '';
+      carriedTranscript = '';
+      currentTranscript = '';
+      input.value = '';
+      // Abort/restart Web Speech to flush any retained recognition results,
+      // including an old "Hey Archer" that must not reactivate the session.
+      if (listening && recognition) {
+        try { recognition.abort(); } catch { /* recognition already ending */ }
+      }
+      setState('listening', 'Two minutes idle. Say “Hey Archer” to talk again.');
+    }, WAKE_IDLE_MS);
   }
 
   function clearSilenceTimer() {
@@ -277,11 +342,16 @@
   function recognizedVoiceText() {
     const raw = rawVoiceText();
     if (!wakeEnabled()) return raw;
-    // Ignore all non-wake speech. Strip the activation phrase so it is never
-    // sent as part of the chat/mission command. Handle interim revisions and
-    // fragments carried across browser recognition restarts.
-    const wake = /\bhey[\s,.!?:;-]+archer\b[\s,.!?:;-]*/i.exec(raw);
-    return wake ? raw.slice(wake.index + wake[0].length).trim() : '';
+    if (!wakeConversationActive) return '';
+    // During activation, remove ambient words before the wake phrase and
+    // strip that phrase itself. Later turns need no wake phrase at all.
+    if (wakePrefixPending) {
+      const wake = WAKE_PHRASE.exec(raw);
+      // Some browser engines replace their recognition result buffer between
+      // "Hey Archer" and the rest of the sentence, rather than appending it.
+      return wake ? raw.slice(wake.index + wake[0].length).trim() : raw;
+    }
+    return raw.replace(/^\s*hey[\s,.!?:;-]+archer\b[\s,.!?:;-]*/i, '').trim();
   }
 
   function displayVoiceText() {
@@ -333,6 +403,9 @@
     sendingVoiceTurn = false;
     sendAfterRecognitionEnd = false;
     clearSilenceTimer();
+    clearWakeInactivityTimer();
+    wakeConversationActive = false;
+    wakePrefixPending = false;
     stopRecognition();
     if (stopAudio) stopSpeech();
     settle();
@@ -349,6 +422,8 @@
     commitCurrentTranscript();
     if (!voiceSessionActive || !handsFreeToggle.checked ||
         appState.busy || !input.value.trim()) return;
+    clearWakeInactivityTimer();
+    wakePrefixPending = false;
     sendingVoiceTurn = true;
     // This calls the same local /api/chat handler as pressing Send.
     // All existing model spending limits still apply.
@@ -358,7 +433,7 @@
   function resumeRecognition() {
     if (!voiceSessionActive || listening || appState.busy || document.hidden ||
         sendAfterRecognitionEnd) return;
-    if (recognitionRestarts >= 40) {
+    if (recognitionRestarts >= 200) {
       endVoiceConversation(false);
       softError('Browser speech recognition kept stopping. Start again manually.');
       return;
@@ -410,6 +485,9 @@
     // Hands-free is opt-in and always starts with an explicit Speak/orb tap.
     voiceSessionActive = handsFreeToggle.checked;
     waitingForVoiceReply = false;
+    wakeConversationActive = false;
+    wakePrefixPending = false;
+    clearWakeInactivityTimer();
     if (voiceSessionActive && hasSpeechOut && !readToggle.checked) {
       readToggle.checked = true;
       setPreference('archer.voice.readAloud', 'yes');
@@ -444,7 +522,9 @@
       listening = true;
       setState('listening', voiceSessionActive
         ? (wakeEnabled()
-            ? 'Say “Hey Archer” followed by your request. The microphone is active only in this session.'
+            ? (wakeConversationActive
+                ? 'Conversation active. Just talk normally; “Hey Archer” returns after two minutes idle.'
+                : 'Standby: say “Hey Archer” once to begin. Microphone active in this browser tab.')
             : 'Hands-free: speak naturally; Archer waits for your selected pause.')
         : 'Your microphone is active. Review the transcript before sending.');
     };
@@ -457,14 +537,23 @@
       const next = transcript.trim();
       if (next !== currentTranscript) {
         currentTranscript = next;
+        if (wakeEnabled()) {
+          if (!wakeConversationActive && WAKE_PHRASE.test(rawVoiceText())) {
+            wakeConversationActive = true;
+            wakePrefixPending = true;
+          }
+          // The idle clock resets only for actual speech while awake, not
+          // browser recognition restarts or ambient words while in standby.
+          if (wakeConversationActive) resetWakeInactivityTimer();
+        }
         displayVoiceText();
         if (voiceSessionActive && !sendAfterRecognitionEnd) {
           recognitionRestarts = 0;
           armSilenceTimer();
           if (wakeEnabled() && !recognizedVoiceText()) {
-            setState('listening', /\bhey[\s,.!?:;-]+archer\b/i.test(rawVoiceText())
-              ? 'Hey Archer heard. What would you like me to do?'
-              : 'Waiting for “Hey Archer”…');
+            setState('listening', wakeConversationActive
+              ? 'Awake. Just talk normally; I’m listening.'
+              : 'Standby. Say “Hey Archer” to begin.');
           }
         }
       }
@@ -506,7 +595,9 @@
         restartTimer = null;
         resumeRecognition();
       }, 300);
-      setState('listening', 'Waiting through your pause… speak when ready.');
+      setState('listening', wakeEnabled()
+        ? (wakeConversationActive ? 'Awake. Speak normally when ready.' : 'Standby. Say “Hey Archer” to begin.')
+        : 'Waiting through your pause… speak when ready.');
     };
   } else {
     mic.disabled = true;

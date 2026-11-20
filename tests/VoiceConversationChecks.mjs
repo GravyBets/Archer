@@ -234,7 +234,7 @@ check('wake phrase followed by request strips wake and waits exactly 2 seconds',
   advance(9000);
   assert.equal(requests.length,3);
 });
-check('after reply a new utterance also requires Hey Archer',()=>{
+check('after reply the next turn does NOT require Hey Archer again',()=>{
   elt('chatText').value='';
   presence.reply('Your missions are ready.');
   assert.ok(pendingUtterance);
@@ -242,21 +242,81 @@ check('after reply a new utterance also requires Hey Archer',()=>{
   speechSynthesis.finish();
   advance(300);
   assert.equal(rec.active,true);
-  rec.push('start a mission without the activation phrase');
-  advance(5000);
+  rec.push('which one should I work on first');
+  advance(1999);
   assert.equal(requests.length,3);
-  assert.equal(elt('chatText').value,'');
-  rec.push('Hey Archer create a mission to research GeoShift competitors');
-  advance(2000);
+  advance(1);
   assert.equal(requests.length,4);
-  assert.equal(requests[3].message,'create a mission to research GeoShift competitors');
+  assert.equal(requests[3].message,'which one should I work on first');
+  assert.equal(requests[3].voiceMode,true);
 });
-check('End conversation stops wake monitoring and prevents unattended auto-restart',()=>{
+check('spoken Markdown markers are sanitized before browser playback',()=>{
+  elt('chatText').value='';
+  presence.reply('Two options:\n- **$49 self-serve**\n- **$299 managed**');
+  assert.ok(pendingUtterance);
+  assert.ok(!pendingUtterance.text.includes('**'));
+  assert.ok(!pendingUtterance.text.includes('\n'));
+  assert.ok(pendingUtterance.text.includes('$49 self-serve'));
+  assert.ok(pendingUtterance.text.includes('$299 managed'));
+  assert.equal(pendingUtterance.rate,1.25);
+  speechSynthesis.finish();
+  advance(300);
+  assert.equal(rec.active,true);
+});
+check('normal speech refreshes the 2-minute idle clock',()=>{
+  // After a reply Archer is awake but silent; near the deadline a spoken
+  // request should be allowed and reset the timeout.
+  advance(119000);
+  assert.equal(rec.active,true);
+  rec.push('tell me more about the cheaper choice');
+  advance(1999);
+  assert.equal(requests.length,4);
+  advance(1);
+  assert.equal(requests.length,5);
+  assert.equal(requests[4].message,'tell me more about the cheaper choice');
+});
+check('two minutes of silence after a reply requires Hey Archer again',()=>{
+  elt('chatText').value='';
+  presence.reply('We can test a smaller price first.');
+  speechSynthesis.finish();
+  advance(300);
+  assert.equal(rec.active,true);
+  // The idle clock started at speech end, 300 ms before this assertion.
+  advance(119699);
+  assert.equal(rec.active,true);
+  advance(1);
+  // Flush recognizer so its previously detected wake cannot falsely
+  // reactivate Archer after the standby transition.
+  assert.equal(rec.active,false);
+  advance(300);
+  assert.equal(rec.active,true);
+  rec.push('show me my missions without the wake word');
+  advance(5000);
+  assert.equal(requests.length,5);
+  assert.equal(elt('chatText').value,'');
+});
+check('Hey Archer alone reawakens the session without creating a request',()=>{
+  rec.push('Hey Archer');
+  advance(3000);
+  assert.equal(requests.length,5);
+  assert.equal(elt('chatText').value,'');
+});
+check('once reawakened the next phrase may omit the wake phrase',()=>{
+  rec.push('list my missions');
+  assert.equal(elt('chatText').value,'list my missions');
+  advance(1999);
+  assert.equal(requests.length,5);
+  advance(1);
+  assert.equal(requests.length,6);
+  assert.equal(requests[5].message,'list my missions');
+});
+check('manually ending prevents all idle-timer and browser auto-restarts',()=>{
   elt('voiceEndConversation').dispatch('click');
   const starts=rec.starts;
-  advance(16000);
+  advance(130000);
   assert.equal(rec.starts,starts);
   assert.equal(rec.active,false);
+  assert.equal(elt('voiceInputButton').textContent,'🎙 Speak');
 });
 
-console.log('PASS:',cases,'handsfree, 2-second pause, Hey Archer wake, repeat turn, privacy and failure scenarios');
+console.log('PASS:',cases,'one-time wake, normal followups, 2-minute idle reactivation, speech formatting, privacy and failure scenarios');
