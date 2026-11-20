@@ -134,6 +134,22 @@ jobs:
           fi
           curl -fsS http://127.0.0.1:5087/ > /tmp/archer-root.html
           curl -fsS http://127.0.0.1:5087/api/config > /tmp/archer-config.json
+          # Voice mission status is local, model-free and recorded for later
+          # conversational context. A third-party page must not be able to
+          # forge a voice-history POST using a simple cross-origin form.
+          curl -fsS -X POST -H 'Content-Type: application/json' \
+            http://127.0.0.1:5087/api/voice/mission-list > /tmp/archer-local-voice-list.json
+          python3 -c 'import json; x=json.load(open("/tmp/archer-local-voice-list.json")); assert x["status"]=="ok" and x["count"]==0 and "missions" in x and isinstance(x["reply"],str); print("PASS: local spoken status returns grounded reply without a model call")'
+          curl -fsS http://127.0.0.1:5087/api/state > /tmp/archer-local-voice-history.json
+          python3 -c 'import json; x=json.load(open("/tmp/archer-local-voice-history.json")); assert [e["role"] for e in x["conversation"]]==["user","assistant"]; assert x["conversation"][1]["content"]=="You don\x27t have any missions yet."; print("PASS: local spoken status is recorded for follow-up memory")'
+          CODE=$(curl -sS -o /tmp/archer-cross-origin-voice.json -w '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' -H 'Origin: https://evil.example' \
+            http://127.0.0.1:5087/api/voice/mission-list)
+          test "$CODE" = "403"
+          CODE=$(curl -sS -o /tmp/archer-form-origin-voice.json -w '%{http_code}' \
+            -X POST -H 'Content-Type: text/plain' \
+            http://127.0.0.1:5087/api/voice/mission-list)
+          test "$CODE" = "415"
           curl -fsS http://127.0.0.1:5087/api/realtime-voice/status > /tmp/archer-realtime-status.json
           python3 -c 'import json; assert not json.load(open("/tmp/archer-realtime-status.json"))["enabled"]; print("PASS: paid realtime audio disabled by default")'
           CODE=$(curl -sS -o /tmp/archer-realtime-rejected.json -w '%{http_code}' \
