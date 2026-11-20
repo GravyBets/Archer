@@ -140,7 +140,9 @@ assert "window.ArcherPresence?.reply(result.answer)" in JS
 assert (ROOT / "js" / "mission-voice.js").is_file()
 VOICE_BRIDGE_JS = (ROOT / "js" / "mission-voice.js").read_text(encoding="utf-8")
 assert "window.confirm(" in VOICE_BRIDGE_JS
-assert "/api/missions" in VOICE_BRIDGE_JS and "/api/state" in VOICE_BRIDGE_JS
+assert "/api/missions" in VOICE_BRIDGE_JS and "/api/voice/mission-list" in VOICE_BRIDGE_JS
+assert "/api/state" not in VOICE_BRIDGE_JS
+assert "headers: {'Content-Type': 'application/json'}" in VOICE_BRIDGE_JS
 assert "/run" not in VOICE_BRIDGE_JS and "/plan" not in VOICE_BRIDGE_JS
 assert "ArcherVoiceMissions?.parse?.(message)" in JS
 assert "window.ArcherVoiceMissions.propose(" in JS
