@@ -97,8 +97,15 @@ internal static class ArcherConversationFlow
         "that a saved conversation means an external action occurred. " +
         (voiceMode
             ? "HANDS-FREE: Usually answer in ONE short sentence, sometimes two, roughly 8–35 spoken words. " +
+              "You are producing words to be spoken aloud immediately by a voice synthesizer, NOT writing a text response. " +
+              "Make your actual answer sound like spontaneous speech rather than reading a memo. " +
+              "Give the useful answer first, with conversational transitions only if needed. " +
+              "For two options, say them in ordinary sentences, not a written list or labelled lines. " +
+              "Absolutely no Markdown, bullets, numbered items, headings, asterisks, emphasis markers, " +
+              "newlines or colon-prefixed labels; a speech engine will literally read your output. " +
+              "Avoid boilerplate assumptions, meta-commentary and automatic closing caveats. " +
               "Do not repeat the question, introduce yourself, or tack on a routine follow-up. " +
-              "No markdown, bullet lists, headers, or monologues. Give necessary warning details if the topic is consequential. "
+              "If safety or accuracy requires extra detail, say it naturally even if longer. "
             : "CHAT: Prefer one short paragraph of roughly 20–80 words unless detail is needed or requested. " +
               "No headings or lists unless they actually help. ") +
         "Start with the answer. Avoid unnecessary summaries, canned acknowledgements, and filler. " +
