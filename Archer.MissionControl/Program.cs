@@ -91,6 +91,16 @@ app.MapGet("/api/config", (ArcherAiService ai) => Results.Ok(new
 app.MapGet("/api/state", async (JsonFileStore store, CancellationToken ct) =>
     Results.Ok(await store.ReadAsync(state => state, ct)));
 
+// Read-only owner-local Windows microphone status. No commands or audio
+// are accepted here, and this endpoint never starts microphone capture.
+app.MapGet("/api/desktop-voice/status", () =>
+{
+    var directory = Environment.GetEnvironmentVariable("ARCHER_DATA_DIR");
+    if (string.IsNullOrWhiteSpace(directory))
+        directory = Path.Combine(app.Environment.ContentRootPath, "Data");
+    return Results.Ok(ArcherDesktopVoiceStatus.Read(directory));
+});
+
 // Only Archer's local, API-reported usage. This is not an OpenAI billing endpoint.
 app.MapGet("/api/usage", async (ApiUsageLedger ledger, CancellationToken ct) =>
     Results.Ok(await ledger.SummaryAsync(ct)));

@@ -11,7 +11,7 @@ New-Item -ItemType Directory -Path (Join-Path $source 'wwwroot'),$installRoot -F
 $zip=Join-Path $root 'archer-app.zip'
 $hash=Join-Path $root 'archer-app.sha256'
 try {
-  foreach($file in @('Archer.MissionControl.exe','Run-Archer.cmd','Start-Archer.ps1')) {
+  foreach($file in @('Archer.MissionControl.exe','Run-Archer.cmd','Start-Archer.ps1','Archer-Voice.ps1')) {
     Set-Content -LiteralPath (Join-Path $source $file) -Value ('sample-'+$file)
   }
   Set-Content -LiteralPath (Join-Path $source 'wwwroot/index.html') -Value 'ARCHER-A'
@@ -20,6 +20,9 @@ try {
     Set-Content -LiteralPath $hash -NoNewline
 
   & $installScript -PackagePath $zip -HashPath $hash -InstallRoot $installRoot
+  if (-not (Test-Path (Join-Path $installRoot 'current/Archer-Voice.ps1'))) {
+    throw 'Native Archer wake listener was not installed.'
+  }
   if (-not (Test-Path (Join-Path $installRoot 'current/Archer.MissionControl.exe'))) {
     throw 'First install did not create current executable.'
   }

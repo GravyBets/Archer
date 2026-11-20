@@ -98,7 +98,10 @@ dynamic_ids = {"starterMission"}
 missing = referred_ids.difference(page.ids).difference(dynamic_ids)
 assert not missing, f"JavaScript references missing DOM IDs: {missing}"
 
-assert [src.split("?")[0] for src in page.scripts[-13:]] == ["/js/mission-voice.js", "/js/app.js", "/js/archer-home.js", "/js/realtime-voice.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js", "/js/coding.js", "/js/communications.js", "/js/inbox.js", "/js/mobile-drafts.js", "/js/mobile-sessions.js"]
+assert [src.split("?")[0] for src in page.scripts[-14:]] == ["/js/mission-voice.js", "/js/app.js", "/js/archer-home.js", "/js/desktop-voice.js", "/js/realtime-voice.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js", "/js/coding.js", "/js/communications.js", "/js/inbox.js", "/js/mobile-drafts.js", "/js/mobile-sessions.js"]
+assert "/js/desktop-voice.js?v=20261120-native1" in page.scripts
+assert 'desktop-voice-status.json' in (ROOT.parent / "Services" / "ArcherDesktopVoiceStatus.cs").read_text(encoding="utf-8")
+assert "Archer-Voice.ps1" in (ROOT.parents[1] / "tools" / "Start-Archer.ps1").read_text(encoding="utf-8")
 assert "/js/archer-home.js?v=20261120-wakefix2" in page.scripts
 assert "no-store, max-age=0" in (ROOT.parent / "Program.cs").read_text(encoding="utf-8")
 assert "/api/mobile/sessions" in MOBILE_SESSIONS_JS
@@ -213,7 +216,10 @@ assert "'Awake · talk normally'" in HOME_JS
 assert "'Standby · say “Hey Archer”'" in HOME_JS
 assert "'Microphone starting / reconnecting'" in HOME_JS
 assert "recognition.maxAlternatives = 3" in HOME_JS
-assert 'Wake with “Hey Archer” · 2-min idle' in HTML
+assert 'Browser wake (fallback)' in HTML
+assert "desktopVoice?.running" in HOME_JS
+assert "mic.hidden = nativeActive" in HOME_JS
+assert "setDesktopVoiceStatus" in HOME_JS
 assert 'WAKE_IDLE_MS = 2 * 60 * 1000' in HOME_JS
 assert 'wakeConversationActive' in HOME_JS
 assert 'resetWakeInactivityTimer()' in HOME_JS
