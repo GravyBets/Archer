@@ -49,6 +49,7 @@ internal static class ArcherDesktopVoiceStatus
             // when the process has already exited. Do not claim it is listening.
             var maximumAge = status is "thinking" or "speaking"
                 ? TimeSpan.FromMinutes(5)
+                : status is "error" or "stopped" ? TimeSpan.FromDays(7)
                 : TimeSpan.FromSeconds(12);
             if (timestamp > DateTime.UtcNow.AddSeconds(30) ||
                 DateTime.UtcNow - timestamp > maximumAge)
