@@ -249,12 +249,19 @@
     utterance.rate = Math.min(1.65, Math.max(0.80, Number(rateSlider.value) || 1.25));
     utterance.pitch = 0.96;
     utterance.volume = 1;
-    utterance.onstart = () => { speaking = true; stopButton.disabled = false; setState('speaking', 'Archer is reading the reply aloud.'); };
+    utterance.onstart = () => {
+      speaking = true;
+      clearWakeInactivityTimer();
+      stopButton.disabled = false;
+      setState('speaking', 'Archer is speaking.');
+    };
     utterance.onend = () => {
       speaking = false;
       stopButton.disabled = true;
       if (clipped) note.textContent = 'Only the first portion of a long reply was read; full text is shown above.';
       settle();
+      if (voiceSessionActive && wakeConversationActive && !waitingForVoiceReply)
+        resetWakeInactivityTimer();
       continueConversationAfterReply();
     };
     utterance.onerror = event => {
