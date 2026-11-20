@@ -54,6 +54,13 @@ class FakeRecognition {
   abort(){this.aborts++;this.active=false;this.onend?.();}
   push(words){this.onresult?.({resultIndex:0,
     results:[{isFinal:true,0:{transcript:words}}]});}
+  pushAlternatives(primary, alternatives){
+    const result = {isFinal:true,length:alternatives.length+1};
+    [primary,...alternatives].forEach((transcript,i)=>{
+      result[i]={transcript};
+    });
+    this.onresult?.({resultIndex:0,results:[result]});
+  }
   spontaneousEnd(){this.active=false;this.onend?.();}
   denied(){this.onerror?.({error:'not-allowed'});}
 }
@@ -352,4 +359,30 @@ check('browser spontaneously ending recognition does not rearm Hey Archer after 
   assert.equal(elt('voiceWakeIndicator').textContent,'Voice off');
 });
 
-console.log('PASS:',cases,'one-time wake, normal followups, 2-minute idle reactivation, speech formatting, privacy and failure scenarios');
+check('standby reports microphone reconnect instead of pretending to listen',()=>{
+  elt('voiceInputButton').dispatch('click');
+  assert.equal(rec.active,true);
+  assert.equal(rec.maxAlternatives,3);
+  assert.equal(elt('voiceWakeIndicator').textContent,'Standby · say “Hey Archer”');
+  rec.spontaneousEnd();
+  assert.equal(elt('voiceWakeIndicator').textContent,'Microphone starting / reconnecting');
+  advance(300);
+  assert.equal(rec.active,true);
+  assert.equal(elt('voiceWakeIndicator').textContent,'Standby · say “Hey Archer”');
+});
+check('wake phrase can be detected from an alternative browser transcript',()=>{
+  rec.pushAlternatives('hey archers', ['Hey Archer']);
+  assert.equal(elt('voiceWakeIndicator').textContent,'Awake · talk normally');
+  assert.equal(elt('chatText').value,'');
+  advance(3500);
+  assert.equal(requests.length,8);
+  rec.push('list my missions');
+  assert.equal(elt('chatText').value,'list my missions');
+  advance(2000);
+  assert.equal(requests.length,9);
+  assert.equal(requests[8].message,'list my missions');
+  elt('voiceEndConversation').dispatch('click');
+  assert.equal(elt('voiceWakeIndicator').textContent,'Voice off');
+});
+
+console.log('PASS:',cases,'alternate transcript wake, accurate mic status, normal followups, 2-minute standby, privacy and failure scenarios');
