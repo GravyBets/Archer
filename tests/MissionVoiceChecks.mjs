@@ -15,12 +15,16 @@ const fakeWindow = {
 };
 const fakeFetch = async (path, options = {}) => {
   network.push({path, options});
-  if (path === '/api/state') return {ok: true, json: async () => ({
-    missions: [{title: 'GeoShift audit', status: 'Ready',
-      privateToken: 'DO_NOT_RETURN_ME',
-      tasks: [{status:'Completed'}, {status:'Pending'}]
-    }]
-  })};
+  if (path === '/api/voice/mission-list') {
+    assert.equal(options.method, 'POST');
+    assert.equal(options.headers['Content-Type'], 'application/json');
+    return {ok: true, json: async () => ({
+      status: 'ok', count: 1,
+      reply: "You've got one mission: GeoShift audit. Its status is Ready.",
+      missions: [{title: 'GeoShift audit', status: 'Ready',
+        tasksCompleted: 1, tasksTotal: 2}]
+    })};
+  }
   if (path === '/api/missions' && options.method === 'POST') {
     const mission = JSON.parse(options.body);
     created.push(mission);
@@ -50,7 +54,8 @@ assert.equal(result.count, 1);
 assert.equal(result.missions[0].tasksCompleted, 1);
 assert.equal(result.missions[0].tasksTotal, 2);
 assert.equal(JSON.stringify(result).includes('DO_NOT_RETURN_ME'), false);
-assert.deepEqual(network.map(x=>x.path), ['/api/state']);
+assert.deepEqual(network.map(x=>x.path), ['/api/voice/mission-list']);
+assert.equal(bridge.describe(result), "You've got one mission: GeoShift audit. Its status is Ready.");
 
 assert.equal((await bridge.propose('Utility SaaS research',
   'Research customer pain points for utility software')).status, 'declined');

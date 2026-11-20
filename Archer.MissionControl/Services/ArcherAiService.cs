@@ -38,12 +38,8 @@ public sealed class ArcherAiService(
     // It is user-supplied context, not evidence that external facts are correct.
     private string WithLocalKnowledge(string requestInstructions)
     {
-        var customPath = Environment.GetEnvironmentVariable("ARCHER_KNOWLEDGE_FILE");
-        var path = string.IsNullOrWhiteSpace(customPath)
-            ? Path.Combine(environment.ContentRootPath, "Data", "archer-knowledge.md")
-            : Path.IsPathRooted(customPath)
-                ? customPath
-                : Path.GetFullPath(Path.Combine(environment.ContentRootPath, customPath));
+        var path = ArcherConversationFlow.ResolveKnowledgePath(
+            environment.ContentRootPath, Environment.GetEnvironmentVariable);
 
         if (!File.Exists(path)) return SafetyInstructions + "\n" + requestInstructions;
 
@@ -306,8 +302,6 @@ public sealed class ArcherAiService(
         var choice = ArcherModelRouting.For("chat");
         var missions = string.Join("\n", state.Missions.Take(8).Select(m =>
             $"- {m.Title} ({m.Status}): {m.Objective} — {m.Tasks.Count(t => t.Status == "Completed")}/{m.Tasks.Count} tasks done"));
-        var conversation = string.Join("\n", state.Conversation.TakeLast(8).Select(c =>
-            $"{c.Role}: {c.Content[..Math.Min(c.Content.Length, 1500)]}"));
         // Private owner presence is never sent to the AI unless explicitly opted in.
         var personalPresence = state.Presence is { ShareWithAi: true } presence &&
             presence.ExpiresAtUtc > DateTimeOffset.UtcNow
@@ -322,30 +316,27 @@ public sealed class ArcherAiService(
             $"last checked: {(m.LastCheckedAtUtc.HasValue ? m.LastCheckedAtUtc.Value.ToString("O") : "never")}; " +
             $"last HTTP status: {(m.LastHttpStatus?.ToString() ?? "none")}"));
         var unacknowledged = state.WebsiteIncidents.Count(x => x.AcknowledgedAtUtc is null);
+        // Local context + separate role-labelled dialogue: the model can
+        // resolve follow-up questions without guessing who said what.
+        // Recent turns are read from the existing, private, persisted state.
+        var localSnapshot = $"CURRENT MISSIONS (local state only):\n{missions}\n" +
+            $"OWNER PRESENCE (explicitly opted in only):\n{personalPresence}\n" +
+            $"LOCAL WEBSITE AVAILABILITY (not revenue or customer telemetry):\n{websiteHealth}\n" +
+            $"Unacknowledged availability incidents: {unacknowledged}. " +
+            "Telephony is separately configured; never claim a notification was sent " +
+            "without a provider delivery result.";
+
         var payload = new
         {
-            model = choice.Model, store = false, reasoning = new { effort = choice.ReasoningEffort },
+            model = choice.Model,
+            store = false,
+            reasoning = new { effort = choice.ReasoningEffort },
+            // Reasoning tokens count against this bound; do not arbitrarily
+            // truncate spoken replies, which could erase vital safety context.
             max_output_tokens = voiceMode ? 900 : 2600,
             instructions = WithLocalKnowledge(
-                "You are Archer, the owner's trusted personal assistant and business operations partner. " +
-                "Talk like an intelligent, grounded bloke having a normal conversation: relaxed, direct, warm, capable, sometimes dryly funny. " +
-                "Natural British English in phrasing is fine, but never force British slang, roleplay a butler, or call the owner 'sir'. " +
-                "Match the owner's energy; swear casually only when it fits. Do not sound like a corporate report or a chatbot. " +
-                (voiceMode
-                    ? "VOICE CONVERSATION: Speak naturally, answer directly in one to three short sentences, usually 15–55 words. "
-                      + "No bullet points, headings, long monologues or step-by-step instructions unless expressly requested. "
-                      + "Ask one brief question only when useful. Do not sacrifice safety or accuracy to be brief. "
-                    : "For ordinary chat, aim for one or two short paragraphs, generally 30–100 words. ") +
-                "Do not use bullet lists, headings, or long caveats unless the owner asks for a breakdown or the task genuinely requires one. " +
-                "Lead with the answer. Ask at most one useful question only if needed. Skip generic praise and restating the owner's question. " +
-                "For a major technical problem, give concrete next steps without hiding essential facts. " +
-                "You can be decisive in recommendations, but label uncertainty and do not invent progress, metrics, actions, messages, or conversations. " +
-                "Never claim to have changed code, deployed, sent a text, or made a call unless an actual tool completed it. " +
-                "Do not imply that missions or tasks were created unless an actual tool created them."),
-            input = $"MISSION CONTEXT:\n{missions}\nOWNER PRESENCE (opt-in only):\n{personalPresence}\n" +
-                $"LOCAL WEBSITE AVAILABILITY (not revenue or customer telemetry):\n{websiteHealth}\n" +
-                $"Unacknowledged availability incidents: {unacknowledged}. Twilio SMS/call delivery, if configured, is controlled separately from chat. Never claim a message was delivered without a real provider result.\n" +
-                $"RECENT CONVERSATION:\n{conversation}\nuser: {message}\nassistant:"
+                ArcherConversationFlow.ChatStyleInstructions(voiceMode)),
+            input = ArcherConversationFlow.BuildInput(state, localSnapshot, message)
         };
         return CompleteAsync(payload, choice.Model, "chat", ct);
     }

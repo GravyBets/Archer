@@ -31,23 +31,18 @@
   }
 
   async function list() {
-    const response = await fetch('/api/state', {cache: 'no-store'});
+    // Owner-started local status call records the verified question/answer in
+    // Archer's already-private conversation history. No AI model runs.
+    const response = await fetch('/api/voice/mission-list', {
+      method: 'POST', cache: 'no-store',
+      headers: {'Content-Type': 'application/json'}
+    });
     if (!response.ok) throw new Error('Mission status is unavailable.');
     const data = await response.json();
-    if (!Array.isArray(data.missions)) throw new Error('Invalid mission status response.');
-    // Return ONLY bounded mission metadata. No chat, objectives, location,
-    // provider keys, artifacts, source files or user presence to the voice API.
-    return {
-      status: 'ok',
-      count: data.missions.length,
-      missions: data.missions.slice(0, 8).map(mission => ({
-        title: String(mission.title ?? '').slice(0, 100),
-        status: String(mission.status ?? '').slice(0, 30),
-        tasksCompleted: Array.isArray(mission.tasks)
-          ? mission.tasks.filter(task => task.status === 'Completed').length : 0,
-        tasksTotal: Array.isArray(mission.tasks) ? mission.tasks.length : 0
-      }))
-    };
+    if (data.status !== 'ok' || !Array.isArray(data.missions) ||
+        typeof data.count !== 'number' || typeof data.reply !== 'string')
+      throw new Error('Invalid mission status response.');
+    return data;
   }
 
   async function propose(title, objective, options = {}) {
@@ -98,13 +93,9 @@
     if (result?.status === 'rejected') return 'I could not create that mission draft. Please give a clearer objective.';
     if (result?.status === 'created')
       return 'Mission draft created. I have not planned or run any tasks.';
-    if (result?.status === 'ok') {
-      if (result.count === 0) return 'You do not have any missions yet.';
-      const first = result.missions?.[0];
-      return 'You have ' + result.count + ' missions. Most recent: ' +
-        String(first?.title ?? 'Untitled') + ', status ' +
-        String(first?.status ?? 'unknown') + '.';
-    }
+    if (result?.status === 'ok')
+      return typeof result.reply === 'string' ? result.reply :
+        'I checked your missions, but could not read the response.';
     return 'I could not complete that mission request.';
   }
 
