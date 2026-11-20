@@ -70,6 +70,26 @@ Check(bounded[^2].Role == "assistant",
 Check(bounded[^1].Content == "Can you elaborate?",
     "current message is preserved after malformed history");
 
+var hugeHistory = new ArcherState();
+for (int i = 0; i < 40; i++)
+{
+    hugeHistory.Conversation.Add(new ConversationEntry
+    {
+        Role = i % 2 == 0 ? "user" : "assistant",
+        Content = "Message " + i + " " + new string((char)('a' + i % 26), 6000)
+    });
+}
+var sizeCapped = ArcherConversationFlow.BuildInput(
+    hugeHistory, "small local context", "Give me the gist.");
+Check(sizeCapped.Skip(1).SkipLast(1).Sum(x => x.Content.Length) <=
+      ArcherConversationFlow.MaxHistoryCharacters +
+        ArcherConversationFlow.MaxRecentTurns * 30,
+    "long conversation history is bounded to prevent high input token costs");
+Check(sizeCapped[^2].Content.StartsWith("Message 39 "),
+    "newest context is retained when conversation budget is exhausted");
+Check(!sizeCapped.Any(x => x.Content.Contains("Message 12 ")),
+    "very old high-volume messages are dropped instead of inflating requests");
+
 var standalone = ArcherConversationFlow.BuildInput(
     new ArcherState(), "", "Hello");
 Check(standalone.Count == 2,
