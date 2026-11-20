@@ -20,6 +20,7 @@
   const accentStatus = el('voiceAccentStatus');
   const input = el('chatText');
   const handsFreeToggle = el('voiceHandsFreeToggle');
+  const wakeToggle = el('voiceWakeToggle');
   const pauseSlider = el('voicePauseSlider');
   const pauseValue = el('voicePauseValue');
   const endConversationButton = el('voiceEndConversation');
@@ -45,6 +46,8 @@
   let recentVoiceError = false;
   let transientError = false;
   let lastReply = '';
+  // Only an explicitly activated hands-free session may wait for this phrase.
+  // This is an ordinary browser speech transcript, not a secure offline wake engine.
   let availableVoices = [];
   let selectedVoiceUri = '';
 
@@ -52,20 +55,31 @@
   const setPreference = (key, value) => { try { window.localStorage.setItem(key, value); } catch { /* privacy mode */ } };
   readToggle.checked = getPreference('archer.voice.readAloud') === 'yes';
   handsFreeToggle.checked = getPreference('archer.voice.handsFree') === 'yes';
+  wakeToggle.checked = getPreference('archer.voice.wake') === 'yes';
+  wakeToggle.disabled = !handsFreeToggle.checked;
   const savedPause = Number(getPreference('archer.voice.pauseSeconds'));
-  const pauseSeconds = Number.isInteger(savedPause) && savedPause >= 4 && savedPause <= 30
+  const pauseSeconds = Number.isInteger(savedPause) && savedPause >= 2 && savedPause <= 30
     ? savedPause : 7;
   pauseSlider.value = String(pauseSeconds);
   pauseValue.textContent = pauseSeconds + ' sec';
   pauseSlider.addEventListener('input', () => {
-    const value = Math.min(30, Math.max(4, Number(pauseSlider.value) || 7));
+    const value = Math.min(30, Math.max(2, Number(pauseSlider.value) || 7));
     pauseValue.textContent = value + ' sec';
     setPreference('archer.voice.pauseSeconds', String(value));
     if (voiceSessionActive && recognizedVoiceText()) armSilenceTimer();
   });
   handsFreeToggle.addEventListener('change', () => {
     setPreference('archer.voice.handsFree', handsFreeToggle.checked ? 'yes' : 'no');
+    wakeToggle.disabled = !handsFreeToggle.checked;
     if (!handsFreeToggle.checked) endVoiceConversation(false);
+  });
+  wakeToggle.addEventListener('change', () => {
+    setPreference('archer.voice.wake', wakeToggle.checked ? 'yes' : 'no');
+    // Do not reinterpret an already captured transcript after mode changes.
+    if (voiceSessionActive) {
+      endVoiceConversation(false);
+      note.textContent = 'Wake phrase setting updated. Select Speak again to restart.';
+    }
   });
 
   // Default to a conversational pace; keep the preference locally per browser.
@@ -253,9 +267,21 @@
     restartTimer = null;
   }
 
-  function recognizedVoiceText() {
+  function wakeEnabled() { return handsFreeToggle.checked && wakeToggle.checked; }
+
+  function rawVoiceText() {
     return [initialTranscript, carriedTranscript, currentTranscript]
-      .filter(Boolean).join(' ').trim().slice(0, 3000);
+      .filter(Boolean).join(' ').trim().slice(-3000);
+  }
+
+  function recognizedVoiceText() {
+    const raw = rawVoiceText();
+    if (!wakeEnabled()) return raw;
+    // Ignore all non-wake speech. Strip the activation phrase so it is never
+    // sent as part of the chat/mission command. Handle interim revisions and
+    // fragments carried across browser recognition restarts.
+    const wake = /\bhey[\s,.!?:;-]+archer\b[\s,.!?:;-]*/i.exec(raw);
+    return wake ? raw.slice(wake.index + wake[0].length).trim() : '';
   }
 
   function displayVoiceText() {
@@ -288,7 +314,7 @@
       } else {
         finishRecognizedTurn();
       }
-    }, Math.min(30, Math.max(4, Number(pauseSlider.value) || 7)) * 1000);
+    }, Math.min(30, Math.max(2, Number(pauseSlider.value) || 7)) * 1000);
   }
 
   function stopRecognition() {
@@ -348,7 +374,9 @@
 
   function beginVoiceTurn() {
     if (!recognition || appState.busy || document.hidden) return;
-    initialTranscript = input.value.trim();
+    // A wake-phrase session must never reuse unsent manual/dictation input.
+    initialTranscript = wakeEnabled() ? '' : input.value.trim();
+    if (wakeEnabled()) input.value = '';
     carriedTranscript = '';
     currentTranscript = '';
     sendAfterRecognitionEnd = false;
@@ -415,7 +443,9 @@
     recognition.onstart = () => {
       listening = true;
       setState('listening', voiceSessionActive
-        ? 'Hands-free: speak naturally; Archer waits for your selected pause.'
+        ? (wakeEnabled()
+            ? 'Say “Hey Archer” followed by your request. The microphone is active only in this session.'
+            : 'Hands-free: speak naturally; Archer waits for your selected pause.')
         : 'Your microphone is active. Review the transcript before sending.');
     };
     recognition.onresult = event => {
@@ -431,6 +461,11 @@
         if (voiceSessionActive && !sendAfterRecognitionEnd) {
           recognitionRestarts = 0;
           armSilenceTimer();
+          if (wakeEnabled() && !recognizedVoiceText()) {
+            setState('listening', /\bhey[\s,.!?:;-]+archer\b/i.test(rawVoiceText())
+              ? 'Hey Archer heard. What would you like me to do?'
+              : 'Waiting for “Hey Archer”…');
+          }
         }
       }
       input.focus({ preventScroll: true });
@@ -476,6 +511,7 @@
   } else {
     mic.disabled = true;
     handsFreeToggle.disabled = true;
+    wakeToggle.disabled = true;
     pauseSlider.disabled = true;
     orb.title = 'Focus the Archer chat input';
     note.textContent = 'Speech recognition is unavailable in this browser. You can type to Archer.';

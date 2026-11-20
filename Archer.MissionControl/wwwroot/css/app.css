@@ -464,3 +464,35 @@
 .realtime-voice-actions{display:flex;gap:9px;flex-wrap:wrap}
 .realtime-voice-actions button{flex:1 1 180px;min-height:39px}
 #realtimeVoiceStatus{overflow-wrap:anywhere}
+
+
+/* v1.14 — calm, voice-first Archer home. Extra tools remain accessible. */
+.archer-home .archer-intro{padding-top:0}
+.archer-home .archer-intro h1{margin:6px 0 5px;font-size:clamp(38px,5vw,50px)}
+.archer-home .presence-stage{height:293px;margin-top:0}
+.archer-home .presence-caption{margin:-8px auto 15px}
+.archer-home .presence-summary{gap:8px;max-width:780px;margin-bottom:17px}
+.archer-home .presence-metric{display:grid;grid-template-columns:1fr auto;align-items:center;gap:2px 12px;padding:11px 14px;background:#111d2c;border-color:#223548}
+.archer-home .presence-metric strong{grid-column:2;grid-row:1 / span 2;font-size:20px;margin:0}
+.archer-home .presence-metric small{grid-column:1;font-size:10px}
+.archer-home .voice-preferences{gap:12px 19px;padding:14px 20px}
+.archer-home .voice-preferences .voice-toggle{white-space:normal}
+.archer-voice-more{flex:1 1 100%;min-width:0;border-top:1px solid #26374a;padding-top:10px}
+.archer-voice-more summary,.archer-extra-tools summary{cursor:pointer;list-style-position:inside;user-select:none;color:#9ebdc5;font-weight:650;font-size:12px;outline-offset:4px}
+.archer-voice-more summary:hover,.archer-extra-tools summary:hover{color:#b8f3e9}
+.voice-preferences-extra{display:flex;flex-wrap:wrap;align-items:center;gap:14px 18px;padding:16px 0 4px}
+.voice-preferences-extra #voiceSupportNote{flex:1 1 100%;text-align:left;line-height:1.6;margin:0}
+.voice-preferences-extra #voiceAccentStatus{flex:1 1 100%;color:#8499ac;line-height:1.6}
+.voice-preferences-extra .realtime-voice-box{flex:1 1 100%;margin-top:3px}
+.archer-extra-tools{max-width:980px;margin:18px auto 0;border:1px solid #26374a;border-radius:12px;padding:13px 16px;background:#0c1725}
+.archer-extra-tools>summary span{margin-left:9px;color:#6b8498;font-weight:400;font-size:11px}
+.archer-extra-content{padding-top:8px}
+.archer-extra-content>.panel{margin:14px 0}
+@media(max-width:650px){
+  .archer-home .presence-stage{height:269px}
+  .archer-home .presence-summary{gap:6px}
+  .archer-home .presence-metric{padding:9px;grid-template-columns:1fr}
+  .archer-home .presence-metric strong{grid-column:1;grid-row:auto;font-size:18px}
+  .archer-home .presence-metric small{display:none}
+  .archer-extra-tools>summary span{display:block;margin:3px 0 0 18px}
+}
