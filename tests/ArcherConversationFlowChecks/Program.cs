@@ -102,6 +102,11 @@ var typed = ArcherConversationFlow.ChatStyleInstructions(false);
 Check(voice.Contains("ONE short sentence") &&
     voice.Contains("8–35 spoken words"),
     "spoken responses are normally short and conversational");
+Check(voice.Contains("words to be spoken aloud immediately") &&
+    voice.Contains("no Markdown") == false &&
+    voice.Contains("Absolutely no Markdown") &&
+    voice.Contains("never a written list") == false,
+    "voice instructions prohibit written bullet-style replies");
 Check(voice.Contains("Do not pretend to remember anything outside"),
     "continuity cannot fabricate long-term memory");
 Check(voice.Contains("never force British slang") &&
