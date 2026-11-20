@@ -496,3 +496,11 @@
   .archer-home .presence-metric small{display:none}
   .archer-extra-tools>summary span{display:block;margin:3px 0 0 18px}
 }
+
+/* Explicit voice readiness states: the mic being active is NOT the same as
+   Archer being awake. Keep the indicator beside voice controls. */
+.voice-wake-indicator{font-size:11px;font-weight:700;letter-spacing:.01em;color:#859bad;white-space:nowrap}
+.voice-wake-indicator[data-state="awake"]{color:#7cebd4}
+.voice-wake-indicator[data-state="standby"]{color:#f4c28f}
+.voice-wake-indicator[data-state="open"]{color:#9bd5e0}
+@media(max-width:650px){.voice-wake-indicator{width:100%;padding-left:1px}}
