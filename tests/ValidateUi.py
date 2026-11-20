@@ -206,6 +206,10 @@ assert 'value="1.25"' in HTML
 assert 'id="voiceRateValue"' in HTML
 assert 'id="voiceHandsFreeToggle"' in HTML
 assert 'id="voiceWakeToggle"' in HTML
+assert 'Wake with “Hey Archer” · 2-min idle' in HTML
+assert 'WAKE_IDLE_MS = 2 * 60 * 1000' in HOME_JS
+assert 'wakeConversationActive' in HOME_JS
+assert 'resetWakeInactivityTimer()' in HOME_JS
 assert 'id="voicePauseSlider"' in HTML
 assert 'min="2" max="30" step="1" value="7"' in HTML
 assert '<details class="archer-voice-more">' in HTML
