@@ -98,7 +98,13 @@ jobs:
              safely updates %LOCALAPPDATA%\Archer\current, and creates
              an Archer desktop shortcut. No server purchase is required.
           4. Open the desktop Archer shortcut. Local web UI opens at
-             http://127.0.0.1:5087/.
+             http://127.0.0.1:5087/. A native Windows voice tray icon starts,
+             so you NEVER need to click the browser Speak button.
+             Say "Hey Archer", then speak naturally after the wake beep.
+             After 2 minutes without speech, say "Hey Archer" again.
+             Right-click the Archer tray icon to pause/exit the microphone.
+             Windows must have an English Speech Recognition engine and
+             working microphone; the UI displays any setup error.
           5. Before updating later, close Archer. Download the newest owner
              approved workflow artifact and run Archer-Install.cmd again.
           6. If needed, use Archer-Rollback.cmd from this extracted folder.
