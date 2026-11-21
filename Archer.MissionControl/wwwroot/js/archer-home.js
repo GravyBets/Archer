@@ -13,6 +13,9 @@
   const readToggle = el('voiceReadToggle');
   const stopButton = el('voiceStopButton');
   const replayButton = el('voiceReplayButton');
+  const testVoiceButton = el('voiceTestButton');
+  const voiceDiagnosticStatus = el('voiceDiagnosticStatus');
+  const copyDiagnosticsButton = el('voiceCopyDiagnostics');
   const note = el('voiceSupportNote');
   const voicePicker = el('voiceChoiceSelect');
   const rateSlider = el('voiceRateSlider');
@@ -141,6 +144,7 @@
       standby: 'Standby · say “Hey Archer”'
     })[wakeState];
     if (desktopVoice?.running) renderDesktopVoice();
+    updateVoiceDiagnostics();
   }
 
   function renderDesktopVoice() {
@@ -186,6 +190,33 @@
     } else {
       setState('idle');
     }
+    updateVoiceDiagnostics();
+  }
+
+  // Only non-sensitive, non-transcript fields: safe to copy for bug reports.
+  function buildVoiceDiagnostics() {
+    const selected = availableVoices.find(v => v.voiceURI === selectedVoiceUri);
+    const audio = selected
+      ? selected.name + ' (' + selected.lang + ')'
+      : 'No explicitly selected English voice';
+    const micState = desktopVoice?.running ? 'Native experimental listener active' :
+      voiceSessionActive && listening ? 'Browser listening' :
+      voiceSessionActive ? 'Browser waiting or reconnecting' : 'Microphone off';
+    return [
+      'Voice mode: ' + (desktopVoice?.running ? 'experimental Windows SAPI' : 'browser Web Speech'),
+      'Browser recognition supported: ' + (SpeechRecognitionCtor ? 'yes' : 'no'),
+      'Browser playback supported: ' + (hasSpeechOut ? 'yes' : 'no'),
+      'Selected voice: ' + audio,
+      'Speaking pace: ' + rateSlider.value + 'x',
+      'Pause before reply: ' + pauseSlider.value + ' seconds',
+      'Microphone: ' + micState,
+      'Wake state: ' + (wakeConversationActive ? 'awake' : 'standby/off'),
+      'Legacy Windows voice is not enabled by default'
+    ].join('\n');
+  }
+
+  function updateVoiceDiagnostics() {
+    voiceDiagnosticStatus.textContent = buildVoiceDiagnostics();
   }
 
   function settle() {
@@ -226,9 +257,11 @@
     const best = voices.filter(v => (v.lang || '').toLowerCase() === 'en-gb')
       .sort((a, b) => voiceScore(b) - voiceScore(a));
     const saved = getPreference('archer.voice.uri');
-    let chosen = voices.find(v => v.voiceURI === saved) || best[0];
-    if (!chosen) chosen = voices.find(v => (v.lang || '').toLowerCase().startsWith('en')) || voices[0];
+    // An explicitly selected fallback is respected. Otherwise, never
+    // silently switch to a robotic default if an en-GB voice disappears.
+    const chosen = (saved && voices.find(v => v.voiceURI === saved)) || best[0] || null;
     selectedVoiceUri = chosen?.voiceURI || '';
+    testVoiceButton.disabled = !chosen;
 
     voicePicker.replaceChildren();
     for (const voice of [
@@ -242,28 +275,33 @@
     if (!voicePicker.options.length) {
       const option = document.createElement('option');
       option.value = selectedVoiceUri;
-      option.textContent = chosen.name + ' (' + chosen.lang + ')';
+      option.textContent = 'Choose a voice explicitly';
       voicePicker.appendChild(option);
     }
     voicePicker.value = selectedVoiceUri;
-    const british = (chosen.lang || '').toLowerCase() === 'en-gb';
-    const maleLikely = /ryan|george|oliver|daniel|male/i.test(chosen.name || '');
-    accentStatus.textContent = british
+    const british = (chosen?.lang || '').toLowerCase() === 'en-gb';
+    const maleLikely = /ryan|george|oliver|daniel|male/i.test(chosen?.name || '');
+    accentStatus.textContent = !chosen
+      ? 'No British voice is available. I will not silently play a robotic fallback; choose a voice manually.'
+      : british
       ? (maleLikely
         ? 'Selected a British voice that may sound masculine. Preview with Read last reply.'
         : 'British voice selected. Its gender and naturalness depend on your browser.')
-      : 'No British English voice is installed. The selected fallback may sound different.';
+      : 'The voice you explicitly selected is not British English.';
+    updateVoiceDiagnostics();
   }
 
   voicePicker.addEventListener('change', () => {
     selectedVoiceUri = voicePicker.value;
     setPreference('archer.voice.uri', selectedVoiceUri);
+    testVoiceButton.disabled = !availableVoices.some(v => v.voiceURI === selectedVoiceUri);
     const selected = availableVoices.find(v => v.voiceURI === selectedVoiceUri);
     accentStatus.textContent = selected
       ? ((selected.lang || '').toLowerCase() === 'en-gb'
         ? 'Using British English: ' + selected.name
         : 'Not a British English voice: ' + selected.name)
-      : 'Selected voice unavailable; system default will be used.';
+      : 'Selected voice unavailable; no silent fallback will be used.';
+    updateVoiceDiagnostics();
   });
 
   function continueConversationAfterReply() {
@@ -302,12 +340,17 @@
     const clipped = clean.length > 1800;
     const utterance = new SpeechSynthesisUtterance(clipped ? clean.slice(0, 1800) : clean);
     const chosen = availableVoices.find(v => v.voiceURI === selectedVoiceUri);
-    if (chosen) {
-      utterance.voice = chosen;
-      utterance.lang = chosen.lang;
-    } else {
-      utterance.lang = 'en-GB';
+    if (!chosen) {
+      note.textContent = 'The selected voice is unavailable. Choose an English voice in Voice settings; no robotic system fallback will play.';
+      setState('responding', 'The reply is available as text.');
+      window.setTimeout(() => {
+        settle();
+        continueConversationAfterReply();
+      }, 300);
+      return;
     }
+    utterance.voice = chosen;
+    utterance.lang = chosen.lang;
     utterance.rate = Math.min(1.65, Math.max(0.80, Number(rateSlider.value) || 1.25));
     utterance.pitch = 0.96;
     utterance.volume = 1;
@@ -712,6 +755,23 @@
     else stopSpeech();
   });
   replayButton.addEventListener('click', () => { if (lastReply) say(lastReply, true); });
+  testVoiceButton.addEventListener('click', () => {
+    // This is an intentionally user-initiated offline voice preview, no model
+    // request, microphone use, or chat-history mutation.
+    if (!availableVoices.some(v => v.voiceURI === selectedVoiceUri)) return;
+    const priorReply = lastReply;
+    say('Archer here. How can I help you today?', true);
+    lastReply = priorReply;
+    replayButton.disabled = !priorReply || !hasSpeechOut;
+  });
+  copyDiagnosticsButton.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(buildVoiceDiagnostics());
+      note.textContent = 'Voice diagnostics copied. No transcript, audio or API key included.';
+    } catch {
+      note.textContent = 'Clipboard unavailable; diagnostic details remain visible above.';
+    }
+  });
   readToggle.addEventListener('change', () => {
     setPreference('archer.voice.readAloud', readToggle.checked ? 'yes' : 'no');
     if (!readToggle.checked) stopSpeech();

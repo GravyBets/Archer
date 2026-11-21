@@ -29,6 +29,32 @@ does not create a server, phone connection, or automatic PC updater.
    approved Archer repository.** A matching SHA256 guards accidental
    corruption but is **not** cryptographic proof of who published the ZIP.
 
+## Voice reliability milestones after the rollback
+
+Three safeguards were added without re-enabling the problematic Windows SAPI
+listener:
+
+1. **Protect the familiar British browser voice:** Archer remembers your
+   explicitly selected browser voice. If no selected voice or automatic
+   British replacement is available, it now avoids silently using the system's
+   robotic default. The full reply remains visible as text; you can select a
+   fallback manually.
+2. **Preview without a microphone or API request:** Open **Voice settings
+   & experimental features → Test selected voice**. It speaks a fixed short
+   sentence using your selected voice and pace. No microphone, model call,
+   or conversation history changes.
+3. **Private capability diagnostics:** Expand **Voice diagnostics (no
+   recording)** to inspect browser engine support, selected voice name/language,
+   rate, pause and whether the microphone is listening. **Copy safe diagnostics**
+   copies only those details, never speech transcripts or provider tokens.
+   CI tests guard the British voice, 1.25× pace, preview, absence of silent
+   robotic fallback and no automatic microphone startup.
+
+These milestones improve quality and rollback safety. They **do not yet
+deliver a reliable no-button "Hey Archer"**. That requires a replacement
+hotword/STT engine and a voice output path that passes actual owner-PC tests;
+don't re-enable the legacy SAPI companion for routine use.
+
 ## Voice quality rollback (November 2026)
 
 The previous experimental System.Speech tray listener produced unreliable

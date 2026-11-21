@@ -514,3 +514,9 @@
 .voice-wake-indicator[data-state="speaking"],
 .voice-wake-indicator[data-state="thinking"]{color:#9bd5e0}
 .voice-wake-indicator[data-state="error"]{color:#f6b39e}
+
+/* Read-only voice capability debugging without microphone capture. */
+.voice-diagnostics-panel{margin:8px 0;padding:8px 10px;border:1px solid var(--line,rgba(165,190,210,.2));border-radius:9px}
+.voice-diagnostics-panel summary{cursor:pointer;font-size:12px;font-weight:650}
+#voiceDiagnosticStatus{white-space:pre-line;line-height:1.45;font-size:11px;opacity:.88}
+.voice-diagnostics-panel>p:last-child{font-size:11px;opacity:.7;line-height:1.4}

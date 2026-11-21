@@ -90,10 +90,17 @@
                     <input id="voiceRateSlider" type="range" min="0.80" max="1.65" step="0.05" value="1.25" aria-label="Archer speaking speed" />
                     <output id="voiceRateValue" for="voiceRateSlider" aria-live="off">1.25×</output>
                   </label>
-                  <button type="button" class="voice-stop" id="voiceReplayButton" disabled>Read last reply</button>
+                  <button type="button" class="voice-stop" id="voiceTestButton" disabled>Test selected voice</button>
+                   <button type="button" class="voice-stop" id="voiceReplayButton" disabled>Read last reply</button>
                   <button type="button" class="voice-stop" id="voiceStopButton" data-allow-busy="true" disabled>Stop speaking</button>
                   <p id="voiceSupportNote" role="status">Select Speak once to activate hands-free listening. Say “Hey Archer” to start a conversation, then talk normally. After 2 minutes without speech, say “Hey Archer” again. Browser mic stops when you end the session or leave this tab; recognition may use your browser's speech provider.</p>
                   <p id="voiceAccentStatus" role="status">British voice availability depends on installed browser voices.</p>
+                   <details class="voice-diagnostics-panel">
+                     <summary>Voice diagnostics (no recording)</summary>
+                     <p id="voiceDiagnosticStatus" role="status">Checking browser voice capabilities…</p>
+                     <button type="button" class="voice-stop" id="voiceCopyDiagnostics">Copy safe diagnostics</button>
+                     <p>Only engine status, selected voice, pace, pause and microphone state are shown. No speech transcripts or tokens are collected.</p>
+                   </details>
                   <div class="realtime-voice-box" aria-label="Optional paid real-time voice">
                     <strong>Experimental realtime voice (optional, billable)</strong>
                     <p>Separate provider WebRTC voice call; not the hands-free conversation above. No Archer tools or transcript saving. Requires explicit opt-in and a separate API budget.</p>
