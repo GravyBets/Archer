@@ -27,4 +27,10 @@ for forbidden in (
 ):
     assert forbidden not in workflow, "Unexpected packaging permission: " + forbidden
 assert "on:\n  workflow_dispatch:\n  workflow_run:" in workflow
+# Broken legacy SAPI must never be launched automatically when owner opens Archer.
+launcher = (Path(__file__).resolve().parents[1] / "tools/Start-Archer.ps1").read_text()
+assert "$enableLegacyVoice=($env:ARCHER_ENABLE_LEGACY_VOICE -ceq '1')" in launcher
+assert "if ($enableLegacyVoice -and (Test-Path -LiteralPath $voiceScript -PathType Leaf))" in launcher
+assert "if (-not $enableLegacyVoice -or -not $running" in launcher
+print("PASS: native legacy microphone opt-in only; previous listener retired on normal launch")
 print("PASS: installer triggered only by manual main or green trusted main build")
