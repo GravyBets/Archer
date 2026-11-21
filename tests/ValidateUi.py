@@ -52,7 +52,7 @@ assert 'data-state="idle"' in HTML
 required = {
     "archerPresence", "orbButton", "orbParticleField", "presenceStatus", "presenceActiveMissions",
     "presenceTasksToday", "presenceAttentionCount", "chatMessages", "chatForm",
-    "chatText", "voiceInputButton", "voiceReadToggle", "voiceReplayButton",
+    "chatText", "voiceInputButton", "voiceReadToggle", "voiceReplayButton", "voiceTestButton", "voiceCopyDiagnostics", "voiceDiagnosticStatus",
     "realtimeVoiceStart", "realtimeVoiceEnd", "realtimeVoiceStatus",
     "voiceStopButton", "voiceSupportNote", "voiceChoiceSelect", "voiceRateSlider", "voiceRateValue",
     "voiceHandsFreeToggle", "voiceWakeToggle", "voiceWakeIndicator", "voicePauseSlider", "voicePauseValue", "voiceEndConversation",
