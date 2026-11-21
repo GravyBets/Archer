@@ -42,8 +42,8 @@ final class ArcherDeviceIdentity: ObservableObject {
         prepared = key != nil
         if let key {
             let hash = SHA256.hash(data: key.publicKey.x963Representation)
-            fingerprint = hash.map { String(format: "%02X", $0) }
-                              .joined().prefix(20) + "…"
+            fingerprint = String(hash.map { String(format: "%02X", $0) }
+                                    .joined().prefix(20)) + "…"
             message = "Local Secure Enclave key ready. NOT enrolled or approved by Archer."
         } else {
             fingerprint = ""
