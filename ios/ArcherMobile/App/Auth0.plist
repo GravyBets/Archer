@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>Domain</key>
-  <string>dev-113ic41kxj7zpeb8.us.auth0.com</string>
+  <string>dev-1l3ic41kxj7zpeb8.us.auth0.com</string>
   <key>ClientId</key>
   <string>REPLACE_WITH_AUTH0_NATIVE_APP_CLIENT_ID</string>
 </dict>

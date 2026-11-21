@@ -1,7 +1,11 @@
 import SwiftUI
+import CryptoKit
 
 struct ArcherWelcomeView: View {
     @EnvironmentObject private var session: ArcherAuthSession
+    @StateObject private var device = ArcherDeviceIdentity()
+    @StateObject private var notificationTest = ArcherNotificationTest()
+    @State private var confirmLocalErase = false
 
     var body: some View {
         ZStack {
@@ -83,6 +87,66 @@ struct ArcherWelcomeView: View {
                         .disabled(!ArcherAuthConfiguration.configured)
                     }
 
+                    if session.signedIn {
+                        Divider().overlay(.white.opacity(0.25))
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("This iPhone's device key", systemImage: "lock.iphone")
+                                .font(.headline)
+                            Text(device.message)
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.8))
+                            if device.prepared {
+                                Text("Local fingerprint: " + device.fingerprint)
+                                    .font(.caption.monospaced())
+                                    .textSelection(.enabled)
+                                Button("Verify local signature") {
+                                    device.testLocalProof()
+                                }
+                                .buttonStyle(.bordered)
+                                Button("Erase local device key", role: .destructive) {
+                                    confirmLocalErase = true
+                                }
+                                .buttonStyle(.bordered)
+                            } else {
+                                Button("Prepare Secure Enclave key") {
+                                    device.prepare()
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(device.busy || !SecureEnclave.isAvailable)
+                            }
+                            Text("Hardware key preparation is local. No device has been enrolled with Archer.")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.62))
+                        }
+
+                        Divider().overlay(.white.opacity(0.25))
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("iPhone notifications", systemImage: "bell.badge")
+                                .font(.headline)
+                            Text(notificationTest.status)
+                                .font(.subheadline)
+                                .foregroundStyle(.white.opacity(0.8))
+                            if notificationTest.authorized {
+                                Button("Send local notification test") {
+                                    Task { await notificationTest.sendLocalTest() }
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(notificationTest.busy)
+                            } else {
+                                Button("Allow test notifications") {
+                                    Task { await notificationTest.requestPermission() }
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(notificationTest.busy)
+                            }
+                            Text("Only a local iPhone test. APNs and Archer remote alerts are not connected.")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.62))
+                        }
+                    }
+
                     Text("Signing in only proves an Auth0 session on this phone. "
                          + "Archer won't accept commands until the gateway separately "
                          + "validates the owner and enrolled device.")
@@ -95,5 +159,19 @@ struct ArcherWelcomeView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .confirmationDialog(
+            "Erase this iPhone's local hardware key?",
+            isPresented: $confirmLocalErase,
+            titleVisibility: .visible
+        ) {
+            Button("Erase local key", role: .destructive) {
+                device.eraseLocalKey()
+            }
+        } message: {
+            Text("This cannot revoke future server approval. Archer gateway access remains locked.")
+        }
+        .task {
+            await notificationTest.inspect()
+        }
     }
 }

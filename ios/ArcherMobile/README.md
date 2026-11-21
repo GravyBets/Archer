@@ -10,11 +10,11 @@ This source is **independent of the work computer**. It will require Xcode/macOS
 
 ## Auth0 tenant settings selected by owner
 
-- Domain: `dev-113ic41kxj7zpeb8.us.auth0.com`
+- Domain: `dev-1l3ic41kxj7zpeb8.us.auth0.com`
 - App type: **Native**
 - Native iOS Bundle ID: `com.gravybets.archer.dev`
 - API audience: `https://archer.example/api/dev`
-- Allowed callback URL: `com.gravybets.archer.dev://dev-113ic41kxj7zpeb8.us.auth0.com/ios/com.gravybets.archer.dev/callback`
+- Allowed callback URL: `com.gravybets.archer.dev://dev-1l3ic41kxj7zpeb8.us.auth0.com/ios/com.gravybets.archer.dev/callback`
 - Allowed logout URL: the same callback URL
 - Grant types: Authorization Code and Refresh Token (NOT Implicit, Password or Client Credentials)
 - Owner login: verified Auth0 database user with passkeys available; the passkey must be enrolled on the owner's personal iPhone when ready.
@@ -32,6 +32,33 @@ This source is **independent of the work computer**. It will require Xcode/macOS
 5. For an actual iPhone, select a legitimate personal Apple signing team in Xcode and keep the Bundle Identifier **exactly** `com.gravybets.archer.dev` (or coordinate a changed identifier and update the Auth0 URLs first). Apple ID free provisioning and distribution limitations may apply; TestFlight typically requires an Apple Developer Program membership.
 6. Sign in via the Auth0 system browser, then if Auth0 offers a passkey, enroll it on the personal phone. Do not create a passkey on a workplace computer. On success the app only says the Auth0 session exists and that gateway access is disabled.
 7. Test session renewal and logout. Confirm no token, callback code or private user profile is printed to logs, screenshots, git files or device preferences.
+
+## Three iPhone milestones (source implementation, still not released)
+
+1. **Correct Native Auth0 tenant:** the Native app domain and callback now use
+   the same confirmed `dev-1l3ic41kxj7zpeb8.us.auth0.com` tenant as the
+   already-tested Pocket browser client, instead of the incorrect older
+   `dev-113ic...` spelling. The actual Native app Client ID still requires
+   owner configuration; this does **not** connect the iPhone to Archer.
+2. **Hardware-backed local device key:** on a real compatible iPhone, the
+   signed-in app can explicitly create a Secure Enclave P-256 signing key,
+   persist its opaque key reference using ThisDeviceOnly Keychain accessibility,
+   show the public-key fingerprint, verify one local signature, and erase its
+   local record after confirmation. If Secure Enclave is unavailable, no
+   software fallback is silently generated. **This is not device enrollment**;
+   the remote gateway has no production endpoint or owner approval.
+3. **Owner-initiated local notification:** the signed-in app requests iOS
+   notification permission only when the user taps **Allow test notifications**.
+   Once granted, **Send local notification test** schedules one harmless local
+   notification after five seconds. It reuses one stable identifier to prevent
+   building up duplicate pending alerts. **This is not APNs**, an incoming
+   remote alert, or a confirmed Archer incident.
+
+These additions run in the iOS simulator build and static safety tests in
+GitHub Actions. Secure Enclave creation and real notification delivery must
+still be verified on the owner's iPhone after signing/distribution. Do not
+describe the native app as installed, online, receiving Archer alerts or
+able to execute missions.
 
 ## Security boundaries / why this is a prototype
 
