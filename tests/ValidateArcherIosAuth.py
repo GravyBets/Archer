@@ -14,6 +14,9 @@ INFO = plistlib.loads((APP / "Info.plist").read_bytes())
 AUTH = plistlib.loads((APP / "Auth0.plist").read_bytes())
 CONFIG = (APP / "ArcherAuthConfiguration.swift").read_text()
 SESSION = (APP / "ArcherAuthSession.swift").read_text()
+DEVICE = (APP / "ArcherDeviceIdentity.swift").read_text()
+NOTIFICATION = (APP / "ArcherNotificationTest.swift").read_text()
+POCKET_CONFIG = (ROOT / "web" / "archer-pocket" / "config.js").read_text()
 VIEW = (APP / "ArcherWelcomeView.swift").read_text()
 README = (APP.parent / "README.md").read_text()
 
@@ -38,6 +41,9 @@ ensure(scheme == [EXPECTED_BUNDLE], "only authorized callback URL scheme registe
 ensure("REPLACE_WITH_AUTH0_NATIVE_APP_CLIENT_ID" == AUTH["ClientId"],
        "real client ID not inadvertently published")
 ensure(AUTH["Domain"] == EXPECTED_DOMAIN, "tenant domain matches configured local Auth0")
+ensure(EXPECTED_DOMAIN in POCKET_CONFIG, "Native Auth0 domain agrees with already-tested iPhone Pocket tenant")
+ensure("dev-113ic41kxj7zpeb8.us.auth0.com" not in
+       (CONFIG + SESSION + README + POCKET_CONFIG), "previous Native Auth0 domain typo is forbidden")
 ensure(EXPECTED_BUNDLE in CONFIG, "bundle is checked at runtime")
 ensure(EXPECTED_AUDIENCE in CONFIG, "Auth0 custom API audience is explicitly requested")
 ensure(EXPECTED_DOMAIN in CONFIG, "app and tenant config must match")
@@ -78,4 +84,36 @@ for prohibited in (
            "iPhone source must not expose tokens or unsupported auth: " + prohibited)
 ensure('"openid profile email offline_access conversation:read conversation:write"' in CONFIG,
        "request a real ID token with openid")
-print(f"PASS: {checks} offline iOS owner-login, callback, secret-handling and permission gates")
+for phrase in (
+    "SecureEnclave.P256.Signing.PrivateKey()",
+    "kSecAttrAccessibleWhenUnlockedThisDeviceOnly",
+    "kSecAttrSynchronizable",
+    "ARCHER_NATIVE_DEVICE_LOCAL_TEST_V1",
+    "key.publicKey.isValidSignature",
+    "SecItemDelete(query as CFDictionary)",
+    "NOT enrolled or approved",
+):
+    ensure(phrase in DEVICE, "native hardware key guard: " + phrase)
+for phrase in (
+    "UNUserNotificationCenter.current().requestAuthorization",
+    "UNTimeIntervalNotificationTrigger(timeInterval: 5",
+    "UNUserNotificationCenter.current().add(request)",
+    "removePendingNotificationRequests",
+    "NOT remote push",
+):
+    ensure(phrase in NOTIFICATION, "local notification safety: " + phrase)
+ensure("device.prepare()" in VIEW and "device.testLocalProof()" in VIEW and
+       "device.eraseLocalKey()" in VIEW, "native hardware key setup, verify and erase UI")
+ensure("notificationTest.requestPermission()" in VIEW and
+       "notificationTest.sendLocalTest()" in VIEW, "notification is only requested after tap")
+ensure("if session.signedIn" in VIEW and
+       "Remote conversations: unavailable" in VIEW,
+       "new capabilities remain separate from unavailable remote chat")
+for text in (DEVICE, NOTIFICATION):
+    for forbidden in ("http://", "https://", "URLSession", "APNs", "getToken", "sendMessage",
+                      "OPENAI_API_KEY", "client_secret"):
+        if forbidden == "APNs" and "APNs" in NOTIFICATION:
+            # The user-facing status must explicitly disclose APNs is unavailable.
+            continue
+        ensure(forbidden not in text, "native local-only feature must not call external services: "+forbidden)
+print(f"PASS: {checks} offline iOS owner-login, Secure Enclave, notifications and scope gates")
