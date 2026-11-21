@@ -95,6 +95,14 @@ app.MapGet("/api/state", async (JsonFileStore store, CancellationToken ct) =>
 // are accepted here, and this endpoint never starts microphone capture.
 app.MapGet("/api/desktop-voice/status", () =>
 {
+    // Explicitly opted-out Windows SAPI is not a failed microphone. Ignore
+    // old/stale tray status (including robotic voice errors) and expose
+    // the established browser speech fallback instead.
+    if (Environment.GetEnvironmentVariable("ARCHER_ENABLE_LEGACY_VOICE") != "1")
+        return Results.Ok(new ArcherDesktopVoiceStatus.Snapshot(
+            false, "disabled",
+            "Experimental Windows speech is disabled; browser voice is available.",
+            null));
     var directory = Environment.GetEnvironmentVariable("ARCHER_DATA_DIR");
     if (string.IsNullOrWhiteSpace(directory))
         directory = Path.Combine(app.Environment.ContentRootPath, "Data");
