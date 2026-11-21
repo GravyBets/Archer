@@ -50,7 +50,8 @@ This source is **independent of the work computer**. It will require Xcode/macOS
 3. **Owner-initiated local notification:** the signed-in app requests iOS
    notification permission only when the user taps **Allow test notifications**.
    Once granted, **Send local notification test** schedules one harmless local
-   notification after five seconds. It reuses one stable identifier to prevent
+   notification after five seconds, including while Archer is in the foreground
+   (the local-test-only app delegate requests banner presentation). It reuses one stable identifier to prevent
    building up duplicate pending alerts. **This is not APNs**, an incoming
    remote alert, or a confirmed Archer incident.
 

@@ -16,6 +16,8 @@ CONFIG = (APP / "ArcherAuthConfiguration.swift").read_text()
 SESSION = (APP / "ArcherAuthSession.swift").read_text()
 DEVICE = (APP / "ArcherDeviceIdentity.swift").read_text()
 NOTIFICATION = (APP / "ArcherNotificationTest.swift").read_text()
+NOTIFICATION_DELEGATE = (APP / "ArcherNotificationDelegate.swift").read_text()
+APP_ENTRY = (APP / "ArcherMobileApp.swift").read_text()
 POCKET_CONFIG = (ROOT / "web" / "archer-pocket" / "config.js").read_text()
 VIEW = (APP / "ArcherWelcomeView.swift").read_text()
 README = (APP.parent / "README.md").read_text()
@@ -106,6 +108,13 @@ ensure("device.prepare()" in VIEW and "device.testLocalProof()" in VIEW and
        "device.eraseLocalKey()" in VIEW, "native hardware key setup, verify and erase UI")
 ensure("notificationTest.requestPermission()" in VIEW and
        "notificationTest.sendLocalTest()" in VIEW, "notification is only requested after tap")
+ensure("ArcherNotificationDelegate" in APP_ENTRY and
+       "UIApplicationDelegateAdaptor" in APP_ENTRY,
+       "iOS local foreground notification presenter is explicitly installed")
+ensure("archer-local-owner-test" in NOTIFICATION_DELEGATE and
+       "completionHandler([.banner, .sound])" in NOTIFICATION_DELEGATE and
+       "completionHandler([])" in NOTIFICATION_DELEGATE,
+       "only owner-requested local test is shown while foregrounded")
 ensure("if session.signedIn" in VIEW and
        "Remote conversations: unavailable" in VIEW,
        "new capabilities remain separate from unavailable remote chat")
