@@ -108,6 +108,13 @@ ensure("device.prepare()" in VIEW and "device.testLocalProof()" in VIEW and
        "device.eraseLocalKey()" in VIEW, "native hardware key setup, verify and erase UI")
 ensure("notificationTest.requestPermission()" in VIEW and
        "notificationTest.sendLocalTest()" in VIEW, "notification is only requested after tap")
+ensure("ArcherNotificationDelegate" in APP_ENTRY and
+       "UIApplicationDelegateAdaptor" in APP_ENTRY,
+       "iOS local foreground notification presenter is explicitly installed")
+ensure("archer-local-owner-test" in NOTIFICATION_DELEGATE and
+       "completionHandler([.banner, .sound])" in NOTIFICATION_DELEGATE and
+       "completionHandler([])" in NOTIFICATION_DELEGATE,
+       "only owner-requested local test is shown while foregrounded")
 ensure("if session.signedIn" in VIEW and
        "Remote conversations: unavailable" in VIEW,
        "new capabilities remain separate from unavailable remote chat")
