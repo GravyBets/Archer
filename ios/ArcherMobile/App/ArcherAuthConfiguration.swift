@@ -4,7 +4,7 @@ import Foundation
 /// The SDK also reads Domain and ClientId from the bundled Auth0.plist.
 enum ArcherAuthConfiguration {
     static let bundleIdentifier = "com.gravybets.archer.dev"
-    static let auth0Domain = "dev-113ic41kxj7zpeb8.us.auth0.com"
+    static let auth0Domain = "dev-1l3ic41kxj7zpeb8.us.auth0.com"
     static let apiAudience = "https://archer.example/api/dev"
     static let requestedScope =
         "openid profile email offline_access conversation:read conversation:write"
