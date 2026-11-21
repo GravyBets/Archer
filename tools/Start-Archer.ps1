@@ -36,11 +36,14 @@ if (-not $running) {
   }
   if (-not $ready) { throw 'Archer did not answer on localhost:5087. Check permissions/firewall and console output.' }
 }
-# Archer Voice is a separate *visible tray* companion, not a browser
-# microphone permission or an invisible Windows service. It starts when the
-# owner launches Archer and works with or without an open browser tab.
+# SAFETY / QUALITY: the legacy Windows System.Speech companion has a
+# robotic fallback voice and poor recognition on some PCs. It MUST NOT
+# silently replace the proven browser voice. This experimental companion
+# may be run only by an informed owner who explicitly sets this opt-in flag.
+# On normal launch, Archer keeps browser voice and its saved British/rate prefs.
 $voiceScript=Join-Path $PSScriptRoot 'Archer-Voice.ps1'
-if (Test-Path -LiteralPath $voiceScript -PathType Leaf) {
+$enableLegacyVoice=($env:ARCHER_ENABLE_LEGACY_VOICE -ceq '1')
+if ($enableLegacyVoice -and (Test-Path -LiteralPath $voiceScript -PathType Leaf)) {
   if (-not $running) {
     # Give the previous version's companion time to notice the changed
     # session token and relinquish its per-owner microphone mutex.
