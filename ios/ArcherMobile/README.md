@@ -10,11 +10,11 @@ This source is **independent of the work computer**. It will require Xcode/macOS
 
 ## Auth0 tenant settings selected by owner
 
-- Domain: `dev-113ic41kxj7zpeb8.us.auth0.com`
+- Domain: `dev-1l3ic41kxj7zpeb8.us.auth0.com`
 - App type: **Native**
 - Native iOS Bundle ID: `com.gravybets.archer.dev`
 - API audience: `https://archer.example/api/dev`
-- Allowed callback URL: `com.gravybets.archer.dev://dev-113ic41kxj7zpeb8.us.auth0.com/ios/com.gravybets.archer.dev/callback`
+- Allowed callback URL: `com.gravybets.archer.dev://dev-1l3ic41kxj7zpeb8.us.auth0.com/ios/com.gravybets.archer.dev/callback`
 - Allowed logout URL: the same callback URL
 - Grant types: Authorization Code and Refresh Token (NOT Implicit, Password or Client Credentials)
 - Owner login: verified Auth0 database user with passkeys available; the passkey must be enrolled on the owner's personal iPhone when ready.
