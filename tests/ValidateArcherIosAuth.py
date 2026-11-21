@@ -19,7 +19,7 @@ README = (APP.parent / "README.md").read_text()
 
 EXPECTED_BUNDLE = "com.gravybets.archer.dev"
 EXPECTED_AUDIENCE = "https://archer.example/api/dev"
-EXPECTED_DOMAIN = "dev-113ic41kxj7zpeb8.us.auth0.com"
+EXPECTED_DOMAIN = "dev-1l3ic41kxj7zpeb8.us.auth0.com"
 checks = 0
 
 
