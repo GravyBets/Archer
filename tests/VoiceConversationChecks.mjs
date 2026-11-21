@@ -73,9 +73,11 @@ class Recognition extends FakeRecognition{
 }
 const voice = {name:'Microsoft George',lang:'en-GB',voiceURI:'test-british'};
 let pendingUtterance=null;
+const providedVoices = [voice];
+let onVoicesChanged = null;
 const speechSynthesis = {
-  getVoices(){return [voice];},
-  addEventListener(){},
+  getVoices(){return providedVoices;},
+  addEventListener(name,handler){if(name==='voiceschanged')onVoicesChanged=handler;},
   cancel(){pendingUtterance=null;},
   speak(utterance) {pendingUtterance=utterance;utterance.onstart?.();},
   finish(){const u=pendingUtterance;pendingUtterance=null;u?.onend?.();}
@@ -95,7 +97,8 @@ const browser={
 const appState={data:{missions:[]},busy:false};
 const doc={hidden:false,getElementById:elt,createElement:()=>({value:'',textContent:''}),
   addEventListener() {}};
-const sandbox={window:browser,document:doc,navigator:{language:'en-US'},
+const sandbox={window:browser,document:doc,navigator:{language:'en-US',
+  clipboard:{writeText:async value=>{browser.lastDiagnostics=value;}}},
   SpeechSynthesisUtterance:FakeUtterance,appState,Date,console};
 runInNewContext(source,sandbox,{filename:'archer-home.js'});
 const rec=recs[0], presence=browser.ArcherPresence;
@@ -385,4 +388,40 @@ check('wake phrase can be detected from an alternative browser transcript',()=>{
   assert.equal(elt('voiceWakeIndicator').textContent,'Voice off');
 });
 
-console.log('PASS:',cases,'alternate transcript wake, accurate mic status, normal followups, 2-minute standby, privacy and failure scenarios');
+check('voice preview uses saved British voice without speech recognition or paid AI',()=>{
+  const priorRequests=requests.length, priorStarts=rec.starts;
+  elt('voiceTestButton').dispatch('click');
+  assert.equal(requests.length,priorRequests);
+  assert.equal(rec.starts,priorStarts);
+  assert.ok(pendingUtterance);
+  assert.equal(pendingUtterance.voice.voiceURI,'test-british');
+  assert.equal(pendingUtterance.rate,1.25);
+  speechSynthesis.finish();
+});
+check('voice quality guard rejects automatic robotic fallback if en-GB disappears',()=>{
+  const priorRequests=requests.length;
+  const robot={name:'Robotic English',lang:'en-US',voiceURI:'test-robot'};
+  providedVoices.splice(0,providedVoices.length,robot);
+  onVoicesChanged();
+  assert.equal(elt('voiceTestButton').disabled,true);
+  assert.match(elt('voiceAccentStatus').textContent,/will not silently play a robotic fallback/);
+  pendingUtterance=null;
+  presence.reply('Voice fallback should not be read by robot.');
+  advance(300);
+  assert.equal(pendingUtterance,null);
+  assert.equal(requests.length,priorRequests);
+  providedVoices.splice(0,providedVoices.length,voice);
+  onVoicesChanged();
+  assert.equal(elt('voiceTestButton').disabled,false);
+});
+check('voice diagnostics reveal no tokens or captured speech',()=>{
+  const info=elt('voiceDiagnosticStatus').textContent;
+  assert.match(info,/Browser recognition supported: yes/);
+  assert.match(info,/Selected voice: Microsoft George/);
+  assert.match(info,/Speaking pace: 1.25x/);
+  assert.match(info,/Microphone: Microphone off/);
+  assert.doesNotMatch(info,/I want to speak|test-british|bearer|access_token/i);
+  assert.equal(elt('voiceCopyDiagnostics').disabled,false);
+});
+
+console.log('PASS:',cases,'voice quality guard, preview, private diagnostics, wake-once, 2-minute standby, privacy and failures');
