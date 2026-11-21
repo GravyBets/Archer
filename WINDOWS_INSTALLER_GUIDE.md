@@ -29,6 +29,29 @@ does not create a server, phone connection, or automatic PC updater.
    approved Archer repository.** A matching SHA256 guards accidental
    corruption but is **not** cryptographic proof of who published the ZIP.
 
+## Voice quality rollback (November 2026)
+
+The previous experimental System.Speech tray listener produced unreliable
+recognition and a robotic Windows TTS voice on the owner PC. It is therefore
+**disabled by default**. Opening Archer from the desktop shortcut once again
+uses the familiar browser voice, including existing British voice and speaking
+pace preferences. The browser may require clicking Speak once to enable
+microphone recognition. **No-button wake-word functionality is not yet
+delivered reliably**, and should not be claimed as complete.
+
+An old tray listener from the previous installer receives a new session token
+and shuts down after you relaunch Archer. If its tray icon is still present,
+right-click **Exit Archer voice**. The companion code remains available only
+for explicit, informed compatibility testing with
+`ARCHER_ENABLE_LEGACY_VOICE=1` in the owner process environment; do not set
+that flag unless willing to use lower-quality Windows voices and legacy speech
+recognition. This compatibility switch does not enable a new Windows service,
+remote microphone, startup task, or automatic account action.
+
+A reliable native wake solution will need a better microphone transcription
+engine **and** voice output that preserves the selected British male voice.
+Neither can be verified on the owner's hardware by GitHub Actions alone.
+
 ## Native, no-button "Hey Archer" voice
 
 When you launch the **Archer desktop shortcut** on Windows, it starts a
