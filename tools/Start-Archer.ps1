@@ -16,7 +16,11 @@ try {
 # The listener follows one Archer server launch. A later app update
 # replaces the token so a companion from the previous version quits.
 $sessionFile=Join-Path $env:ARCHER_DATA_DIR 'desktop-voice-session.txt'
-if (-not $running -or -not (Test-Path -LiteralPath $sessionFile)) {
+$enableLegacyVoice=($env:ARCHER_ENABLE_LEGACY_VOICE -ceq '1')
+# Expire an already-running old tray listener on every ordinary launch:
+# leaving it alive would keep stealing the mic even after this rollback.
+if (-not $enableLegacyVoice -or -not $running -or
+    -not (Test-Path -LiteralPath $sessionFile)) {
   [guid]::NewGuid().ToString('N') |
     Set-Content -LiteralPath $sessionFile -Encoding Ascii -NoNewline
 }
@@ -42,7 +46,6 @@ if (-not $running) {
 # may be run only by an informed owner who explicitly sets this opt-in flag.
 # On normal launch, Archer keeps browser voice and its saved British/rate prefs.
 $voiceScript=Join-Path $PSScriptRoot 'Archer-Voice.ps1'
-$enableLegacyVoice=($env:ARCHER_ENABLE_LEGACY_VOICE -ceq '1')
 if ($enableLegacyVoice -and (Test-Path -LiteralPath $voiceScript -PathType Leaf)) {
   if (-not $running) {
     # Give the previous version's companion time to notice the changed
