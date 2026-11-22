@@ -360,6 +360,7 @@
                   <label>Priority (5 is highest) <input id="projectPriority" type="number" min="1" max="5" value="3"/></label>
                   <label>Maximum coding attempts per rolling 24 hours <input id="projectAttemptLimit" type="number" min="1" max="12" value="6"/></label>
                   <label><input id="projectAllowNewSource" type="checkbox"/> Allow new source files inside the approved application directories (no tests or configuration)</label>
+                  <label><input id="projectCumulativeWorkspaces" type="checkbox"/> Allow successive tasks to build on one draft branch; require CI after each task</label>
                   <button id="registerProjectButton" type="submit" class="button primary">Register project</button>
                 </form>
               </details>
