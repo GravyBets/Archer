@@ -279,6 +279,7 @@ public sealed class GitHubRepositoryReader(HttpClient http)
 
         var fileList = root.GetProperty("tree").EnumerateArray()
             .Where(x => x.TryGetProperty("type", out var kind) && kind.GetString() == "blob" &&
+                x.TryGetProperty("mode", out var mode) && mode.GetString() == "100644" &&
                 x.TryGetProperty("path", out _) && x.TryGetProperty("sha", out _))
             .Select(x => new ReviewableFile(
                 x.GetProperty("path").GetString() ?? "",
