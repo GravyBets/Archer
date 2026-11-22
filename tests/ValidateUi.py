@@ -106,6 +106,12 @@ assert [src.split("?")[0] for src in page.scripts[-15:]] == ["/js/mission-voice.
 assert "/js/desktop-voice.js?v=20261120-native1" in page.scripts
 assert 'desktop-voice-status.json' in (ROOT.parent / "Services" / "ArcherDesktopVoiceStatus.cs").read_text(encoding="utf-8")
 assert "Archer-Voice.ps1" in (ROOT.parents[1] / "tools" / "Start-Archer.ps1").read_text(encoding="utf-8")
+NATIVE_VOICE = (ROOT.parents[1] / "tools" / "Archer-Voice.ps1").read_text(encoding="utf-8")
+assert "directOwnerInput=$true" in NATIVE_VOICE, "Native wake-session must route explicit work through owner gate"
+SERVER = (ROOT.parent / "Program.cs").read_text(encoding="utf-8")
+CHAT = SERVER.split('app.MapPost("/api/chat"', 1)[1].split("// Dedicated local companion bridge.", 1)[0]
+assert CHAT.index("ConversationAssignments.LooksLikeAssignment") < CHAT.index("if (!ai.IsConfigured) return MissingApiKey();"), "Local commands must not require a chat API key"
+
 assert "/js/archer-home.js?v=20261120-wakefix2" in page.scripts
 assert "no-store, max-age=0" in (ROOT.parent / "Program.cs").read_text(encoding="utf-8")
 assert "/api/mobile/sessions" in MOBILE_SESSIONS_JS
