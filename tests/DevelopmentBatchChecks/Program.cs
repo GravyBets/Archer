@@ -417,6 +417,21 @@ Check(SelfDevelopmentReview.TryCandidate(selfProfile, selfBatch) is null, "prote
 Environment.SetEnvironmentVariable("ARCHER_SELF_PROJECT_ENABLED", null);
 Environment.SetEnvironmentVariable("ARCHER_SELF_PROJECT_FILES", null);
 
+var conversationState = new ArcherState();
+var talkProject = ProjectPolicy.Register(new("Personal app", "owner/talk", ".NET", ["src"], "ci.yml", "build", ["Compile", "Test"]));
+conversationState.Projects.Add(talkProject);
+var assigned = ConversationAssignments.Assign(conversationState, "Hey Archer, work on Personal app and improve the settings empty state.", _ => true, now);
+Check(assigned.Accepted && talkProject.Objectives.Count == 1 && talkProject.Objectives[0].PlanningState == "Delegated" &&
+    talkProject.Objectives[0].DelegatedUntilUtc == now.AddHours(24), "conversation directly delegates one bounded objective");
+Check(!ConversationAssignments.Assign(conversationState, "work on Personal app and improve the settings empty state.", _ => true, now).Accepted &&
+    talkProject.Objectives.Count == 1, "repeated transcript cannot create duplicate paid assignment");
+Check(!ConversationAssignments.Assign(conversationState, "work on Other: implement the requested change", _ => true, now).Accepted,
+    "unknown project cannot be created through chat");
+Check(!ConversationAssignments.Assign(conversationState, "work on Personal app: implement another improvement", _ => false, now).Accepted,
+    "conversation does not bypass project gate");
+Check(!ConversationAssignments.LooksLikeAssignment("Can you explain how to work on Personal app?"), "discussion is not execution");
+Check(ConversationAssignments.Status(conversationState).Contains("queued"), "status uses actual persisted assignment data");
+
 sealed class FakeGitHub : HttpMessageHandler
 {
     public string Mode = "success";
