@@ -36,7 +36,10 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$TESTED_SHA"
-          test "$(git remote get-url origin)" = "https://github.com/GravyBets/Archer"
+          case "$(git remote get-url origin)" in
+            https://github.com/GravyBets/Archer|https://github.com/GravyBets/Archer.git) ;;
+            *) echo "::error::Unexpected checkout source"; exit 1 ;;
+          esac
       - name: Publish reviewed Linux core and companion
         shell: bash
         run: bash deploy/linux/publish.sh "$RUNNER_TEMP/archer-linux-staging"
