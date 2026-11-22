@@ -32,7 +32,7 @@ public static class ConversationAssignments
             var possessive = Regex.Match(tail, @"^['’]s\s+(?<detail>.+)$",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
             var verb = prefix.Groups["action"].Value.ToLowerInvariant();
-            if (possessive.Success && verb is "fix" or "improve" or "update" or "build" or "develop")
+            if (possessive.Success && (verb is "fix" or "improve" or "update" or "build" or "develop"))
                 return new(name, char.ToUpperInvariant(verb[0]) + verb[1..] + " " +
                     possessive.Groups["detail"].Value.Trim());
         }
