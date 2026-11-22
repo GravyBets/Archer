@@ -11,7 +11,6 @@ struct ArcherConnectedView: View {
     @State private var status = "Connect to your private Archer server."
     @State private var working = false
     @State private var queuedRequest: UUID?
-    @State private var queuedMessage = ""
     @State private var readAloud = false
     @State private var speech = AVSpeechSynthesizer()
     @State private var selected = "Chat"
@@ -95,17 +94,21 @@ struct ArcherConnectedView: View {
 
     private func send(recover: Bool = false) async {
         guard !working else { return }
-        let text = recover ? queuedMessage : message.trimmingCharacters(in:.whitespacesAndNewlines)
-        guard !text.isEmpty, text.count <= 3000 else { return }
-        if !recover { queuedRequest=UUID(); queuedMessage=text; message="" }
+        let text = message.trimmingCharacters(in:.whitespacesAndNewlines)
+        if !recover {
+            guard !text.isEmpty, text.count <= 3000 else { return }
+            queuedRequest=UUID(); message=""
+        }
         guard let id=queuedRequest else { return }
         working=true; defer { working=false }
         status="Archer is processing your message…"
         do {
-            let result=try await client.send(text,id:id,auth:auth,device:device)
+            let result: ArcherMessageResult
+            if recover { result=try await client.receipt(id,auth:auth,device:device) }
+            else { result=try await client.send(text,id:id,auth:auth,device:device) }
             guard auth.signedIn else { data=nil; return }
-            if result.status == "Pending" { status="The earlier message is still pending. Check again; it won't be sent twice."; return }
-            queuedRequest=nil; queuedMessage=""
+            if result.status == "Pending" { status="The earlier message is still pending. Check again; this only reads its receipt."; return }
+            queuedRequest=nil
             status=result.status == "Completed" ? "Reply received." : "Message stopped: " + result.status + ". No automatic retry."
             data=try await client.overview(auth:auth,device:device)
             if readAloud, let answer=result.answer {
