@@ -263,6 +263,7 @@ public sealed class DevelopmentTask
     public DateTimeOffset? SubmittedAtUtc { get; set; }
     public CodeProposal? Proposal { get; set; }
     public List<string> PriorPullRequests { get; set; } = [];
+    public List<string> PriorHeadShas { get; set; } = [];
 }
 public sealed record DevelopmentPlanRequest(string? Objective, bool Confirm, Guid ProjectId = default, Guid? ObjectiveId = null);
 public sealed record DevelopmentArmRequest(bool Confirm, bool ResumeAfterRestart = false);
