@@ -59,6 +59,13 @@ builder.Services.AddHttpClient<GitHubDraftPrPublisher>(client =>
     client.Timeout = TimeSpan.FromSeconds(45);
 });
 
+builder.Services.AddHttpClient<GeoShiftCiVerifier>(client => client.Timeout = TimeSpan.FromSeconds(30))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    { AllowAutoRedirect = false, UseCookies = false });
+builder.Services.AddSingleton<GeoShiftDevelopmentWorker>();
+builder.Services.AddHostedService<GeoShiftDevelopmentWorker>(services =>
+    services.GetRequiredService<GeoShiftDevelopmentWorker>());
+
 var app = builder.Build();
 
 // Archer V0.1 intentionally binds to loopback only: no remote users and no authentication yet.
@@ -933,6 +940,54 @@ app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore
     catch (Exception error) { return Results.Problem(title: "Archer could not respond", detail: error.Message, statusCode: 502); }
 });
 
+// Owner-local development mission control. No remote exposure or model tool access.
+app.MapGet("/api/development/batches", async (JsonFileStore store, GeoShiftDevelopmentWorker worker, CancellationToken ct) =>
+    Results.Ok(new { enabled = worker.CanArm, batches = await store.ReadAsync(s => s.DevelopmentBatches.Select(b => new
+    {
+        b.Id, b.Objective, b.Armed, b.ExpiresAtUtc, b.AttemptsRemaining,
+        tasks = b.Tasks.Select(t => new { t.Id, t.Instruction, t.Paths, t.Status, t.Attempts, t.Detail,
+            pullRequestUrl = t.Proposal == null ? null : t.Proposal.PullRequestUrl, t.PriorPullRequests }).ToArray()
+    }).ToArray(), ct) }));
+
+app.MapPost("/api/development/batches", async Task<IResult> (HttpContext context,
+    DevelopmentPlanRequest request, GeoShiftDevelopmentWorker worker, CancellationToken ct) =>
+{
+    if (!LocalDevelopmentRequest(context)) return Results.StatusCode(403);
+    var objective = request.Objective?.Trim() ?? "";
+    if (!request.Confirm || objective.Length is < 15 or > 1000)
+        return Results.BadRequest(new { error = "Confirm one billed planning call with a concrete objective (15–1000 characters)." });
+    if (!worker.CanArm) return Results.BadRequest(new { error = "Configure the dedicated GeoShift autonomy flag, API key and repo-scoped GitHub publishing first." });
+    try
+    {
+        var batch = await worker.PlanAsync(objective, ct);
+        if (!await worker.SavePlanAsync(batch, ct))
+            return Results.Conflict(new { error = "Local batch history limit reached." });
+        return Results.Ok(new { id = batch.Id, message = "Plan saved, unarmed. Review all proposed tasks before authorizing." });
+    }
+    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+    catch (Exception error) { return Results.BadRequest(new { error = error.Message }); }
+});
+app.MapPost("/api/development/batches/{id:guid}/arm", async Task<IResult> (HttpContext context,
+    Guid id, DevelopmentArmRequest request, GeoShiftDevelopmentWorker worker, CancellationToken ct) =>
+{
+    if (!LocalDevelopmentRequest(context)) return Results.StatusCode(403);
+    if (!request.Confirm) return Results.BadRequest(new { error = "Explicit batch authorization required." });
+    try
+    {
+        return await worker.ArmAsync(id, ct) ? Results.Ok(new { message = "Armed within remaining attempt and time limits." }) :
+            Results.Conflict(new { error = "Cannot arm. Check configuration, independent CI, expiration, and other active or blocked batches." });
+    }
+    catch (Exception) when (!ct.IsCancellationRequested)
+    { return Results.Conflict(new { error = "Independent GeoShift CI could not be verified. No coding authorized." }); }
+});
+app.MapPost("/api/development/batches/{id:guid}/pause", async Task<IResult> (HttpContext context,
+    Guid id, DevelopmentArmRequest request, GeoShiftDevelopmentWorker worker, CancellationToken ct) =>
+{
+    if (!LocalDevelopmentRequest(context)) return Results.StatusCode(403);
+    return await worker.PauseAsync(id, ct) ? Results.Ok(new { message = "Paused; an in-flight operation may finish." }) :
+        Results.NotFound();
+});
+
 app.MapFallbackToFile("index.html");
 
 Console.WriteLine("ARCHER Mission Control V1.13.0 — http://127.0.0.1:5087");
@@ -947,4 +1002,12 @@ static void Log(ArcherState state, Guid? missionId, string message, string level
 {
     state.Activity.Insert(0, new ActivityEntry { MissionId = missionId, Message = message, Level = level });
     if (state.Activity.Count > 250) state.Activity.RemoveRange(250, state.Activity.Count - 250);
+}
+
+
+static bool LocalDevelopmentRequest(HttpContext context)
+{
+    if (!context.Request.HasJsonContentType()) return false;
+    var origin = context.Request.Headers.Origin.ToString();
+    return origin.Length == 0 || origin == "http://127.0.0.1:5087" || origin == "http://localhost:5087";
 }
