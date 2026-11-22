@@ -69,7 +69,7 @@ public static class ProjectPolicy
         {
             Name = name, Repository = repo, Technology = technology, SourceRoots = roots,
             WorkflowFile = workflow, VerificationJob = job, RequiredSteps = steps,
-            Priority = input.Priority, DailyAttemptLimit = input.DailyAttemptLimit, AllowNewSourceFiles = input.AllowNewSourceFiles
+            Priority = input.Priority, DailyAttemptLimit = input.DailyAttemptLimit, AllowNewSourceFiles = input.AllowNewSourceFiles, CumulativeWorkspaces = input.CumulativeWorkspaces
         };
     }
 
@@ -79,30 +79,36 @@ public static class ProjectPolicy
         var eligible = eligiblePaths.ToHashSet(StringComparer.Ordinal);
         var occupied = (allPaths ?? eligiblePaths).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var cumulative = project?.CumulativeWorkspaces == true;
         if (plan is null || plan.Tasks is null || plan.Tasks.Count is < 1 or > 3 ||
             string.IsNullOrWhiteSpace(plan.Summary) || plan.Summary.Length > 800)
             throw new InvalidOperationException("No valid bounded development plan returned.");
         foreach (var task in plan.Tasks)
         {
+            var current = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (task is null || string.IsNullOrWhiteSpace(task.Title) || task.Title.Length > 150 ||
                 string.IsNullOrWhiteSpace(task.Description) || task.Description.Length > 800 ||
                 task.Paths is null || task.NewPaths is null || task.ContextPaths is null ||
                 task.Paths.Count + task.NewPaths.Count is < 1 or > MaxWorkspaceFiles ||
                 task.NewPaths.Count > 2 || task.ContextPaths.Count > MaxContextFiles ||
-                task.Paths.Any(path => !eligible.Contains(path) || !used.Add(path)) ||
+                task.Paths.Any(path => !eligible.Contains(path) || !current.Add(path) || (!cumulative && !used.Add(path))) ||
                 task.NewPaths.Any(path => project is null || !NewSourceAllowed(project, path) ||
                     occupied.Contains(path) || occupied.Any(p => p.StartsWith(path + "/", StringComparison.OrdinalIgnoreCase)) ||
-                    !used.Add(path)) ||
+                    !current.Add(path) || !used.Add(path)) ||
                 task.ContextPaths.Any(path => !eligible.Contains(path)) ||
                 task.ContextPaths.Distinct(StringComparer.Ordinal).Count() != task.ContextPaths.Count ||
-                task.ContextPaths.Intersect(task.Paths, StringComparer.Ordinal).Any())
+                task.ContextPaths.Intersect(task.Paths.Concat(task.NewPaths), StringComparer.OrdinalIgnoreCase).Any())
                 throw new InvalidOperationException("The plan includes conflicting, missing or unapproved files.");
+            if (cumulative)
+            {
+                foreach (var path in task.NewPaths) { eligible.Add(path); occupied.Add(path); }
+            }
         }
         // Case-insensitive conflicts and parent/child collisions are refused for Windows and Git compatibility.
         if (used.Any(p => used.Any(other => other.StartsWith(p + "/", StringComparison.OrdinalIgnoreCase))))
             throw new InvalidOperationException("The plan contains conflicting file paths.");
         foreach (var task in plan.Tasks)
-            if (task.ContextPaths.Any(used.Contains))
+            if (!cumulative && task.ContextPaths.Any(used.Contains))
                 throw new InvalidOperationException("Independent tasks cannot depend on files another task will change.");
     }
 
