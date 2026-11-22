@@ -143,7 +143,9 @@
       'Needs approval': 'The plan is ready. Approve it to let Archer begin.'
     };
     card.append(element('p', messages[label]));
-    if (label === 'Needs attention' && task?.detail) card.append(element('p', task.detail));
+    if (label === 'Needs attention' && task?.detail) {
+      const reason = disclosure('Why Archer stopped'); reason.append(element('p', task.detail)); card.append(reason);
+    }
     const buttons = element('div', ''); buttons.className = 'dev-actions';
     const path = '/api/development/batches/' + b.id;
     if (!historical && b.armed) buttons.append(action('Pause work', () => command(path + '/pause', { confirm: true })));
@@ -161,7 +163,7 @@
         const urls = [...new Set(b.tasks.map(t => t.pullRequestUrl).filter(Boolean))];
         for (const url of urls) { const a = link(url, 'Review proposed changes', b.repository); if (a) buttons.append(a); }
       }
-      if (o && !o.acceptedAtUtc) buttons.append(action('Mark accepted', () => accept(p, o)));
+      if (o && !o.acceptedAtUtc && (!p.selfProject || reviews.get(reviewKey(b))?.candidate)) buttons.append(action('Mark accepted', () => accept(p, o)));
     }
     if (buttons.children.length) card.append(buttons);
     const detail = disclosure('Plan and technical details');
@@ -209,7 +211,9 @@
     dependency.replaceChildren(option('', 'None'));
     if (!p) { list.append(element('p', 'No project selected. Open Project settings to add one.')); return; }
     const projectBatches = batches.filter(b => b.projectId === p.id);
-    const verifiedDescriptions = new Set(projectBatches.filter(b => phase(b) === 'Ready for review' && !b.armed).map(b => b.objective.trim()));
+    // Only an identical, newer verified assignment can move an earlier failure into history.
+    const supersededByVerified = o => p.objectives.slice(p.objectives.indexOf(o) + 1).some(next =>
+      next.description.trim() === o.description.trim() && projectBatches.some(b => b.objectiveId === next.id && !b.armed && phase(b, next) === 'Ready for review'));
     const cards = [];
     let accepted = 0, pending = 0, working = 0, review = 0, attention = 0;
     function placeBatch(b, o, past) {
@@ -229,13 +233,13 @@
       if (o.acceptedAtUtc) accepted++;
       if (related.length) {
         const currentBatch = related.find(b => b.armed) || related[0];
-        placeBatch(currentBatch, o, !!o.acceptedAtUtc || (phase(currentBatch, o) === 'Needs attention' && verifiedDescriptions.has(o.description.trim())));
+        placeBatch(currentBatch, o, !!o.acceptedAtUtc || (phase(currentBatch, o) === 'Needs attention' && supersededByVerified(o)));
         for (const b of related.filter(b => b !== currentBatch)) placeBatch(b, o, true);
       } else {
         const label = !ready && !o.acceptedAtUtc ? 'Waiting on dependency' : objectivePhase(o);
         const card = element('article',''); card.className = 'dev-assignment-card';
         card.append(chip(label), element('h3', o.description));
-        if (label === 'Needs attention') { attention++; card.append(element('p', o.planningDetail || 'Planning stopped.')); }
+        if (label === 'Needs attention') { attention++; card.append(element('p', 'Archer could not prepare the plan. Review the reason before trying again.')); const reason = disclosure('Why Archer stopped'); reason.append(element('p', o.planningDetail || 'Planning stopped.')); card.append(reason); }
         else if (['Planning','Queued'].includes(label)) { working++; card.append(element('p', 'Archer is preparing the assignment.')); }
         else if (!o.acceptedAtUtc) pending++;
         if (delegated) card.append(action('Cancel assignment', () => command('/api/projects/' + p.id + '/objectives/' + o.id + '/cancel-delegation', { confirm: true })));
@@ -245,7 +249,7 @@
         }, !p.enabled));
         if (o.acceptedAtUtc) history.append(card);
         else if (label === 'Saved' || label === 'Waiting on dependency') objectives.append(card);
-        else if (label === 'Needs attention' && verifiedDescriptions.has(o.description.trim())) { attention--; history.append(card); }
+        else if (label === 'Needs attention' && supersededByVerified(o)) { attention--; history.append(card); }
         else cards.push(card);
       }
       if (ready && !alreadyPlanned && !delegated && !o.continuous) {
