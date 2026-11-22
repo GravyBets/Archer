@@ -18,5 +18,6 @@
     <Compile Include="../../Archer.MissionControl/Services/SandboxArchiveReader.cs" Link="SandboxArchiveReader.cs" />
     <Compile Include="../../Archer.MissionControl/Services/ProjectSandboxRunner.cs" Link="ProjectSandboxRunner.cs" />
     <Compile Include="../../Archer.MissionControl/Services/ContinuousObjectivePolicy.cs" Link="ContinuousObjectivePolicy.cs" />
+    <Compile Include="../../Archer.MissionControl/Services/SelfDevelopmentReview.cs" Link="SelfDevelopmentReview.cs" />
   </ItemGroup>
 </Project>
