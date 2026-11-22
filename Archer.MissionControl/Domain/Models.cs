@@ -262,6 +262,7 @@ public sealed class DevelopmentTask
     public List<DateTimeOffset> AttemptedAtUtc { get; set; } = [];
     public string? Detail { get; set; }
     public DateTimeOffset? SubmittedAtUtc { get; set; }
+    public SandboxEvidence? Sandbox { get; set; }
     public CodeProposal? Proposal { get; set; }
     public List<string> PriorPullRequests { get; set; } = [];
     public List<string> PriorHeadShas { get; set; } = [];
@@ -284,6 +285,7 @@ public sealed class ManagedProject
     public bool Paused { get; set; }
     public bool AllowNewSourceFiles { get; set; }
     public bool CumulativeWorkspaces { get; set; }
+    public bool RequireSandbox { get; set; }
     public List<string> RegressionTestRoots { get; set; } = [];
     public List<ProjectObjective> Objectives { get; set; } = [];
     public List<ProjectMemoryEntry> Memory { get; set; } = [];
@@ -311,7 +313,7 @@ public sealed class ProjectMemoryEntry
 }
 public sealed record RegisterProjectRequest(string? Name, string? Repository, string? Technology,
     List<string>? SourceRoots, string? WorkflowFile, string? VerificationJob, List<string>? RequiredSteps,
-    int Priority = 3, int DailyAttemptLimit = 6, bool AllowNewSourceFiles = false, bool CumulativeWorkspaces = false, List<string>? RegressionTestRoots = null);
+    int Priority = 3, int DailyAttemptLimit = 6, bool AllowNewSourceFiles = false, bool CumulativeWorkspaces = false, List<string>? RegressionTestRoots = null, bool RequireSandbox = false);
 public sealed record ProjectPauseRequest(bool Paused);
 public sealed record ProjectObjectiveRequest(string? Description, List<Guid>? DependsOn);
 public sealed record ProjectMemoryRequest(string? Kind, string? Content, bool ShareWithAi);
@@ -332,3 +334,12 @@ public sealed class ProjectPlanTaskDraft
 }
 
 public sealed record DelegateObjectiveRequest(bool Confirm, bool ResumeAfterRestart = false);
+
+public sealed class SandboxEvidence
+{
+    public string HeadSha { get; set; } = "";
+    public string ImageId { get; set; } = "";
+    public string Status { get; set; } = "Not run";
+    public string Detail { get; set; } = "";
+    public DateTimeOffset RecordedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+}
