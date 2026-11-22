@@ -48,6 +48,7 @@
     el('managedProjectStatus').textContent = p
       ? p.repository + ' · ' + p.technology + ' · priority ' + p.priority + ' · ' +
         p.attemptsToday + '/' + p.dailyAttemptLimit + ' attempts in last 24h · ' +
+        (p.allowNewSourceFiles ? 'New source allowed' : 'Existing source only') + ' · ' +
         (p.enabled ? 'Configured' : 'Not configured or paused') +
         ' · credential variables: ' + p.credentialPrefix + '_READ_TOKEN and _WRITE_TOKEN'
       : 'No project registered. Registration itself grants no GitHub or model access.';
@@ -113,7 +114,10 @@
       for (const t of batch.tasks) {
         const detail = document.createElement('details');
         detail.append(element('summary', t.status + ' · ' + t.instruction),
-          element('p', 'Approved files: ' + t.paths.join(', ')), element('p', 'Attempts: ' + t.attempts + ' / 2'));
+          element('p', 'Editable files: ' + (t.paths.join(', ') || 'None')),
+          element('p', 'New files: ' + ((t.newPaths || []).join(', ') || 'None')),
+          element('p', 'Read-only context: ' + ((t.contextPaths || []).join(', ') || 'None')),
+          element('p', 'Attempts: ' + t.attempts + ' / 2'));
         if (t.detail) detail.append(element('p', t.detail));
         const currentPr = link(t.pullRequestUrl, 'Current draft PR', batch.repository);
         if (currentPr) detail.append(currentPr);
@@ -157,7 +161,7 @@
       sourceRoots: el('projectRoots').value.split(',').map(x => x.trim()).filter(Boolean),
       workflowFile: el('projectWorkflow').value, verificationJob: el('projectJob').value,
       requiredSteps: el('projectSteps').value.split('\n').map(x => x.trim()).filter(Boolean),
-      priority: Number(el('projectPriority').value), dailyAttemptLimit: Number(el('projectAttemptLimit').value)
+      priority: Number(el('projectPriority').value), dailyAttemptLimit: Number(el('projectAttemptLimit').value), allowNewSourceFiles: el('projectAllowNewSource').checked
     }, 'POST', () => el('projectRegistryForm').reset());
   });
   el('pauseProjectButton').addEventListener('click', () => {
