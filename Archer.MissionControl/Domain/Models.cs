@@ -161,6 +161,8 @@ public sealed class CodeProposal
     public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
     public string Repository { get; set; } = "";
     public string BaseBranch { get; set; } = "";
+    public string? BaseTreeSha { get; set; }
+    public bool WorkspaceDraft { get; set; }
     public string Title { get; set; } = "";
     public string Request { get; set; } = "";
     public string Summary { get; set; } = "";
@@ -177,6 +179,7 @@ public sealed class CodeProposalFile
 {
     public string Path { get; set; } = "";
     public string ExpectedBlobSha { get; set; } = "";
+    public bool IsNew { get; set; }
     public string OriginalContent { get; set; } = "";
     public string ProposedContent { get; set; } = "";
 }
@@ -243,6 +246,8 @@ public sealed class DevelopmentTask
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Instruction { get; set; } = "";
     public List<string> Paths { get; set; } = [];
+    public List<string> NewPaths { get; set; } = [];
+    public List<string> ContextPaths { get; set; } = [];
     public string Status { get; set; } = "Queued";
     public int Attempts { get; set; }
     public List<DateTimeOffset> AttemptedAtUtc { get; set; } = [];
@@ -267,6 +272,7 @@ public sealed class ManagedProject
     public int Priority { get; set; } = 3;
     public int DailyAttemptLimit { get; set; } = 6;
     public bool Paused { get; set; }
+    public bool AllowNewSourceFiles { get; set; }
     public List<ProjectObjective> Objectives { get; set; } = [];
     public List<ProjectMemoryEntry> Memory { get; set; } = [];
 }
@@ -293,7 +299,7 @@ public sealed class ProjectMemoryEntry
 }
 public sealed record RegisterProjectRequest(string? Name, string? Repository, string? Technology,
     List<string>? SourceRoots, string? WorkflowFile, string? VerificationJob, List<string>? RequiredSteps,
-    int Priority = 3, int DailyAttemptLimit = 6);
+    int Priority = 3, int DailyAttemptLimit = 6, bool AllowNewSourceFiles = false);
 public sealed record ProjectPauseRequest(bool Paused);
 public sealed record ProjectObjectiveRequest(string? Description, List<Guid>? DependsOn);
 public sealed record ProjectMemoryRequest(string? Kind, string? Content, bool ShareWithAi);
@@ -309,6 +315,8 @@ public sealed class ProjectPlanTaskDraft
     public string Title { get; set; } = "";
     public string Description { get; set; } = "";
     public List<string> Paths { get; set; } = [];
+    public List<string> NewPaths { get; set; } = [];
+    public List<string> ContextPaths { get; set; } = [];
 }
 
 public sealed record DelegateObjectiveRequest(bool Confirm, bool ResumeAfterRestart = false);
