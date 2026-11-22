@@ -430,6 +430,9 @@ Check(!ConversationAssignments.Assign(conversationState, "work on Other: impleme
 Check(!ConversationAssignments.Assign(conversationState, "work on Personal app: implement another improvement", _ => false, now).Accepted,
     "conversation does not bypass project gate");
 Check(!ConversationAssignments.LooksLikeAssignment("Can you explain how to work on Personal app?"), "discussion is not execution");
+Check(ConversationAssignments.Parse("Archer, I want you to work on Personal app and improve the settings menu.", [talkProject])?.Objective == "improve the settings menu.", "natural explicit owner direction is parsed");
+Check(ConversationAssignments.Parse("Hey Archer, fix Personal app's confusing empty-state screen.", [talkProject])?.Objective == "Fix confusing empty-state screen.", "spoken possessive wording retains required project scope");
+Check(ConversationAssignments.Parse("Can you work on an app sometime?", [talkProject]) is null, "ambiguous work request does not authorize paid coding");
 Check(ConversationAssignments.Status(conversationState).Contains("queued"), "status uses actual persisted assignment data");
 
 var researchState = new ArcherState();
