@@ -65,6 +65,23 @@ public static class ProjectPolicy
         };
     }
 
+    public static void ValidatePlan(ProjectPlanDraft? plan, IReadOnlyList<string> eligiblePaths)
+    {
+        var eligible = eligiblePaths.ToHashSet(StringComparer.Ordinal);
+        var used = new HashSet<string>(StringComparer.Ordinal);
+        if (plan is null || plan.Tasks is null || plan.Tasks.Count is < 1 or > 3 ||
+            string.IsNullOrWhiteSpace(plan.Summary) || plan.Summary.Length > 800)
+            throw new InvalidOperationException("No valid bounded development plan returned.");
+        foreach (var task in plan.Tasks)
+        {
+            if (task is null || string.IsNullOrWhiteSpace(task.Title) || task.Title.Length > 150 ||
+                string.IsNullOrWhiteSpace(task.Description) || task.Description.Length > 800 ||
+                task.Paths is null || task.Paths.Count is < 1 or > 2 ||
+                task.Paths.Any(path => !eligible.Contains(path) || !used.Add(path)))
+                throw new InvalidOperationException("The plan includes missing, overlapping or unapproved files.");
+        }
+    }
+
     public static bool ObjectiveReady(ManagedProject project, ProjectObjective objective) =>
         objective.AcceptedAtUtc is null &&
         objective.DependsOn.All(id => project.Objectives.Any(o => o.Id == id && o.AcceptedAtUtc is not null));
