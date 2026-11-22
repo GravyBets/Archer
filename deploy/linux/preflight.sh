@@ -97,7 +97,7 @@ if [[ -f "$core" && -f "$gateway" ]]; then
       fail "$name is missing, a placeholder or invalid"
     fi
   }
-  check_gateway_field ARCHER_PRIVATE_HOST '^[a-z0-9][a-z0-9.-]+\\.ts\\.net
+  check_gateway_field ARCHER_PRIVATE_HOST '^[a-z0-9][a-z0-9.-]+\.ts\\.net
   if grep -q '^ARCHER_COMPANION_BRIDGE_KEY=' "$core"; then
     pass 'Core companion bridge is configured'
   else fail 'Core companion bridge key missing'; fi
@@ -143,7 +143,7 @@ if (( failures > 0 )); then
 fi
 printf 'Archer server preparation checks passed for %s. Manual validation still required.\n' "$mode"
 
-  check_gateway_field ARCHER_PRIVATE_AUTH0_DOMAIN '^[a-z0-9][a-z0-9.-]+\\.auth0\\.com
+  check_gateway_field ARCHER_PRIVATE_AUTH0_DOMAIN '^[a-z0-9][a-z0-9.-]+\.auth0\.com
   if grep -q '^ARCHER_COMPANION_BRIDGE_KEY=' "$core"; then
     pass 'Core companion bridge is configured'
   else fail 'Core companion bridge key missing'; fi
@@ -235,7 +235,7 @@ if (( failures > 0 )); then
 fi
 printf 'Archer server preparation checks passed for %s. Manual validation still required.\n' "$mode"
 
-  check_gateway_field ARCHER_PRIVATE_OWNER_SUBJECT '^auth0\\|[A-Za-z0-9_-]{1,120}
+  check_gateway_field ARCHER_PRIVATE_OWNER_SUBJECT '^auth0\|[A-Za-z0-9_-]{1,120}
   if grep -q '^ARCHER_COMPANION_BRIDGE_KEY=' "$core"; then
     pass 'Core companion bridge is configured'
   else fail 'Core companion bridge key missing'; fi
