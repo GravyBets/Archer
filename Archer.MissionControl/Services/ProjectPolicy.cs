@@ -110,6 +110,7 @@ public static class ProjectPolicy
                 task.Paths is null || task.NewPaths is null || task.ContextPaths is null ||
                 task.Paths.Count + task.NewPaths.Count is < 1 or > MaxWorkspaceFiles ||
                 task.NewPaths.Count > 2 || task.ContextPaths.Count > MaxContextFiles ||
+                (project is not null && task.NewPaths.Any(path => NewRegressionAllowed(project, path)) && task.ContextPaths.Count >= MaxContextFiles) ||
                 (project is not null && task.NewPaths.Count(path => NewRegressionAllowed(project, path)) > 1) ||
                 (project is not null && task.NewPaths.Any(path => NewRegressionAllowed(project, path)) && task.Paths.Count == 0 && !task.NewPaths.Any(path => NewSourceAllowed(project, path))) ||
                 task.Paths.Any(path => !eligible.Contains(path) || !current.Add(path) || (!cumulative && !used.Add(path))) ||
