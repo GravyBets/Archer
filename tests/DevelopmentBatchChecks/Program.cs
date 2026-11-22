@@ -432,6 +432,23 @@ Check(!ConversationAssignments.Assign(conversationState, "work on Personal app: 
 Check(!ConversationAssignments.LooksLikeAssignment("Can you explain how to work on Personal app?"), "discussion is not execution");
 Check(ConversationAssignments.Status(conversationState).Contains("queued"), "status uses actual persisted assignment data");
 
+var researchState = new ArcherState();
+var research = ConversationResearch.Queue(researchState, "Archer, research competing geographic data conversion services.", now);
+Check(research.Accepted && researchState.Missions.Count == 1 &&
+    researchState.Missions[0].AutoRunEnabled && researchState.Missions[0].AutoRunTasksRemaining == 1 &&
+    researchState.Missions[0].Tasks.Single().Kind == "research", "direct research queues one bounded, non-mutating worker task");
+Check(!ConversationResearch.Queue(researchState, "Archer, research competing geographic data conversion services.", now).Accepted &&
+    researchState.Missions.Count == 1, "repeat transcript never duplicates paid research");
+Check(!ConversationResearch.LooksLikeResearch("Tell me how research works"), "discussion does not execute research");
+Check(!ConversationResearch.Queue(researchState, "Archer, research x", now).Accepted,
+    "vague or ambiguous research does not execute");
+Check(ConversationAssignments.Status(researchState).Contains("competing geographic data"), "work status also reports real research assignments");
+for (var i = 0; i < 3; i++)
+    Check(ConversationResearch.Queue(researchState, "Research source comparisons for area " + i, now).Accepted, "bounded research quota " + i);
+Check(!ConversationResearch.Queue(researchState, "Research another provider with a new objective", now).Accepted,
+    "rolling four-research allowance refuses fifth attempt");
+
+
 var phoneState = new ArcherState();
 var phoneRequest = new CompanionBridge.MessageRequest(Guid.NewGuid(), "Hello Archer");
 Check(CompanionBridge.Reserve(phoneState, phoneRequest, now).Begin, "phone request reserved before model call");
