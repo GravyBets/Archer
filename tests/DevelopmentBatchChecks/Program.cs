@@ -446,6 +446,12 @@ Check(!ConversationResearch.LooksLikeResearch("Tell me how research works"), "di
 Check(!ConversationResearch.Queue(researchState, "Archer, research x", now).Accepted,
     "vague or ambiguous research does not execute");
 Check(ConversationAssignments.Status(researchState).Contains("competing geographic data"), "work status also reports real research assignments");
+
+researchState.Missions[0].Artifacts.Add(new MissionArtifact { Title = "Findings", Content = new string('x', 6200) });
+var phoneResearch = System.Text.Json.JsonSerializer.Serialize(CompanionBridge.Overview(researchState));
+Check(phoneResearch.Contains("findings") && phoneResearch.Contains(new string('x', 6000)) &&
+    !phoneResearch.Contains(new string('x', 6001)), "owner phone receives bounded actual research findings");
+
 for (var i = 0; i < 3; i++)
     Check(ConversationResearch.Queue(researchState, "Research source comparisons for area " + i, now).Accepted, "bounded research quota " + i);
 Check(!ConversationResearch.Queue(researchState, "Research another provider with a new objective", now).Accepted,
