@@ -946,7 +946,7 @@ app.MapGet("/api/projects", async (JsonFileStore store, ProjectDevelopmentWorker
     Results.Ok(await store.ReadAsync(s => s.Projects.Select(p => new
     {
         p.Id, p.Name, p.Repository, p.Technology, p.SourceRoots, p.WorkflowFile, p.VerificationJob,
-        p.RequiredSteps, p.Priority, p.DailyAttemptLimit, p.Paused, p.Objectives, p.Memory,
+        p.RequiredSteps, p.Priority, p.DailyAttemptLimit, p.Paused, p.AllowNewSourceFiles, p.Objectives, p.Memory,
         enabled = worker.CanArm(p), credentialPrefix = ProjectGitHubCredentials.Prefix(p.Repository),
         attemptsToday = ProjectPolicy.AttemptsToday(s, p.Id, DateTimeOffset.UtcNow)
     }).ToArray(), ct)));
@@ -1108,7 +1108,7 @@ app.MapGet("/api/development/batches", async (JsonFileStore store, ProjectDevelo
             b.Id, b.ProjectId, b.ObjectiveId, b.Objective, b.Armed, b.ResumeAfterRestart, b.ExpiresAtUtc, b.AttemptsRemaining,
             projectName = s.Projects.SingleOrDefault(p => p.Id == b.ProjectId)?.Name ?? "Unassigned",
             repository = s.Projects.SingleOrDefault(p => p.Id == b.ProjectId)?.Repository ?? "",
-            tasks = b.Tasks.Select(t => new { t.Id, t.Instruction, t.Paths, t.Status, t.Attempts, t.Detail,
+            tasks = b.Tasks.Select(t => new { t.Id, t.Instruction, t.Paths, t.NewPaths, t.ContextPaths, t.Status, t.Attempts, t.Detail,
                 pullRequestUrl = t.Proposal == null ? null : t.Proposal.PullRequestUrl, t.PriorPullRequests }).ToArray()
         }).ToArray()
     }, ct)));
