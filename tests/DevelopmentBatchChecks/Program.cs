@@ -230,6 +230,21 @@ Check(Refused(() => ProjectPolicy.ValidatePlan(regressionPlan, eligibleWorkspace
 other.CumulativeWorkspaces = false;
 Check(!ProjectPolicy.NewRegressionAllowed(other, "tests/unit/archer-map.test.ts"), "test authoring requires cumulative mode");
 
+var ranked = ProjectRepositoryContext.Rank(new GitHubRepositoryReader.ReviewableFile[]
+{
+    new("src/components/MapState.ts", new string('a',40), 2000),
+    new("src/components/Legend.tsx", new string('b',40), 3000),
+    new("src/utils/DateFormatting.ts", new string('c',40), 1000)
+}, "Fix MapState persistence");
+Check(ranked.SequenceEqual(new[] { "src/components/MapState.ts" }), "planner retrieves relevant component by exact/camel-case symbols");
+var excerpts = ProjectRepositoryContext.Excerpts(new GitHubRepositoryReader.SourcePreviewFile[]
+{
+    new("src/components/MapState.ts", "", "export class MapState {}\n" + new string('a', 8000), 8025, false),
+    new("src/private.ts", "", "truncated source", 10000, true)
+});
+Check(excerpts.Contains("export class MapState") && excerpts.Contains("[excerpt truncated]") &&
+    !excerpts.Contains("src/private.ts") && excerpts.Length < 3000, "source context is bounded, actual and skips truncated blobs");
+
 sealed class FakeGitHub : HttpMessageHandler
 {
     public string Mode = "success";
