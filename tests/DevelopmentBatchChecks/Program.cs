@@ -212,6 +212,24 @@ other.CumulativeWorkspaces = false;
 try { await publisher.PublishWorkspaceAsync(other, workspace, default); throw new Exception("Unapproved continuation accepted"); }
 catch (InvalidOperationException) { Check(fakePublisher.Writes.Count == 0, "continuation requires project opt-in"); }
 
+other.CumulativeWorkspaces = true;
+other.RegressionTestRoots = ["tests/unit"];
+Check(ProjectPolicy.NewRegressionAllowed(other, "tests/unit/archer-map.test.ts"), "explicit additive regression path permitted");
+Check(!ProjectPolicy.NewRegressionAllowed(other, "tests/unit/map.test.ts"), "existing conventional tests not editable");
+Check(!ProjectPolicy.NewRegressionAllowed(other, "tests/unit/../archer-map.test.ts"), "regression traversal refused");
+var regressionPlan = new ProjectPlanDraft { Summary = "Map regression", Tasks = [
+    new ProjectPlanTaskDraft { Title = "Fix map", Description = "Preserve selected state", Paths = ["src/components/Map.tsx"], NewPaths = ["tests/unit/archer-map.test.ts"] }
+] };
+ProjectPolicy.ValidatePlan(regressionPlan, eligibleWorkspace, other);
+Check(Refused(() => ProjectPolicy.ValidatePlan(regressionPlan, eligibleWorkspace, other, ["tests/unit/archer-map.test.ts"])), "existing regression path never overwritten");
+regressionPlan.Tasks.Add(new ProjectPlanTaskDraft { Title = "Change test", Description = "Modify previous generated regression", Paths = ["tests/unit/archer-map.test.ts"] });
+Check(Refused(() => ProjectPolicy.ValidatePlan(regressionPlan, eligibleWorkspace, other)), "later cumulative task cannot rewrite authored regression");
+regressionPlan.Tasks.RemoveAt(1);
+regressionPlan.Tasks[0].Paths.Clear();
+Check(Refused(() => ProjectPolicy.ValidatePlan(regressionPlan, eligibleWorkspace, other)), "test-only authoring refused");
+other.CumulativeWorkspaces = false;
+Check(!ProjectPolicy.NewRegressionAllowed(other, "tests/unit/archer-map.test.ts"), "test authoring requires cumulative mode");
+
 sealed class FakeGitHub : HttpMessageHandler
 {
     public string Mode = "success";
