@@ -4,7 +4,7 @@ namespace Archer.MissionControl.Services;
 
 /// <summary>Single-worker, single-owner, explicitly armed draft-only coding.
 /// All paid calls use the existing ledger. No merges, deployment or shell.
-/// Restart interrupts ambiguous writes and requires renewed authorization.</summary>
+/// Restart interrupts ambiguous writes; safe work resumes only if explicitly authorized.</summary>
 public sealed class GeoShiftDevelopmentWorker(
     JsonFileStore store, GitHubRepositoryReader reader, ArcherAiService ai,
     GitHubDraftPrPublisher publisher, GeoShiftCiVerifier ci,
@@ -50,7 +50,7 @@ public sealed class GeoShiftDevelopmentWorker(
             return true;
         }, ct);
 
-    public async Task<bool> ArmAsync(Guid id, CancellationToken ct)
+    public async Task<bool> ArmAsync(Guid id, bool resumeAfterRestart, CancellationToken ct)
     {
         if (!CanArm || !await ci.ReadyAsync(ct)) return false;
         return await store.UpdateAsync(s =>
@@ -66,6 +66,7 @@ public sealed class GeoShiftDevelopmentWorker(
                 batch.AttemptsRemaining = Math.Min(6, batch.Tasks.Count * 2);
             }
             if (batch.ExpiresAtUtc <= DateTimeOffset.UtcNow) return false;
+            batch.ResumeAfterRestart = resumeAfterRestart;
             batch.Armed = true;
             return true;
         }, ct);
