@@ -169,7 +169,8 @@ public sealed class ProjectDevelopmentWorker(
             var t = b.Tasks.Single(x => x.Id == task.Id);
             var p = s.Projects.Single(x => x.Id == b.ProjectId);
             var claimTime = DateTimeOffset.UtcNow;
-            if (!CanArm(p) || ProjectPolicy.AttemptsToday(s, p.Id, claimTime) >= p.DailyAttemptLimit)
+            if (!CanArm(p) || ProjectPolicy.AttemptsToday(s, p.Id, claimTime) >= p.DailyAttemptLimit ||
+                (b.Continuous && !p.Objectives.Any(o => o.Id == b.ObjectiveId && o.PlanningState == "Batch created" && ContinuousObjectivePolicy.Authorized(o, claimTime) && ContinuousObjectivePolicy.RemainingAttempts(o, b) > 0)))
             { b.Armed = false; t.Detail = "Project authorization or rolling 24-hour coding allowance exhausted."; return false; }
             if (!DevelopmentBatchPolicy.Claim(b, t, claimTime)) return false;
             t.AttemptedAtUtc.Add(claimTime);
@@ -323,6 +324,8 @@ public sealed class ProjectDevelopmentWorker(
 
     private async Task<bool> ReassessAsync(CancellationToken ct)
     {
+        if (!await store.ReadAsync(s => s.Projects.Any(p => p.Objectives.Any(o => o.Continuous &&
+            o.PlanningState is ("Batch created" or "Reassessment queued"))), ct)) return false;
         var selected = await store.UpdateAsync(s =>
         {
             var now = DateTimeOffset.UtcNow;
@@ -331,6 +334,8 @@ public sealed class ProjectDevelopmentWorker(
             {
                 var b = s.DevelopmentBatches.SingleOrDefault(b => b.ProjectId == p.Id && b.ObjectiveId == o.Id && b.Continuous);
                 if (b is not null) ContinuousObjectivePolicy.Reconcile(p, o, b, now);
+                if (o.PlanningState == "Reassessment queued" && ProjectPolicy.AttemptsToday(s, p.Id, now) >= p.DailyAttemptLimit)
+                    ContinuousObjectivePolicy.Stop(o, "Review required", "Project rolling coding allowance reached. No further paid reassessment.");
                 if (o.PlanningState == "Reassessment queued" && (b is null || !ContinuousObjectivePolicy.CanContinue(p, o, b, now)))
                     ContinuousObjectivePolicy.Stop(o, "Blocked", "Reassessment authorization or recorded workspace is no longer valid.");
             }
@@ -352,7 +357,7 @@ public sealed class ProjectDevelopmentWorker(
         {
             var published = batch.Tasks.Last().Proposal!;
             // Revalidate the exact previous head before any new model call.
-            if (!await ci.ReadyAsync(project, ct) || (await ci.InspectAsync(project, published, ct)).Status != "Verified")
+            if (!await ci.ReadyAsync(project, ct) || (await ci.InspectAsync(project, published, ct, requireDraft: true)).Status != "Verified")
                 throw new InvalidOperationException("Previously verified draft no longer has passing exact-head CI.");
             if (project.RequireSandbox && (batch.Tasks.Last().Sandbox is not { Status: "Passed" } evidence ||
                 evidence.HeadSha != batch.WorkspaceHeadSha || evidence.ImageId != SandboxPolicy.ImageFor(project)))
@@ -389,7 +394,10 @@ public sealed class ProjectDevelopmentWorker(
                 var now = DateTimeOffset.UtcNow;
                 if (!CanArm(p) || !ContinuousObjectivePolicy.Authorized(o, now) || o.PlanningState != "Planning" ||
                     o.PlanningCyclesUsed != objective.PlanningCyclesUsed || b.WorkspaceHeadSha != batch.WorkspaceHeadSha)
+                {
+                    if (o.PlanningState == "Planning") ContinuousObjectivePolicy.Stop(o, "Blocked", "Authorization or workspace changed during reassessment.");
                     return false;
+                }
                 if (plan.Disposition is "review" or "blocked")
                 {
                     ContinuousObjectivePolicy.Stop(o, plan.Disposition == "review" ? "Review required" : "Blocked",
