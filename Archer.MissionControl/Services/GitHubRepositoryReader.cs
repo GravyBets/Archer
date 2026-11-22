@@ -198,6 +198,7 @@ public sealed class GitHubRepositoryReader(HttpClient http)
         int TotalReviewableFiles, bool Truncated, List<ReviewableFile> Files)
     {
         public List<string> AllPaths { get; init; } = [];
+        public string? SnapshotCommitSha { get; init; }
     }
     public sealed record SourcePreviewFile(string Path, string Url, string Content,
         long Size, bool Truncated);
@@ -259,10 +260,10 @@ public sealed class GitHubRepositoryReader(HttpClient http)
             normalized.EndsWith(".md", StringComparison.OrdinalIgnoreCase);
     }
 
-    public async Task<RepositoryInventory> ListReviewableFilesAsync(string repositoryUrl, CancellationToken ct, bool fresh = false)
+    public async Task<RepositoryInventory> ListReviewableFilesAsync(string repositoryUrl, CancellationToken ct, bool fresh = false, string? commitSha = null)
     {
         var (owner, name, repository) = ValidateReviewRepository(repositoryUrl);
-        if (!fresh && _inventories.TryGetValue(repository, out var cached) &&
+        if (commitSha is null && !fresh && _inventories.TryGetValue(repository, out var cached) &&
             cached.Expires > DateTimeOffset.UtcNow)
             return cached.Value;
 
@@ -273,8 +274,11 @@ public sealed class GitHubRepositoryReader(HttpClient http)
         var branch = branchValue.GetString() ??
             throw new InvalidOperationException("GitHub returned an empty default branch.");
 
+        if (commitSha is not null && !Regex.IsMatch(commitSha, @"^[a-fA-F0-9]{40}$"))
+            throw new ArgumentException("Invalid immutable workspace commit.");
+        var refName = commitSha ?? branch;
         using var treeResponse = await ReadJsonAsync(
-            api + "/git/trees/" + Uri.EscapeDataString(branch) + "?recursive=1", ct);
+            api + "/git/trees/" + Uri.EscapeDataString(refName) + "?recursive=1", ct);
         var root = treeResponse.RootElement;
         if (root.TryGetProperty("truncated", out var truncated) &&
             truncated.ValueKind == JsonValueKind.True)
@@ -296,8 +300,8 @@ public sealed class GitHubRepositoryReader(HttpClient http)
         var value = new RepositoryInventory(repository, branch,
             root.GetProperty("sha").GetString() ?? "",
             fileList.Count, fileList.Count > 1200, fileList.Take(1200).ToList())
-        { AllPaths = entries.Select(x => x.GetProperty("path").GetString() ?? "").ToList() };
-        _inventories[repository] = (DateTimeOffset.UtcNow.AddMinutes(5), value);
+        { AllPaths = entries.Select(x => x.GetProperty("path").GetString() ?? "").ToList(), SnapshotCommitSha = commitSha };
+        if (commitSha is null) _inventories[repository] = (DateTimeOffset.UtcNow.AddMinutes(5), value);
         return value;
     }
 
@@ -341,7 +345,7 @@ public sealed class GitHubRepositoryReader(HttpClient http)
             if (partial) content = content[..allowedLength];
             remaining -= content.Length;
             var encodedPath = string.Join("/", path.Split('/').Select(Uri.EscapeDataString));
-            var link = $"https://github.com/{owner}/{name}/blob/{Uri.EscapeDataString(inventory.Branch)}/{encodedPath}";
+            var link = $"https://github.com/{owner}/{name}/blob/{Uri.EscapeDataString(inventory.SnapshotCommitSha ?? inventory.Branch)}/{encodedPath}";
             result.Add(new SourcePreviewFile(path, link, content, file.Size, partial));
         }
         return new SourcePreview(repository, inventory.Branch, inventory.TreeSha,
