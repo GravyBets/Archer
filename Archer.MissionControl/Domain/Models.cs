@@ -162,6 +162,7 @@ public sealed class CodeProposal
     public string Repository { get; set; } = "";
     public string BaseBranch { get; set; } = "";
     public string? BaseTreeSha { get; set; }
+    public string? OriginalBaseCommitSha { get; set; }
     public bool WorkspaceDraft { get; set; }
     public string? WorkspaceParentSha { get; set; }
     public string? WorkspaceBranch { get; set; }
@@ -244,6 +245,7 @@ public sealed class DevelopmentBatch
     public string? WorkspaceHeadSha { get; set; }
     public int? WorkspacePullRequestNumber { get; set; }
     public string? WorkspaceBaseBranch { get; set; }
+    public string? WorkspaceOriginalBaseCommitSha { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
     public string Objective { get; set; } = "";
     public bool Armed { get; set; }
