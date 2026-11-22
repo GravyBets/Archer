@@ -333,13 +333,14 @@ var continuousBatch = new DevelopmentBatch
     WorkspaceHeadSha = firstHead, WorkspaceBranch = "archer/draft-123456789abc",
     WorkspacePullRequestNumber = 42, WorkspaceBaseBranch = "main",
     Tasks = [new DevelopmentTask { Instruction = "First verified change", Status = "Verified", Attempts = 2,
-        Proposal = new CodeProposal { Repository = continuousProject.Repository, PublishedHeadSha = firstHead } }]
+        Proposal = new CodeProposal { Repository = continuousProject.Repository, PublishedHeadSha = firstHead, BranchName = "archer/draft-123456789abc", BaseBranch = "main", PullRequestNumber = 42 } }]
 };
 Check(ContinuousObjectivePolicy.RemainingAttempts(continuousObjective, continuousBatch) == 2, "continuous allowance counts earlier-cycle repairs");
 ContinuousObjectivePolicy.Reconcile(continuousProject, continuousObjective, continuousBatch, now);
 Check(continuousObjective.PlanningState == "Reassessment queued", "only fully verified cycle queues reassessment");
 Check(ContinuousObjectivePolicy.Claim(continuousProject, continuousObjective, continuousBatch, now), "continuous planning reserves next call");
 Check(!ContinuousObjectivePolicy.Claim(continuousProject, continuousObjective, continuousBatch, now), "duplicate reassessment refused");
+Check(!ContinuousObjectivePolicy.Append(continuousProject, continuousObjective, continuousBatch, [new DevelopmentTask { Instruction = "First verified change" }], 5, now), "exact duplicate task cannot consume another cycle");
 var extraTasks = new[] { new DevelopmentTask { Instruction = "Next change" } };
 Check(!ContinuousObjectivePolicy.Append(continuousProject, continuousObjective, continuousBatch, extraTasks, 0, now), "reassessment cannot overrun project quota");
 Check(ContinuousObjectivePolicy.Append(continuousProject, continuousObjective, continuousBatch, extraTasks, 5, now), "verified workspace gains another cycle");
@@ -349,7 +350,7 @@ Check(continuousBatch.Armed && continuousBatch.Tasks.Count == 2 && continuousBat
 Check(!ContinuousObjectivePolicy.Append(continuousProject, continuousObjective, continuousBatch, extraTasks, 5, now), "append cannot be replayed");
 Check(DevelopmentBatchPolicy.Claim(continuousBatch, extraTasks[0], now), "next cycle executes in order");
 extraTasks[0].Status = "Testing";
-extraTasks[0].Proposal = new CodeProposal { PublishedHeadSha = new string('b',40) };
+extraTasks[0].Proposal = new CodeProposal { Repository = continuousProject.Repository, PublishedHeadSha = new string('b',40), BranchName = continuousBatch.WorkspaceBranch, BaseBranch = "main", PullRequestNumber = 42 };
 continuousBatch.WorkspaceHeadSha = extraTasks[0].Proposal.PublishedHeadSha;
 DevelopmentBatchPolicy.CompleteCi(continuousBatch, extraTasks[0], "Verified", "passed");
 ContinuousObjectivePolicy.Reconcile(continuousProject, continuousObjective, continuousBatch, now);
@@ -358,7 +359,7 @@ var third = new DevelopmentTask { Instruction = "Final change" };
 Check(ContinuousObjectivePolicy.Append(continuousProject, continuousObjective, continuousBatch, [third], 4, now) &&
     continuousBatch.AttemptsRemaining == 1, "only final unused attempt granted");
 third.Status = "Testing"; third.Attempts = 1;
-third.Proposal = new CodeProposal { PublishedHeadSha = new string('c',40) };
+third.Proposal = new CodeProposal { Repository = continuousProject.Repository, PublishedHeadSha = new string('c',40), BranchName = continuousBatch.WorkspaceBranch, BaseBranch = "main", PullRequestNumber = 42 };
 continuousBatch.WorkspaceHeadSha = third.Proposal.PublishedHeadSha;
 DevelopmentBatchPolicy.CompleteCi(continuousBatch, third, "Verified", "passed");
 ContinuousObjectivePolicy.Reconcile(continuousProject, continuousObjective, continuousBatch, now);
