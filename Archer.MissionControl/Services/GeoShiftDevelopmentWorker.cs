@@ -19,7 +19,12 @@ public sealed class ProjectDevelopmentWorker(
         if (inventory.Truncated) throw new InvalidOperationException("Source inventory is incomplete.");
         var eligible = inventory.Files.Where(f => ProjectPolicy.Eligible(project, f.Path, f.Size)).ToArray();
         if (eligible.Length == 0) throw new InvalidOperationException("No eligible source files.");
-        var plan = await ai.PlanDevelopmentAsync(project, objective, eligible.Select(f => f.Path).ToArray(), ct, inventory.AllPaths);
+        var ranked = ProjectRepositoryContext.Rank(eligible, objective);
+        var sourceContext = ranked.Count == 0 ? "" :
+            ProjectRepositoryContext.Excerpts((await reader.PreviewFilesAsync("https://github.com/" + project.Repository,
+                ranked, ct, inventory)).Files);
+        var plan = await ai.PlanDevelopmentAsync(project, objective, eligible.Select(f => f.Path).ToArray(), ct,
+            inventory.AllPaths, sourceContext);
         var batch = new DevelopmentBatch { Objective = objective, ProjectId = project.Id, ObjectiveId = objectiveId, Cumulative = project.CumulativeWorkspaces };
         foreach (var step in plan.Tasks)
             batch.Tasks.Add(new DevelopmentTask { Instruction = step.Title + ": " + step.Description, Paths = step.Paths, NewPaths = step.NewPaths, ContextPaths = step.ContextPaths });
