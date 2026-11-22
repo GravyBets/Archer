@@ -58,13 +58,14 @@ app.MapGet("/health/live",()=>Results.Ok(new {status="ok"}));
 app.MapPost("/v1/challenge", (ChallengeRequest request, HttpContext ctx) =>
 {
     if(request.Method is null || request.Path is null || request.BodyHash is null ||
-       (request.Method=="POST" && !CanWrite(ctx))) return Results.StatusCode(403);
+       (request.Method=="POST" && !CanWrite(ctx)) ||
+       (request.Method=="GET" && !CanRead(ctx))) return Results.StatusCode(403);
     var challenge=proof.Begin(request.Method,request.Path,request.BodyHash,DateTimeOffset.UtcNow);
     return challenge is null ? Results.BadRequest(new {error="Invalid or unavailable proof challenge."}) : Results.Ok(challenge);
 }).RequireAuthorization();
 app.MapGet(DeviceProof.Overview,async Task<IResult>(HttpContext ctx,IHttpClientFactory clients,CancellationToken ct)=>
 {
-    if(!Verify(ctx,[],proof))return Results.StatusCode(403);
+    if(!CanRead(ctx)||!Verify(ctx,[],proof))return Results.StatusCode(403);
     return await Forward(clients,"/api/companion/overview",null,ct);
 }).RequireAuthorization();
 app.MapPost(DeviceProof.Message,async Task<IResult>(HttpContext ctx,IHttpClientFactory clients,CancellationToken ct)=>
@@ -100,8 +101,8 @@ app.MapPost(DeviceProof.Receipt,async Task<IResult>(HttpContext ctx,IHttpClientF
 app.MapFallback(()=>Results.NotFound());
 app.Run();
 
-static bool CanWrite(HttpContext ctx) => ctx.User.Claims.Where(c=>c.Type is "scope" or "scp")
-    .SelectMany(c=>c.Value.Split(' ',StringSplitOptions.RemoveEmptyEntries)).Contains("conversation:write",StringComparer.Ordinal);
+static bool CanRead(HttpContext ctx) => GatewayScopes.Allows(ctx.User, "conversation:read");
+static bool CanWrite(HttpContext ctx) => GatewayScopes.Allows(ctx.User, "conversation:write");
 static string Header(HttpContext ctx,string name) => ctx.Request.Headers.TryGetValue(name,out var v)&&v.Count==1?v[0]??"":"";
 static bool Verify(HttpContext ctx,byte[] body,DeviceProof proof) =>
     proof.Consume(Header(ctx,"X-Archer-Ticket"),ctx.Request.Method,ctx.Request.Path.Value??"",body,
