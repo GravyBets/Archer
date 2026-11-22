@@ -61,7 +61,13 @@ struct ArcherConnectedView: View {
                     }
                     Toggle("Read replies aloud",isOn:$readAloud)
                 } else if selected == "Work" {
-                    if data.assignments.isEmpty { Text("No recorded assignments.") }
+                    if data.assignments.isEmpty && data.research.isEmpty { Text("No recorded assignments.") }
+                    ForEach(data.research) { item in
+                        VStack(alignment:.leading,spacing:5) {
+                            Text("Research · " + item.status).font(.caption.bold()).foregroundStyle(.cyan)
+                            Text(item.title)
+                        }.padding(.vertical,6)
+                    }
                     ForEach(data.assignments) { item in
                         VStack(alignment:.leading,spacing:5) {
                             Text(item.project + " · " + item.status).font(.caption.bold()).foregroundStyle(.cyan)
