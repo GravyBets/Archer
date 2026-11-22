@@ -83,7 +83,7 @@ public static class ProjectPolicy
     }
 
     public static bool ObjectiveReady(ManagedProject project, ProjectObjective objective) =>
-        objective.AcceptedAtUtc is null &&
+        project.Objectives.Any(o => o.Id == objective.Id) && objective.AcceptedAtUtc is null &&
         objective.DependsOn.All(id => project.Objectives.Any(o => o.Id == id && o.AcceptedAtUtc is not null));
 
     public static bool CanPlanDelegated(ManagedProject project, ProjectObjective objective, DateTimeOffset now) =>
