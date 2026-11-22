@@ -5,6 +5,7 @@ public sealed class ArcherState
     public List<Mission> Missions { get; set; } = [];
     public List<ActivityEntry> Activity { get; set; } = [];
     public List<ConversationEntry> Conversation { get; set; } = [];
+    public List<CompanionReceipt> CompanionReceipts { get; set; } = [];
     // A single, optional presence snapshot; no location/activity history.
     public OwnerPresence? Presence { get; set; }
     public List<WebsiteMonitor> WebsiteMonitors { get; set; } = [];
@@ -72,6 +73,15 @@ public sealed class ConversationEntry
     public string Role { get; set; } = "user";
     public string Content { get; set; } = "";
     public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public sealed class CompanionReceipt
+{
+    public Guid Id { get; set; }
+    public string Digest { get; set; } = "";
+    public string Status { get; set; } = "Pending";
+    public string? Answer { get; set; }
+    public DateTimeOffset CreatedAtUtc { get; set; }
 }
 
 public sealed record CreateMissionRequest(string? Title, string? Objective);
