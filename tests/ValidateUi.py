@@ -248,7 +248,7 @@ assert "recognitionRestarts >= 200" in HOME_JS  # still bounded; supports long h
 assert "sendAfterRecognitionEnd = true" in HOME_JS
 assert "el('chatForm').requestSubmit()" in HOME_JS
 assert "window.ArcherPresence?.prepareSend?.()" in JS
-assert "JSON.stringify({ message, voiceMode })" in JS
+assert "JSON.stringify({ message, voiceMode, directOwnerInput: !mobileSource })" in JS
 assert "document.addEventListener('visibilitychange'" in HOME_JS
 
 assert "en-gb" in HOME_JS.lower()
