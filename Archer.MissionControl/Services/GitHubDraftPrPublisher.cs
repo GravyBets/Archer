@@ -57,6 +57,8 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
             throw new InvalidOperationException(
                 "GitHub code publishing is disabled. Explicitly configure ARCHER_CODING_ENABLED=true and a repo-scoped ARCHER_GITHUB_WRITE_TOKEN before trying again.");
 
+        if (SelfDevelopmentPolicy.IsSelf(proposal.Repository))
+            throw new InvalidOperationException("Archer self-development must use the protected project workspace, not legacy publication.");
         var (owner, repo) = CheckRepository(proposal);
         var baseUri = $"https://api.github.com/repos/{Uri.EscapeDataString(owner)}/{Uri.EscapeDataString(repo)}";
         var branch = "archer/draft-" + proposal.Id.ToString("N")[..12];
@@ -140,7 +142,10 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
     public async Task<(string Url, string Branch)> PublishWorkspaceAsync(
         ManagedProject project, CodeProposal proposal, CancellationToken ct)
     {
-        if (!proposal.WorkspaceDraft || !string.Equals(project.Repository, proposal.Repository, StringComparison.OrdinalIgnoreCase) ||
+        if (!SelfDevelopmentPolicy.Configured(project) ||
+            proposal.Files.Any(f => !SelfDevelopmentPolicy.CanEdit(project.Repository, f.Path) ||
+                (SelfDevelopmentPolicy.IsSelf(project.Repository) && (f.IsNew || f.IsRegressionTest))) ||
+            !proposal.WorkspaceDraft || !string.Equals(project.Repository, proposal.Repository, StringComparison.OrdinalIgnoreCase) ||
             !ProjectPolicy.ValidRepository(project.Repository) || project.Paused ||
             !CanPublishRepository(project.Repository) || !ProjectGitHubCredentials.IsConfigured(project.Repository) ||
             !(Environment.GetEnvironmentVariable("ARCHER_GITHUB_WRITE_REPOS") ?? "").Split(',',
@@ -254,6 +259,7 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
         var url = pull.RootElement.GetProperty("html_url").GetString();
         if (number <= 0 || actualHead != commitSha || !string.Equals(url, "https://github.com/" + proposal.Repository + "/pull/" + number, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Unexpected PR identity: inspect the isolated branch manually.");
+        proposal.OriginalBaseCommitSha = baseCommit;
         proposal.PublishedHeadSha = actualHead;
         proposal.PullRequestNumber = number;
         return (url!, branch);
