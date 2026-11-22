@@ -225,7 +225,7 @@ assert "'Awake · talk normally'" in HOME_JS
 assert "'Standby · say “Hey Archer”'" in HOME_JS
 assert "'Microphone starting / reconnecting'" in HOME_JS
 assert "recognition.maxAlternatives = 3" in HOME_JS
-assert 'Browser wake (fallback)' in HTML
+assert 'Say “Hey Archer” to wake' in HTML and 'id="voiceAutoStandbyToggle"' in HTML
 assert "desktopVoice?.running" in HOME_JS
 assert "mic.hidden = nativeActive" in HOME_JS
 assert "setDesktopVoiceStatus" in HOME_JS
