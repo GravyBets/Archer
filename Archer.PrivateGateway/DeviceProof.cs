@@ -8,13 +8,13 @@ namespace Archer.PrivateGateway;
 // the host. A valid bearer token alone is insufficient to read or write.
 internal sealed class DeviceProof(string approvedHash)
 {
-    internal const string Overview = "/v1/overview", Message = "/v1/message";
+    internal const string Overview = "/v1/overview", Message = "/v1/message", Receipt = "/v1/receipt";
     internal static string EmptyDigest => Hash([]);
     private readonly object gate = new();
     private readonly Dictionary<string, Challenge> pending = new(StringComparer.Ordinal);
     internal sealed record Challenge(string Ticket, string Nonce, string Method, string Path, string BodyHash, DateTimeOffset Expires);
     internal static string Hash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
-    private static bool Allowed(string method,string path) => (method == "GET" && path == Overview) || (method == "POST" && path == Message);
+    private static bool Allowed(string method,string path) => (method == "GET" && path == Overview) || (method == "POST" && (path == Message || path == Receipt));
     internal Challenge? Begin(string method, string path, string bodyHash, DateTimeOffset now)
     {
         if (!Allowed(method,path) || !Regex.IsMatch(bodyHash ?? "", "^[A-F0-9]{64}$") ||
