@@ -41,6 +41,8 @@ for name,valid,invalid in (
     for value in valid: assert regex.fullmatch(value), "Valid "+name+" rejected"
     for value in invalid: assert not regex.fullmatch(value), "Invalid "+name+" accepted"
 
+assert preflight.count("Archer server preparation checks passed") == 1, "Malformed duplicate or trailing preflight blocks"
+assert preflight.rstrip().endswith('"$mode"'), "Unexpected content after preflight finish"
 assert "read_env_value" in preflight
 assert "CHECK MANUALLY" in preflight
 assert "GatewayScopes.Allows(ctx.User" in gateway
