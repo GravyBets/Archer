@@ -6,7 +6,7 @@ struct ArcherOverview: Decodable {
     struct Assignment: Decodable, Identifiable { let id: UUID; let project: String; let title: String; let status: String }
     struct Alert: Decodable, Identifiable { let id: UUID; let title: String; let summary: String; let priority: String }
     let conversation: [Message]
-    struct Research: Decodable, Identifiable { let id: UUID; let title: String; let status: String }
+    struct Research: Decodable, Identifiable { let id: UUID; let title: String; let status: String; let findings: String? }
     let research: [Research]
     let assignments: [Assignment]
     let alerts: [Alert]
