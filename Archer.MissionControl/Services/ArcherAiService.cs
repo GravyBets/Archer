@@ -371,7 +371,7 @@ public sealed class ArcherAiService(
         var development = string.Join("\n", state.DevelopmentBatches.TakeLast(5).Select(b =>
             $"- {state.Projects.SingleOrDefault(p => p.Id == b.ProjectId)?.Name ?? "Unassigned"}: {b.Objective} | armed: {b.Armed} | attempts remaining: {b.AttemptsRemaining} | " +
             string.Join("; ", b.Tasks.Select(t => $"{t.Status}: {t.Instruction}"))));
-        var projectList = string.Join("\n", state.Projects.Take(20).Select(p => $"{p.Name}: {p.Repository}, priority {p.Priority}, {(p.Paused ? "paused" : "available")}; " + p.Objectives.Count(o => o.AcceptedAtUtc is null) + " open objectives"));
+        var projectList = string.Join("\n", state.Projects.Take(20).Select(p => $"{p.Name}: {p.Repository}, priority {p.Priority}, {(p.Paused ? "paused" : "available")}; " + p.Objectives.Count(o => o.AcceptedAtUtc is null) + " open objectives" + "; " + string.Join("; ", p.Objectives.Where(o => o.AcceptedAtUtc is null).Take(5).Select(o => $"{o.PlanningState}: {o.Description}"))));
         var matchedProjects = state.Projects.Where(p => message.Contains(p.Name, StringComparison.OrdinalIgnoreCase) || message.Contains(p.Repository, StringComparison.OrdinalIgnoreCase)).Take(2).ToArray();
         var projectMemory = matchedProjects.Length == 1 ? ProjectPolicy.Context(matchedProjects[0], message) : "No uniquely named project; no private project notes retrieved.";
         var localSnapshot = $"CURRENT MISSIONS (local state only):\n{missions}\n" +
