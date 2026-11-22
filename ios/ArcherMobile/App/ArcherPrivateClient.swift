@@ -23,6 +23,7 @@ final class ArcherPrivateClient {
     private struct Challenge: Decodable {
         let ticket: String; let nonce: String; let method: String; let path: String; let bodyHash: String
     }
+    private struct ReceiptRequest: Encodable { let requestId: UUID }
     private struct MessageRequest: Encodable { let requestId: UUID; let message: String; let voiceMode: Bool }
     private let session = ArcherPrivateClient.makeSession()
     private static func makeSession() -> URLSession {
@@ -42,7 +43,7 @@ final class ArcherPrivateClient {
         return host
     }
     private func request(_ path: String, _ method: String, _ token: String, _ body: Data?) throws -> URLRequest {
-        guard ["/v1/challenge", "/v1/overview", "/v1/message"].contains(path),
+        guard ["/v1/challenge", "/v1/overview", "/v1/message", "/v1/receipt"].contains(path),
               let host = Self.configuredHost, let url = URL(string: "https://" + host + path) else {
             throw URLError(.unsupportedURL)
         }
@@ -80,6 +81,10 @@ final class ArcherPrivateClient {
     }
     func overview(auth: ArcherAuthSession, device: ArcherDeviceIdentity) async throws -> ArcherOverview {
         try await signed("/v1/overview",method:"GET",body:nil,auth:auth,device:device,type:ArcherOverview.self)
+    }
+    func receipt(_ id: UUID, auth: ArcherAuthSession, device: ArcherDeviceIdentity) async throws -> ArcherMessageResult {
+        let body = try JSONEncoder().encode(ReceiptRequest(requestId:id))
+        return try await signed("/v1/receipt",method:"POST",body:body,auth:auth,device:device,type:ArcherMessageResult.self)
     }
     func send(_ message: String, id: UUID, auth: ArcherAuthSession, device: ArcherDeviceIdentity) async throws -> ArcherMessageResult {
         let body = try JSONEncoder().encode(MessageRequest(requestId:id,message:message,voiceMode:false))
