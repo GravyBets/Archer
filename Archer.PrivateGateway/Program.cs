@@ -82,6 +82,21 @@ app.MapPost(DeviceProof.Message,async Task<IResult>(HttpContext ctx,IHttpClientF
     if(!Verify(ctx,body,proof))return Results.StatusCode(403);
     return await Forward(clients,"/api/companion/message",body,ct);
 }).RequireAuthorization();
+app.MapPost(DeviceProof.Receipt,async Task<IResult>(HttpContext ctx,IHttpClientFactory clients,CancellationToken ct)=>
+{
+    if(!CanWrite(ctx)||!ctx.Request.HasJsonContentType())return Results.StatusCode(403);
+    using var stream=new MemoryStream();
+    var buffer=new byte[4096];
+    int n;
+    while((n=await ctx.Request.Body.ReadAsync(buffer,ct))>0)
+    {
+        if(stream.Length+n>16_384)return Results.StatusCode(413);
+        stream.Write(buffer,0,n);
+    }
+    var body=stream.ToArray();
+    if(!Verify(ctx,body,proof))return Results.StatusCode(403);
+    return await Forward(clients,"/api/companion/receipt",body,ct);
+}).RequireAuthorization();
 app.MapFallback(()=>Results.NotFound());
 app.Run();
 
