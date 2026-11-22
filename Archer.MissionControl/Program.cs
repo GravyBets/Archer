@@ -961,6 +961,59 @@ app.MapPost("/api/chat", async Task<IResult> (HttpContext context, ChatRequest r
     catch (Exception error) { return Results.Problem(title: "Archer could not respond", detail: error.Message, statusCode: 502); }
 });
 
+// Dedicated local companion bridge. Public gateway can reach only this
+// narrow, separately keyed contract, never /api/state or admin operations.
+app.MapGet("/api/companion/health", (HttpContext context) =>
+    CompanionBridge.Authorized(context) ? Results.Ok(new { status = "ok" }) : Results.NotFound());
+app.MapGet("/api/companion/overview", async Task<IResult> (HttpContext context, JsonFileStore store, CancellationToken ct) =>
+{
+    if (!CompanionBridge.Authorized(context)) return Results.StatusCode(403);
+    return Results.Ok(await store.ReadAsync(CompanionBridge.Overview, ct));
+});
+app.MapPost("/api/companion/message", async Task<IResult> (HttpContext context, CompanionBridge.MessageRequest request,
+    JsonFileStore store, ArcherAiService ai, ProjectDevelopmentWorker worker, CancellationToken ct) =>
+{
+    if (!CompanionBridge.Authorized(context) || !context.Request.HasJsonContentType()) return Results.StatusCode(403);
+    var message = request.Message?.Trim() ?? "";
+    if (request.RequestId == Guid.Empty || message.Length is < 1 or > 3000)
+        return Results.BadRequest(new { error = "Invalid message." });
+    request = request with { Message = message };
+    var claim = await store.UpdateAsync(s => CompanionBridge.Reserve(s, request, DateTimeOffset.UtcNow), ct);
+    if (!claim.Begin) return Results.Ok(claim.Result);
+    try
+    {
+        // Phone input is authorized by a separately authenticated, enrolled
+        // owner gateway. Only the same explicit assignment parser may write.
+        if (ConversationAssignments.LooksLikeAssignment(message) || ConversationAssignments.IsStatusRequest(message))
+        {
+            var result = await store.UpdateAsync(s =>
+            {
+                var answer = ConversationAssignments.IsStatusRequest(message)
+                    ? ConversationAssignments.Status(s)
+                    : ConversationAssignments.Assign(s, message, worker.CanArm, DateTimeOffset.UtcNow).Answer;
+                return CompanionBridge.Complete(s, request, answer);
+            }, CancellationToken.None);
+            return Results.Ok(result);
+        }
+        if (!ai.IsConfigured) throw new InvalidOperationException("AI unavailable.");
+        var snapshot = await store.ReadAsync(s => s, ct);
+        var reply = await ai.ChatAsync(message, snapshot, ct, request.VoiceMode);
+        return Results.Ok(await store.UpdateAsync(s => CompanionBridge.Complete(s, request, reply), CancellationToken.None));
+    }
+    catch (Exception)
+    {
+        // Paid operations might have reached the provider even when the phone
+        // disconnects. Record an explicit terminal receipt, never auto-retry.
+        await store.UpdateAsync(s =>
+        {
+            var receipt = s.CompanionReceipts.Single(x => x.Id == request.RequestId);
+            if (receipt.Status == "Pending") receipt.Status = "Interrupted";
+            return true;
+        }, CancellationToken.None);
+        return Results.Ok(new CompanionBridge.MessageResult("Interrupted", null));
+    }
+});
+
 // Owner-local project management and development mission control.
 app.MapGet("/api/projects", async (JsonFileStore store, ProjectDevelopmentWorker worker, CancellationToken ct) =>
     Results.Ok(await store.ReadAsync(s => s.Projects.Select(p => new
