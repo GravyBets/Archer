@@ -14,5 +14,8 @@
     <Compile Include="../../Archer.MissionControl/Services/GitHubDraftPrPublisher.cs" Link="GitHubDraftPrPublisher.cs" />
     <Compile Include="../../Archer.MissionControl/Services/GitHubRepositoryReader.cs" Link="GitHubRepositoryReader.cs" />
     <Compile Include="../../Archer.MissionControl/Services/ProjectRepositoryContext.cs" Link="ProjectRepositoryContext.cs" />
+    <Compile Include="../../Archer.MissionControl/Services/SandboxPolicy.cs" Link="SandboxPolicy.cs" />
+    <Compile Include="../../Archer.MissionControl/Services/SandboxArchiveReader.cs" Link="SandboxArchiveReader.cs" />
+    <Compile Include="../../Archer.MissionControl/Services/ProjectSandboxRunner.cs" Link="ProjectSandboxRunner.cs" />
   </ItemGroup>
 </Project>
