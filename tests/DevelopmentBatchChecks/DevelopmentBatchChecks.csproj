@@ -11,5 +11,6 @@
     <Compile Include="../../Archer.MissionControl/Services/GeoShiftCiVerifier.cs" Link="ProjectCiVerifier.cs" />
     <Compile Include="../../Archer.MissionControl/Services/ProjectPolicy.cs" Link="ProjectPolicy.cs" />
     <Compile Include="../../Archer.MissionControl/Services/ProjectGitHubCredentials.cs" Link="ProjectGitHubCredentials.cs" />
+    <Compile Include="../../Archer.MissionControl/Services/GitHubDraftPrPublisher.cs" Link="GitHubDraftPrPublisher.cs" />
   </ItemGroup>
 </Project>

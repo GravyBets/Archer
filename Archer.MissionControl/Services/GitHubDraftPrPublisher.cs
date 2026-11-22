@@ -135,6 +135,107 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
         return (url, branch);
     }
 
+    // Create a complete Git tree and commit before exposing any branch.
+    // Never write the default branch, force-push, merge or execute generated code locally.
+    public async Task<(string Url, string Branch)> PublishWorkspaceAsync(
+        ManagedProject project, CodeProposal proposal, CancellationToken ct)
+    {
+        if (!proposal.WorkspaceDraft || !string.Equals(project.Repository, proposal.Repository, StringComparison.OrdinalIgnoreCase) ||
+            !ProjectPolicy.ValidRepository(project.Repository) || project.Paused ||
+            !CanPublishRepository(project.Repository) || !ProjectGitHubCredentials.IsConfigured(project.Repository) ||
+            !(Environment.GetEnvironmentVariable("ARCHER_GITHUB_WRITE_REPOS") ?? "").Split(',',
+                StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Contains(project.Repository, StringComparer.OrdinalIgnoreCase) ||
+            !Regex.IsMatch(proposal.BaseBranch, @"^[A-Za-z0-9_.-]{1,80}$") ||
+            !Regex.IsMatch(proposal.BaseTreeSha ?? "", @"^[0-9a-fA-F]{40}$") ||
+            proposal.Files.Count is < 1 or > ProjectPolicy.MaxWorkspaceFiles ||
+            proposal.Files.Count(f => f.IsNew) > 2 ||
+            proposal.Files.Sum(f => (long)f.ProposedContent.Length) > ProjectPolicy.MaxGeneratedCharacters ||
+            proposal.Files.Select(f => f.Path).Distinct(StringComparer.OrdinalIgnoreCase).Count() != proposal.Files.Count ||
+            proposal.Files.Any(f => f.ProposedContent.Length is < 1 or > 12000 ||
+                !ProjectPolicy.IsApplicationPath(f.Path) || !ProjectPolicy.InSourceRoot(project, f.Path) ||
+                (f.IsNew ? !ProjectPolicy.NewSourceAllowed(project, f.Path) || f.ExpectedBlobSha.Length != 0 :
+                    !Regex.IsMatch(f.ExpectedBlobSha, @"^[0-9a-fA-F]{40}$"))))
+            throw new InvalidOperationException("Workspace publication refused: authorization, path or size validation failed.");
+
+        var api = "https://api.github.com/repos/" + project.Repository;
+        var branch = "archer/draft-" + proposal.Id.ToString("N")[..12];
+        using var head = await RequestAsync(HttpMethod.Get, api + "/git/ref/heads/" + Uri.EscapeDataString(proposal.BaseBranch), null, ct);
+        var baseCommit = RequireSha(head.RootElement.GetProperty("object").GetProperty("sha"));
+        using var commit = await RequestAsync(HttpMethod.Get, api + "/git/commits/" + baseCommit, null, ct);
+        var baseTree = RequireSha(commit.RootElement.GetProperty("tree").GetProperty("sha"));
+        if (!string.Equals(baseTree, proposal.BaseTreeSha, StringComparison.Ordinal))
+            throw new InvalidOperationException("Repository changed since workspace inspection; no branch created.");
+        using var tree = await RequestAsync(HttpMethod.Get, api + "/git/trees/" + baseTree + "?recursive=1", null, ct);
+        if (tree.RootElement.GetProperty("truncated").GetBoolean())
+            throw new InvalidOperationException("Cannot validate a truncated repository tree.");
+        var entries = tree.RootElement.GetProperty("tree").EnumerateArray().ToArray();
+        if (entries.Length > 12_000) throw new InvalidOperationException("Repository exceeds bounded workspace limit.");
+        var byPath = entries.ToDictionary(x => x.GetProperty("path").GetString()!, StringComparer.Ordinal);
+        foreach (var file in proposal.Files)
+        {
+            if (file.IsNew)
+            {
+                if (entries.Any(x =>
+                {
+                    var p = x.GetProperty("path").GetString()!;
+                    return p.Equals(file.Path, StringComparison.OrdinalIgnoreCase) ||
+                        p.StartsWith(file.Path + "/", StringComparison.OrdinalIgnoreCase) ||
+                        (file.Path.StartsWith(p + "/", StringComparison.OrdinalIgnoreCase) &&
+                            (x.GetProperty("type").GetString() != "tree" || !file.Path.StartsWith(p + "/", StringComparison.Ordinal)));
+                }))
+                    throw new InvalidOperationException("New source path conflicts with an existing entry; no branch created.");
+            }
+            else if (!byPath.TryGetValue(file.Path, out var existing) ||
+                existing.GetProperty("mode").GetString() != "100644" ||
+                existing.GetProperty("type").GetString() != "blob" ||
+                existing.GetProperty("sha").GetString() != file.ExpectedBlobSha)
+                throw new InvalidOperationException("Original file no longer matches its approved regular blob.");
+        }
+        if (proposal.Files.Any(f => proposal.Files.Any(other =>
+            other.Path.StartsWith(f.Path + "/", StringComparison.OrdinalIgnoreCase))))
+            throw new InvalidOperationException("Workspace file paths collide.");
+
+        // GitHub's tree API accepts UTF-8 file content. One tree and one commit
+        // represent the whole change-set; no partially edited branch is visible.
+        using var nextTree = await RequestAsync(HttpMethod.Post, api + "/git/trees", new
+        {
+            base_tree = baseTree,
+            tree = proposal.Files.Select(f => new { path = f.Path, mode = "100644", type = "blob", content = f.ProposedContent }).ToArray()
+        }, ct);
+        var treeSha = RequireSha(nextTree.RootElement.GetProperty("sha"));
+        using var nextCommit = await RequestAsync(HttpMethod.Post, api + "/git/commits", new
+        {
+            message = "[Archer workspace] " + proposal.Title,
+            tree = treeSha, parents = new[] { baseCommit }
+        }, ct);
+        var commitSha = RequireSha(nextCommit.RootElement.GetProperty("sha"));
+        await RequestAsyncDiscard(HttpMethod.Post, api + "/git/refs",
+            new { @ref = "refs/heads/" + branch, sha = commitSha }, ct);
+        using var pull = await RequestAsync(HttpMethod.Post, api + "/pulls", new
+        {
+            title = "[Archer draft] " + proposal.Title, head = branch, @base = proposal.BaseBranch,
+            body = "## Owner-authorized isolated workspace\n" + proposal.Summary +
+                "\n\nOwner objective: " + proposal.Request + "\n\nVerification recommendations (not executed yet): " +
+                proposal.TestRecommendations + "\n\nReview required. Archer never merges or deploys.",
+            draft = true, maintainer_can_modify = false
+        }, ct);
+        var number = pull.RootElement.GetProperty("number").GetInt32();
+        var actualHead = RequireSha(pull.RootElement.GetProperty("head").GetProperty("sha"));
+        var url = pull.RootElement.GetProperty("html_url").GetString();
+        if (number <= 0 || actualHead != commitSha || !string.Equals(url, "https://github.com/" + proposal.Repository + "/pull/" + number, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Unexpected PR identity: inspect the isolated branch manually.");
+        proposal.PublishedHeadSha = actualHead;
+        proposal.PullRequestNumber = number;
+        return (url!, branch);
+    }
+
+    private static string RequireSha(JsonElement value)
+    {
+        var sha = value.GetString() ?? "";
+        return Regex.IsMatch(sha, @"^[0-9a-fA-F]{40}$") ? sha :
+            throw new InvalidOperationException("GitHub returned an invalid object identity.");
+    }
+
     private async Task RequestAsyncDiscard(HttpMethod method, string url, object body, CancellationToken ct)
     {
         using var _ = await RequestAsync(method, url, body, ct);
