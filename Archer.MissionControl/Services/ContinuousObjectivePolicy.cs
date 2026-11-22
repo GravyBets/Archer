@@ -20,7 +20,10 @@ public static class ContinuousObjectivePolicy
         !batch.Armed && batch.Tasks.Count > 0 && batch.Tasks.All(t => t.Status == "Verified") &&
         batch.WorkspaceBranch is not null && SandboxPolicy.IsHead(batch.WorkspaceHeadSha) &&
         batch.WorkspacePullRequestNumber is > 0 && batch.WorkspaceBaseBranch is not null &&
-        batch.Tasks.Last().Proposal?.PublishedHeadSha == batch.WorkspaceHeadSha &&
+        batch.Tasks.Last().Proposal is { } last && last.PublishedHeadSha == batch.WorkspaceHeadSha &&
+        last.Repository.Equals(project.Repository, StringComparison.OrdinalIgnoreCase) &&
+        last.BranchName == batch.WorkspaceBranch && last.BaseBranch == batch.WorkspaceBaseBranch &&
+        last.PullRequestNumber == batch.WorkspacePullRequestNumber &&
         batch.PlanningCycles == objective.PlanningCyclesUsed &&
         batch.ExpiresAtUtc == objective.DelegatedUntilUtc;
 
@@ -77,6 +80,10 @@ public static class ContinuousObjectivePolicy
             !SandboxPolicy.IsHead(batch.WorkspaceHeadSha) || batch.Tasks.Last().Proposal?.PublishedHeadSha != batch.WorkspaceHeadSha ||
             tasks.Count is < 1 or > 3 || tasks.Any(t => t.Status != "Queued" || t.Attempts != 0 || t.Proposal is not null) ||
             batch.Tasks.Count + tasks.Count > 12)
+            return false;
+        // Exact duplicate instructions (even from a new planning call) do not justify more paid coding.
+        if (tasks.Any(t => batch.Tasks.Any(old => string.Equals(old.Instruction.Trim(), t.Instruction.Trim(), StringComparison.OrdinalIgnoreCase) &&
+            old.Paths.Concat(old.NewPaths).OrderBy(p => p, StringComparer.Ordinal).SequenceEqual(t.Paths.Concat(t.NewPaths).OrderBy(p => p, StringComparer.Ordinal)))))
             return false;
         var allowance = Math.Min(projectAttemptsRemaining, Math.Min(RemainingAttempts(objective, batch), tasks.Count * 2));
         if (allowance < tasks.Count) return false;
