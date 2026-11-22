@@ -8,5 +8,6 @@
   <ItemGroup>
     <Compile Include="../../Archer.MissionControl/Services/GeoShiftSourceSelection.cs" Link="GeoShiftSourceSelection.cs" />
     <Compile Include="../../Archer.MissionControl/Services/GitHubRepositoryReader.cs" Link="GitHubRepositoryReader.cs" />
+    <Compile Include="../../Archer.MissionControl/Services/ProjectGitHubCredentials.cs" Link="ProjectGitHubCredentials.cs" />
   </ItemGroup>
 </Project>
