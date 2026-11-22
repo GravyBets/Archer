@@ -944,7 +944,7 @@ app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore
 app.MapGet("/api/development/batches", async (JsonFileStore store, GeoShiftDevelopmentWorker worker, CancellationToken ct) =>
     Results.Ok(new { enabled = worker.CanArm, batches = await store.ReadAsync(s => s.DevelopmentBatches.Select(b => new
     {
-        b.Id, b.Objective, b.Armed, b.ExpiresAtUtc, b.AttemptsRemaining,
+        b.Id, b.Objective, b.Armed, b.ResumeAfterRestart, b.ExpiresAtUtc, b.AttemptsRemaining,
         tasks = b.Tasks.Select(t => new { t.Id, t.Instruction, t.Paths, t.Status, t.Attempts, t.Detail,
             pullRequestUrl = t.Proposal == null ? null : t.Proposal.PullRequestUrl, t.PriorPullRequests }).ToArray()
     }).ToArray(), ct) }));
@@ -974,7 +974,7 @@ app.MapPost("/api/development/batches/{id:guid}/arm", async Task<IResult> (HttpC
     if (!request.Confirm) return Results.BadRequest(new { error = "Explicit batch authorization required." });
     try
     {
-        return await worker.ArmAsync(id, ct) ? Results.Ok(new { message = "Armed within remaining attempt and time limits." }) :
+        return await worker.ArmAsync(id, request.ResumeAfterRestart, ct) ? Results.Ok(new { message = "Armed within remaining attempt and time limits." }) :
             Results.Conflict(new { error = "Cannot arm. Check configuration, independent CI, expiration, and other active or blocked batches." });
     }
     catch (Exception) when (!ct.IsCancellationRequested)
