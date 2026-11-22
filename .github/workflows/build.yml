@@ -108,6 +108,9 @@ jobs:
       - name: Verify local Archer installer preserves data and supports rollback
         shell: pwsh
         run: ./tests/Test-WindowsInstaller.ps1
+      - name: Check private owner state migration without touching data
+        shell: pwsh
+        run: ./tests/Test-ArcherStateMigration.ps1
       - name: Verify Windows package automation trusts only green main CI
         run: python3 tests/ValidateInstallerWorkflow.py
       - name: Check dashboard and presence JavaScript
