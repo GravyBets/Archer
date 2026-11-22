@@ -76,7 +76,8 @@ required = {
     "spendSaveButton", "spendPauseIndicator",
     "codingHeading", "codingInstruction", "codingGenerateButton",
     "codingStatus", "codingProposalPreview", "codingPublishStatus",
-    "codingPublishButton", "developmentBatchHeading", "developmentObjective", "developmentPilotButton",
+    "codingPublishButton", "developmentBatchHeading", "developmentObjective", "projectRegistryHeading", "managedProjectSelect", "managedProjectStatus",
+    "projectRegistryForm", "projectObjectiveForm", "projectMemoryForm", "projectObjectives", "projectMemories",
     "developmentPlanButton", "developmentRefreshButton", "developmentResumeAfterRestart",
     "developmentBatchStatus", "developmentBatchList",
     "communicationHeading", "communicationsProviderStatus", "communicationsDestination",
@@ -131,6 +132,8 @@ assert "/api/development/code-proposals" in CODING_JS
 assert "window.confirm(" in CODING_JS
 assert "publish" in CODING_JS
 assert "/api/development/batches" in DEVELOPMENT_JS
+assert "/api/projects" in DEVELOPMENT_JS
+assert "projectId: p.id" in DEVELOPMENT_JS
 assert "window.confirm(" in DEVELOPMENT_JS
 assert "textContent" in DEVELOPMENT_JS and "innerHTML" not in DEVELOPMENT_JS
 assert "/api/spending" in SPEND_JS
