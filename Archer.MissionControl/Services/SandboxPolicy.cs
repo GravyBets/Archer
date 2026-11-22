@@ -25,7 +25,7 @@ public static class SandboxPolicy
         if (!IsImageId(image) || !IsName(name)) throw new ArgumentException("Expected a pinned local image ID and generated container identity.");
         return [
             "--remote=false", "create", "--name=" + name, "--interactive",
-            "--pull=never", "--network=none", "--http-proxy=false", "--no-healthcheck",
+            "--pull=never", "--network=none", "--http-proxy=false", "--env-host=false", "--no-healthcheck",
             "--pid=private", "--ipc=private", "--uts=private",
             "--userns=keep-id:uid=65532,gid=65532", "--user=65532:65532",
             "--cap-drop=ALL", "--security-opt=no-new-privileges",
@@ -81,15 +81,23 @@ public static class SandboxPolicy
                 host.GetProperty("Memory").GetInt64() > 0 &&
                 host.GetProperty("Memory").GetInt64() <= 1536L * 1024 * 1024 &&
                 host.GetProperty("PidsLimit").GetInt64() is > 0 and <= 128 &&
-                root.GetProperty("Mounts").EnumerateArray().All(m =>
-                    m.GetProperty("Type").GetString() == "tmpfs" &&
-                    m.GetProperty("Destination").GetString() is "/work" or "/tmp") &&
+                root.GetProperty("Path").GetString() == "/usr/local/bin/archer-verify" &&
+                EmptyArray(root.GetProperty("EffectiveCaps")) && EmptyArray(root.GetProperty("BoundingCaps")) &&
+                host.GetProperty("SecurityOpt").EnumerateArray().Any(x => (x.GetString() ?? "").StartsWith("no-new-privileges", StringComparison.Ordinal)) &&
+                host.GetProperty("PidMode").GetString() is "" or "private" &&
+                host.GetProperty("IpcMode").GetString() is "" or "private" &&
+                SafeMounts(root.GetProperty("Mounts")) &&
                 (!host.TryGetProperty("Binds", out var binds) || binds.ValueKind == JsonValueKind.Null ||
                     (binds.ValueKind == JsonValueKind.Array && binds.GetArrayLength() == 0));
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException or IndexOutOfRangeException)
         { return false; }
     }
+    private static bool EmptyArray(JsonElement value) => value.ValueKind == JsonValueKind.Null ||
+        (value.ValueKind == JsonValueKind.Array && value.GetArrayLength() == 0);
+    private static bool SafeMounts(JsonElement value) => value.ValueKind == JsonValueKind.Null ||
+        (value.ValueKind == JsonValueKind.Array && value.EnumerateArray().All(m =>
+            m.GetProperty("Type").GetString() == "tmpfs" && m.GetProperty("Destination").GetString() is "/work" or "/tmp"));
     private static string? NormalizeImage(string? image) =>
         image is null || image.StartsWith("sha256:", StringComparison.Ordinal) ? image : "sha256:" + image;
 
