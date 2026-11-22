@@ -11,6 +11,9 @@ public static class CompanionBridge
     public const int DailyMessages = 40;
     public sealed record MessageRequest(Guid RequestId, string? Message, bool VoiceMode = false);
     public sealed record MessageResult(string Status, string? Answer);
+    public sealed record ReceiptRequest(Guid RequestId);
+    public static MessageResult Receipt(ArcherState s, Guid id) => s.CompanionReceipts.SingleOrDefault(x => x.Id == id) is { } saved
+        ? new(saved.Status, saved.Answer) : new("Not found", null);
     public static bool Authorized(HttpContext context)
     {
         var configured = Environment.GetEnvironmentVariable("ARCHER_COMPANION_BRIDGE_KEY");
