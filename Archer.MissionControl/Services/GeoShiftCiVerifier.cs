@@ -30,7 +30,7 @@ public sealed class ProjectCiVerifier(HttpClient client)
         if (p.GetProperty("state").GetString() != "open" ||
             head.GetProperty("sha").GetString() != proposal.PublishedHeadSha ||
             head.GetProperty("ref").GetString() != proposal.BranchName ||
-            head.GetProperty("repo").GetProperty("full_name").GetString() != proposal.Repository ||
+            !string.Equals(head.GetProperty("repo").GetProperty("full_name").GetString(), proposal.Repository, StringComparison.OrdinalIgnoreCase) ||
             p.GetProperty("base").GetProperty("ref").GetString() != proposal.BaseBranch)
             return new("Blocked", "PR changed, closed, or no longer matches the recorded head.");
 
