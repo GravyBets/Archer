@@ -262,11 +262,76 @@
           </div>
         </section>
         <section id="developerView" class="view hidden" aria-labelledby="developerHeading">
-          <div class="hero">
-            <div class="eyebrow">DEVELOPMENT OPERATIONS <span class="eyebrow-line"></span></div>
-            <h1 id="developerHeading">Developer Workspace<span class="accent">.</span></h1>
-            <p>Inspect actual GitHub source files. Prepare focused AI code reviews with specific evidence.</p>
-          </div>
+          <div class="hero"><div class="eyebrow">DEVELOPMENT OPERATIONS <span class="eyebrow-line"></span></div>
+            <h1 id="developerHeading">Development<span class="accent">.</span></h1>
+            <p>Tell Archer what to accomplish. Follow his work and review the results.</p></div>
+          <section class="panel dev-project-panel" aria-labelledby="projectRegistryHeading">
+            <div class="panel-header"><div><h2 id="projectRegistryHeading">Project</h2><p>Choose the application or business.</p></div><button id="developmentRefreshButton" class="button secondary" type="button">Refresh</button></div>
+            <div class="coding-agent-content">
+              <div class="dev-project-row"><label>Active project <select id="managedProjectSelect"></select></label><p id="managedProjectStatus" role="status">Loading projects…</p><button id="pauseProjectButton" type="button" class="button secondary" disabled>Pause project</button></div>
+              <div id="developmentOverview" class="dev-metrics" aria-live="polite"></div>
+              <p id="developmentBatchStatus" role="status" class="dev-help">Checking configuration…</p>
+            </div>
+          </section>
+          <section class="panel dev-assignment-panel"><div class="panel-header"><div><h2>New assignment</h2><p>Describe the outcome, not the code.</p></div></div><div class="coding-agent-content">
+              <form id="projectObjectiveForm">
+                <label>What do you want Archer to accomplish? <textarea id="projectObjectiveText" required minlength="15" maxlength="1000" rows="3" placeholder="Describe the result you want."></textarea></label>
+                <details class="dev-disclosure"><summary>Other options</summary><label>Complete this objective first <select id="projectDependency"><option value="">None</option></select></label><label class="dev-check"><input id="developmentResumeAfterRestart" type="checkbox"/> Continue authorized work after restart</label><label class="dev-check"><input id="developmentContinuous" type="checkbox"/> Allow up to four planning cycles on the same objective</label><button class="button secondary" id="saveObjectiveOnly" type="button">Save for later</button></details>
+                <button class="button primary" id="assignObjectiveButton" type="submit">Assign to Archer</button><p id="objectiveSubmitStatus" role="status" class="dev-help"></p>
+              </form>
+
+          </div></section>
+          <section class="panel dev-work-panel" aria-labelledby="developmentBatchHeading">
+            <div class="panel-header"><div><h2 id="developmentBatchHeading">Archer's work</h2><p>Current assignments, results and decisions that need you.</p></div></div>
+            <div class="coding-agent-content"><div id="developmentBatchList" class="dev-work-list"></div><details class="dev-disclosure"><summary>Saved assignments and advanced planning</summary><div id="projectObjectives"></div>              <label for="developmentObjective">Development objective
+                <textarea id="developmentObjective" rows="3" maxlength="1000" placeholder="Describe a small implementation objective for the selected project."></textarea>
+              </label>
+              <div class="coding-actions">
+                <button id="developmentPlanButton" class="button primary" type="button" disabled>Create task plan</button>
+                
+              </div>
+              
+</details>
+              <details class="dev-disclosure"><summary>Past attempts and completed history</summary><div id="developmentHistory"></div></details>
+            </div>
+          </section>
+          <details class="panel dev-disclosure dev-settings" id="developmentSettings"><summary>Project settings &amp; memory</summary><div class="coding-agent-content">
+              <p id="developmentTechnicalStatus" class="dev-help"></p>
+              <details class="coding-file-diff"><summary>Archer permissions</summary>
+                <div id="selfDevelopmentAudit" role="status">Loading self-development readiness…</div>
+                <button id="registerSelfProjectButton" type="button" class="button secondary">Register protected Archer project</button>
+                
+              </details>
+              <details class="coding-file-diff"><summary>Register a new project</summary>
+                <form id="projectRegistryForm">
+                  <label>Project name <input id="projectName" required maxlength="80" placeholder="My business"/></label>
+                  <label>GitHub owner/repository <input id="projectRepo" required maxlength="140" placeholder="owner/repo"/></label>
+                  <label>Technology <input id="projectTechnology" required maxlength="80" placeholder=".NET, React, Python…"/></label>
+                  <label>Editable application directories (comma separated) <input id="projectRoots" required placeholder="src, web/components"/></label>
+                  <label>CI workflow filename <input id="projectWorkflow" required placeholder="ci.yml"/></label>
+                  <label>Required CI job name <input id="projectJob" required placeholder="Build and test"/></label>
+                  <label>Required build and test step names (one per line) <textarea id="projectSteps" rows="3" required></textarea></label>
+                  <label>Priority (5 is highest) <input id="projectPriority" type="number" min="1" max="5" value="3"/></label>
+                  <label>Maximum coding attempts per rolling 24 hours <input id="projectAttemptLimit" type="number" min="1" max="12" value="6"/></label>
+                  <label><input id="projectAllowNewSource" type="checkbox"/> Allow new source files inside the approved application directories (no tests or configuration)</label>
+                  <label><input id="projectCumulativeWorkspaces" type="checkbox"/> Allow successive tasks to build on one draft branch; require CI after each task</label>
+                  <label>Optional additive regression test directories (comma-separated; cumulative mode required) <input id="projectRegressionRoots" maxlength="500" placeholder="MyApp.Tests, tests/unit"/></label>
+                  <label><input id="projectRequireSandbox" type="checkbox"/> Require isolated local Linux build and test verification in addition to GitHub CI</label>
+                  <button id="registerProjectButton" type="submit" class="button primary">Register project</button>
+                </form>
+              </details>
+
+              <div id="selfDevelopmentCandidate" role="status" hidden></div>
+              <div id="projectMemories"></div>
+              <form id="projectMemoryForm">
+                <label>Remember <select id="projectMemoryKind"><option>Owner note</option><option>Decision</option><option>Preference</option><option>Architecture</option><option>Lesson</option></select></label>
+                <label>Project memory (never enter secrets) <textarea id="projectMemoryText" required maxlength="1200" rows="2"></textarea></label>
+                <label class="dev-check"><input id="projectMemoryShare" type="checkbox"/> Include in relevant AI requests</label>
+                <button class="button secondary" type="submit">Save memory</button>
+              </form>
+
+          </div></details>
+          <details class="panel dev-disclosure dev-settings"><summary>Advanced developer tools</summary><div class="coding-agent-content">
           <section class="panel developer-repository">
             <div class="developer-repo-header">
               <div><h2>Repository connection</h2><p>Read-only access to explicitly approved GitHub repositories</p></div>
@@ -342,72 +407,9 @@
               </div>
             </div>
           </section>
-          <section class="panel code-agent-panel" aria-labelledby="projectRegistryHeading">
-            <div class="panel-header"><div><h2 id="projectRegistryHeading">Managed projects</h2>
-              <p>Separate project objectives, repository permissions, verification rules and memory.</p></div></div>
-            <div class="coding-agent-content">
-              <label>Active project <select id="managedProjectSelect"></select></label>
-              <p id="managedProjectStatus" role="status">Loading projects…</p>
-              <details class="coding-file-diff"><summary>Archer self-development</summary>
-                <div id="selfDevelopmentAudit" role="status">Loading self-development readiness…</div>
-                <button id="registerSelfProjectButton" type="button" class="button secondary">Register protected Archer project</button>
-                <div id="selfDevelopmentCandidate" role="status"></div>
-              </details>
-              <details class="coding-file-diff"><summary>Register a new project</summary>
-                <form id="projectRegistryForm">
-                  <label>Project name <input id="projectName" required maxlength="80" placeholder="My business"/></label>
-                  <label>GitHub owner/repository <input id="projectRepo" required maxlength="140" placeholder="owner/repo"/></label>
-                  <label>Technology <input id="projectTechnology" required maxlength="80" placeholder=".NET, React, Python…"/></label>
-                  <label>Editable application directories (comma separated) <input id="projectRoots" required placeholder="src, web/components"/></label>
-                  <label>CI workflow filename <input id="projectWorkflow" required placeholder="ci.yml"/></label>
-                  <label>Required CI job name <input id="projectJob" required placeholder="Build and test"/></label>
-                  <label>Required build and test step names (one per line) <textarea id="projectSteps" rows="3" required></textarea></label>
-                  <label>Priority (5 is highest) <input id="projectPriority" type="number" min="1" max="5" value="3"/></label>
-                  <label>Maximum coding attempts per rolling 24 hours <input id="projectAttemptLimit" type="number" min="1" max="12" value="6"/></label>
-                  <label><input id="projectAllowNewSource" type="checkbox"/> Allow new source files inside the approved application directories (no tests or configuration)</label>
-                  <label><input id="projectCumulativeWorkspaces" type="checkbox"/> Allow successive tasks to build on one draft branch; require CI after each task</label>
-                  <label>Optional additive regression test directories (comma-separated; cumulative mode required) <input id="projectRegressionRoots" maxlength="500" placeholder="MyApp.Tests, tests/unit"/></label>
-                  <label><input id="projectRequireSandbox" type="checkbox"/> Require isolated local Linux build and test verification in addition to GitHub CI</label>
-                  <button id="registerProjectButton" type="submit" class="button primary">Register project</button>
-                </form>
-              </details>
-              <button id="pauseProjectButton" type="button" class="button secondary" disabled>Pause project</button>
-              <div id="projectObjectives"></div>
-              <form id="projectObjectiveForm">
-                <label>Add objective <textarea id="projectObjectiveText" required minlength="15" maxlength="1000" rows="2"></textarea></label>
-                <label>Depends on (optional; select an earlier objective) <select id="projectDependency"><option value="">None</option></select></label>
-                <button class="button secondary" type="submit">Save objective</button>
-              </form>
-              <div id="projectMemories"></div>
-              <form id="projectMemoryForm">
-                <label>Remember <select id="projectMemoryKind"><option>Owner note</option><option>Decision</option><option>Preference</option><option>Architecture</option><option>Lesson</option></select></label>
-                <label>Project memory (never enter secrets) <textarea id="projectMemoryText" required maxlength="1200" rows="2"></textarea></label>
-                <label><input id="projectMemoryShare" type="checkbox"/> Include in relevant AI requests</label>
-                <button class="button secondary" type="submit">Save memory</button>
-              </form>
-            </div>
-          </section>
-          <section class="panel code-agent-panel" aria-labelledby="developmentBatchHeading">
-            <div class="panel-header"><div>
-              <h2 id="developmentBatchHeading">Autonomous development missions</h2>
-              <p>Choose a registered project, plan, review once, then run with independent CI and bounded repair. Draft PRs only.</p>
-            </div><span class="developer-readonly">AUTONOMY / BOUNDED</span></div>
-            <div class="coding-agent-content">
-              <label for="developmentObjective">Development objective
-                <textarea id="developmentObjective" rows="3" maxlength="1000" placeholder="Describe a small implementation objective for the selected project."></textarea>
-              </label>
-              <div class="coding-actions">
-                <button id="developmentPlanButton" class="button primary" type="button" disabled>Create task plan</button>
-                <button id="developmentRefreshButton" class="button secondary" type="button">Refresh</button>
-              </div>
-              <label><input type="checkbox" id="developmentResumeAfterRestart"> Resume safe queued work after restart within the same 24-hour authorization.</label>
-              <p id="developmentBatchStatus" role="status">Checking configuration…</p>
-              <div id="developmentBatchList" class="coding-proposal-preview"></div>
-            </div>
-          </section>
-          <p class="developer-footnote">Repository browsing and previews don't consume OpenAI API credits.
-            Review missions and generated code drafts incur AI API charges only when you explicitly request them.
-            Selected source excerpts are sent to OpenAI when generating a code proposal. Individual drafts require approval; development missions require project and batch authorization and use registered GitHub CI. Archer never merges or deploys.</p>
+
+          </div></details>
+          <p class="developer-footnote">Archer uses your configured AI spending limits. He prepares draft changes for review; he does not merge or deploy them automatically.</p>
         </section>
         <section id="operationsView" class="view hidden" aria-labelledby="operationsHeading">
           <div class="hero"><div class="eyebrow">BUSINESS OPERATIONS <span class="eyebrow-line"></span></div>

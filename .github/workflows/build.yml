@@ -117,6 +117,7 @@ jobs:
           node --check Archer.MissionControl/wwwroot/js/spending.js
           node --check Archer.MissionControl/wwwroot/js/coding.js
           node --check Archer.MissionControl/wwwroot/js/development-batches.js
+          node tests/DevelopmentWorkspaceUiChecks.mjs
           node --check Archer.MissionControl/wwwroot/js/communications.js
           node --check Archer.MissionControl/wwwroot/js/inbox.js
           node --check Archer.MissionControl/wwwroot/js/mobile-drafts.js

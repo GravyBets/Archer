@@ -520,3 +520,43 @@
 .voice-diagnostics-panel summary{cursor:pointer;font-size:12px;font-weight:650}
 #voiceDiagnosticStatus{white-space:pre-line;line-height:1.45;font-size:11px;opacity:.88}
 .voice-diagnostics-panel>p:last-child{font-size:11px;opacity:.7;line-height:1.4}
+
+
+/* Development: owner-facing assignments, with engineering details on demand. */
+#developerView .dev-project-panel,#developerView .dev-assignment-panel,#developerView .dev-work-panel{margin-bottom:18px}
+#developerView .dev-project-row{display:flex;align-items:end;flex-wrap:wrap;gap:14px}
+#developerView .dev-project-row>label{flex:1;min-width:180px}
+#developerView .dev-project-row>p{flex:1;margin:0;padding:11px 0;color:#a9c9d7}
+#developerView .dev-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px;margin-top:18px}
+#developerView .dev-metrics>div{display:flex;flex-direction:column;gap:5px;border:1px solid var(--border);border-radius:9px;padding:14px;background:#0b1725}
+#developerView .dev-metrics strong{font-size:24px;color:#e3edf5;font-weight:650}
+#developerView .dev-metrics span{font-size:12px;color:#9db2c6}
+#developerView .dev-help{color:#9db2c6;font-size:12px;line-height:1.6;margin:12px 0 0}
+#developerView .dev-assignment-panel textarea{min-height:92px}
+#developerView form{display:grid;gap:12px}
+#developerView form>label,#developerView .dev-project-row>label,#developerView details>label{display:flex;flex-direction:column;gap:7px;font-size:13px;color:#a9bdcd}
+#developerView form>button{justify-self:start}
+#developerView select,#developerView form input:not([type=checkbox]){color:#dceaf2;background:#0b1725;border:1px solid #345066;border-radius:8px;padding:10px 12px;min-width:0;width:100%;font:inherit}
+#developerView label.dev-check{display:flex;flex-direction:row;align-items:center;gap:10px;margin:10px 0}
+#developerView input[type=checkbox]{width:16px;height:16px;flex:0 0 16px;accent-color:var(--accent)}
+#developerView .dev-disclosure{border:1px solid #2e4458;border-radius:9px;margin:12px 0;padding:0 14px;background:#101d2c}
+#developerView .dev-disclosure>summary{cursor:pointer;color:#a8c4d5;padding:13px 0;font-size:13px;font-weight:600}
+#developerView .dev-disclosure[open]{padding-bottom:14px}
+#developerView .dev-disclosure p{overflow-wrap:anywhere;line-height:1.6;color:#aec1cf}
+#developerView .dev-disclosure a{display:inline-block;margin-right:14px;color:#7de4d4}
+#developerView .dev-settings>summary{font-size:15px;padding:16px 0}
+#developerView .dev-work-list{display:grid;gap:14px}
+#developerView .dev-assignment-card{padding:18px;border:1px solid #2e4458;border-radius:11px;background:#0d1928;overflow-wrap:anywhere}
+#developerView .dev-assignment-card h3{font-size:16px;line-height:1.5;font-weight:650;color:#dceaf2;margin:10px 0}
+#developerView .dev-assignment-card p{font-size:13px;line-height:1.6;color:#b8cbd7;margin:8px 0}
+#developerView .dev-assignment-card progress{width:100%;height:7px;accent-color:var(--accent);display:block;margin:16px 0 4px}
+#developerView .dev-phase{display:inline-block;background:#203245;color:#b9cddd;border-radius:5px;font-size:11px;font-weight:650;padding:5px 9px}
+#developerView .dev-phase[data-phase="Ready for review"],#developerView .dev-phase[data-phase="Accepted"]{color:#91dec5;background:#17362f}
+#developerView .dev-phase[data-phase="Needs attention"],#developerView .dev-phase[data-phase="Needs approval"]{color:#f2c791;background:#3a2b22}
+#developerView .dev-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0}
+#developerView .dev-review{padding:14px;margin:14px 0;border:1px solid #35556a;border-radius:8px;background:#101f30}
+#developerView .dev-review strong{color:#b1ded6;font-size:14px}
+#developerView .dev-review>a{display:block;color:#7de4d4;margin:10px 0}
+#developerView #projectObjectives,#developerView #developmentHistory{display:grid;gap:10px}
+#developerView #projectObjectives .dev-assignment-card,#developerView #developmentHistory .dev-assignment-card{margin:0}
+@media(max-width:650px){#developerView .dev-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}#developerView .dev-project-row>label,#developerView .dev-project-row>p{flex-basis:100%}#developerView .dev-assignment-card{padding:13px}}
