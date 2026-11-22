@@ -51,6 +51,7 @@
         (p.allowNewSourceFiles ? 'New source allowed' : 'Existing source only') + ' · ' +
         (p.cumulativeWorkspaces ? 'Cumulative drafts' : 'Independent drafts') + ' · ' +
         ((p.regressionTestRoots || []).length ? 'Additive regression tests enabled' : 'Regression authoring disabled') + ' · ' +
+        (p.requireSandbox ? (p.sandboxConfigured ? 'Sandbox configured' : 'Sandbox required, not configured') : 'GitHub CI only') + ' · ' +
         (p.enabled ? 'Configured' : 'Not configured or paused') +
         ' · credential variables: ' + p.credentialPrefix + '_READ_TOKEN and _WRITE_TOKEN'
       : 'No project registered. Registration itself grants no GitHub or model access.';
@@ -122,6 +123,7 @@
           element('p', 'Read-only context: ' + ((t.contextPaths || []).join(', ') || 'None')),
           element('p', 'Attempts: ' + t.attempts + ' / 2'));
         if (t.detail) detail.append(element('p', t.detail));
+        if (t.sandbox) detail.append(element('p', 'Isolated verification: ' + t.sandbox.status + ' · ' + t.sandbox.detail + ' · head ' + t.sandbox.headSha.slice(0, 12)));
         const currentPr = link(t.pullRequestUrl, 'Current draft PR', batch.repository);
         if (currentPr) detail.append(currentPr);
         for (const head of t.priorHeadShas || []) detail.append(element('p', 'Earlier attempted head: ' + head));
@@ -165,7 +167,7 @@
       sourceRoots: el('projectRoots').value.split(',').map(x => x.trim()).filter(Boolean),
       workflowFile: el('projectWorkflow').value, verificationJob: el('projectJob').value,
       requiredSteps: el('projectSteps').value.split('\n').map(x => x.trim()).filter(Boolean),
-      priority: Number(el('projectPriority').value), dailyAttemptLimit: Number(el('projectAttemptLimit').value), allowNewSourceFiles: el('projectAllowNewSource').checked, cumulativeWorkspaces: el('projectCumulativeWorkspaces').checked, regressionTestRoots: el('projectRegressionRoots').value.split(',').map(x => x.trim()).filter(Boolean)
+      priority: Number(el('projectPriority').value), dailyAttemptLimit: Number(el('projectAttemptLimit').value), allowNewSourceFiles: el('projectAllowNewSource').checked, cumulativeWorkspaces: el('projectCumulativeWorkspaces').checked, regressionTestRoots: el('projectRegressionRoots').value.split(',').map(x => x.trim()).filter(Boolean), requireSandbox: el('projectRequireSandbox').checked
     }, 'POST', () => el('projectRegistryForm').reset());
   });
   el('pauseProjectButton').addEventListener('click', () => {

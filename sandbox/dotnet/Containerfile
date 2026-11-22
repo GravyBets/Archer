@@ -1,0 +1,12 @@
+# Owner must supply an SDK image pinned by digest and an offline package set.
+# Build only in a trusted provisioning environment; never by generated code.
+ARG SDK_IMAGE
+FROM ${SDK_IMAGE}
+ARG BUILD_TARGET
+ARG TEST_TARGET
+ENV ARCHER_BUILD_TARGET=${BUILD_TARGET} ARCHER_TEST_TARGET=${TEST_TARGET}
+COPY packages/ /opt/archer/packages/
+COPY NuGet.Config /opt/archer/NuGet.Config
+COPY verify.sh /usr/local/bin/archer-verify
+RUN chmod 0555 /usr/local/bin/archer-verify && test -n "$ARCHER_BUILD_TARGET" && test -n "$ARCHER_TEST_TARGET"
+ENTRYPOINT ["/usr/local/bin/archer-verify"]

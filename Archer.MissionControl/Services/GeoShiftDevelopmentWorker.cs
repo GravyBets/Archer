@@ -7,7 +7,7 @@ namespace Archer.MissionControl.Services;
 /// Restart interrupts ambiguous writes; safe work resumes only if explicitly authorized.</summary>
 public sealed class ProjectDevelopmentWorker(
     JsonFileStore store, GitHubRepositoryReader reader, ArcherAiService ai,
-    GitHubDraftPrPublisher publisher, ProjectCiVerifier ci,
+    GitHubDraftPrPublisher publisher, ProjectCiVerifier ci, ProjectSandboxRunner sandbox,
     ILogger<ProjectDevelopmentWorker> logger) : BackgroundService
 {
     public static bool Enabled => Environment.GetEnvironmentVariable("ARCHER_PROJECT_AUTONOMY_ENABLED") == "true";
@@ -31,7 +31,7 @@ public sealed class ProjectDevelopmentWorker(
         return batch;
     }
 
-    public bool CanArm(ManagedProject project) => Enabled && !project.Paused && ai.IsConfigured &&
+    public bool CanArm(ManagedProject project) => Enabled && !project.Paused && ai.IsConfigured && SandboxPolicy.Configured(project) &&
         publisher.CanPublishRepository(project.Repository) && ProjectGitHubCredentials.IsConfigured(project.Repository) &&
         (Environment.GetEnvironmentVariable("ARCHER_GITHUB_WRITE_REPOS") ?? "")
             .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
@@ -120,6 +120,27 @@ public sealed class ProjectDevelopmentWorker(
         {
             if (task.SubmittedAtUtc is null || DateTimeOffset.UtcNow - task.SubmittedAtUtc.Value > TimeSpan.FromMinutes(45))
             { await BlockAsync(active.Id, task.Id, "CI timed out; inspect the draft PR.", ct); return; }
+            if (project.RequireSandbox && (task.Sandbox is null ||
+                task.Sandbox.HeadSha != published.PublishedHeadSha ||
+                task.Sandbox.ImageId != SandboxPolicy.ImageFor(project) ||
+                task.Sandbox.Status != "Passed"))
+            {
+                var result = await sandbox.VerifyAsync(project, published, ct);
+                await store.UpdateAsync(s =>
+                {
+                    var b = s.DevelopmentBatches.Single(x => x.Id == active.Id);
+                    var t = b.Tasks.Single(x => x.Id == task.Id);
+                    if (t.Status != "Testing" || t.Proposal?.PublishedHeadSha != result.HeadSha) return false;
+                    t.Sandbox = result;
+                    var p = s.Projects.Single(x => x.Id == b.ProjectId);
+                    ProjectPolicy.AddMemory(p, "Isolated verification", result.HeadSha + " | " + result.Status + " | " + result.Detail, true);
+                    if (result.Status != "Passed")
+                        DevelopmentBatchPolicy.CompleteCi(b, t, result.Status == "Failed" ? "Failed" : "Blocked", result.Detail);
+                    else t.Detail = result.Detail;
+                    return true;
+                }, CancellationToken.None);
+                return;
+            }
             // A transient read failure does not spend money or trigger a repair.
             var verdict = await ci.InspectAsync(project, published, ct);
             if (verdict.Status == "Testing") return;
@@ -279,6 +300,7 @@ public sealed class ProjectDevelopmentWorker(
                     b.WorkspaceBaseBranch = proposal.BaseBranch;
                 }
                 t.SubmittedAtUtc = DateTimeOffset.UtcNow;
+                t.Sandbox = null;
                 t.Status = "Testing";
                 t.Detail = "Draft published, waiting for CI. Not merged.";
                 return true;

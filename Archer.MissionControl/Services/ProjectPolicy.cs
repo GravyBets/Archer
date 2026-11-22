@@ -88,7 +88,7 @@ public static class ProjectPolicy
         {
             Name = name, Repository = repo, Technology = technology, SourceRoots = roots,
             WorkflowFile = workflow, VerificationJob = job, RequiredSteps = steps,
-            Priority = input.Priority, DailyAttemptLimit = input.DailyAttemptLimit, AllowNewSourceFiles = input.AllowNewSourceFiles, CumulativeWorkspaces = input.CumulativeWorkspaces, RegressionTestRoots = testRoots
+            Priority = input.Priority, DailyAttemptLimit = input.DailyAttemptLimit, AllowNewSourceFiles = input.AllowNewSourceFiles, CumulativeWorkspaces = input.CumulativeWorkspaces, RegressionTestRoots = testRoots, RequireSandbox = input.RequireSandbox
         };
     }
 
