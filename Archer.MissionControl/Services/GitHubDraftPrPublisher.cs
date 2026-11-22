@@ -149,12 +149,14 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
             !Regex.IsMatch(proposal.BaseTreeSha ?? "", @"^[0-9a-fA-F]{40}$") ||
             proposal.Files.Count is < 1 or > ProjectPolicy.MaxWorkspaceFiles ||
             proposal.Files.Count(f => f.IsNew) > 2 ||
+            proposal.Files.Count(f => f.IsRegressionTest) > 1 || proposal.Files.All(f => f.IsRegressionTest) ||
             proposal.Files.Sum(f => (long)f.ProposedContent.Length) > ProjectPolicy.MaxGeneratedCharacters ||
             proposal.Files.Select(f => f.Path).Distinct(StringComparer.OrdinalIgnoreCase).Count() != proposal.Files.Count ||
             proposal.Files.Any(f => f.ProposedContent.Length is < 1 or > 12000 ||
-                !ProjectPolicy.IsApplicationPath(f.Path) || !ProjectPolicy.InSourceRoot(project, f.Path) ||
-                (f.IsNew ? !ProjectPolicy.NewSourceAllowed(project, f.Path) || f.ExpectedBlobSha.Length != 0 :
-                    !Regex.IsMatch(f.ExpectedBlobSha, @"^[0-9a-fA-F]{40}$"))))
+                (f.IsRegressionTest ? !f.IsNew || !ProjectPolicy.NewRegressionAllowed(project, f.Path) || f.ExpectedBlobSha.Length != 0 :
+                    !ProjectPolicy.IsApplicationPath(f.Path) || !ProjectPolicy.InSourceRoot(project, f.Path) ||
+                    (f.IsNew ? !ProjectPolicy.NewSourceAllowed(project, f.Path) || f.ExpectedBlobSha.Length != 0 :
+                        !Regex.IsMatch(f.ExpectedBlobSha, @"^[0-9a-fA-F]{40}$")))))
             throw new InvalidOperationException("Workspace publication refused: authorization, path or size validation failed.");
 
         var api = "https://api.github.com/repos/" + project.Repository;
