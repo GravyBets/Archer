@@ -293,3 +293,15 @@ public sealed record ProjectPauseRequest(bool Paused);
 public sealed record ProjectObjectiveRequest(string? Description, List<Guid>? DependsOn);
 public sealed record ProjectMemoryRequest(string? Kind, string? Content, bool ShareWithAi);
 public sealed record AcceptObjectiveRequest(bool Confirm);
+
+public sealed class ProjectPlanDraft
+{
+    public string Summary { get; set; } = "";
+    public List<ProjectPlanTaskDraft> Tasks { get; set; } = [];
+}
+public sealed class ProjectPlanTaskDraft
+{
+    public string Title { get; set; } = "";
+    public string Description { get; set; } = "";
+    public List<string> Paths { get; set; } = [];
+}
