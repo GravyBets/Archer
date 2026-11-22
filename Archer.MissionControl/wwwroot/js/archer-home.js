@@ -241,7 +241,7 @@
     if (locale !== 'en-gb') return -9999;
     let score = 100;
     if (/natural|neural|premium|online/i.test(label)) score += 45;
-    if (/ryan|george|oliver|daniel|male/i.test(label)) score += 70;
+    if (/ryan|george|oliver|daniel|\\bmale\\b/i.test(label)) score += 70;
     if (/hazel|sonia|libby|susan|female/i.test(label)) score -= 60;
     return score;
   }
@@ -250,7 +250,14 @@
     if (!hasSpeechOut) return;
     const voices = window.speechSynthesis.getVoices();
     if (!voices.length) {
+      // Providers may temporarily remove all voices. Never keep a stale
+      // voice object around: some browsers silently use a system fallback.
+      availableVoices = [];
+      selectedVoiceUri = '';
+      testVoiceButton.disabled = true;
+      voicePicker.replaceChildren();
       accentStatus.textContent = 'Searching for installed British voices…';
+      updateVoiceDiagnostics();
       return;
     }
     availableVoices = voices;
@@ -280,7 +287,7 @@
     }
     voicePicker.value = selectedVoiceUri;
     const british = (chosen?.lang || '').toLowerCase() === 'en-gb';
-    const maleLikely = /ryan|george|oliver|daniel|male/i.test(chosen?.name || '');
+    const maleLikely = /ryan|george|oliver|daniel|\\bmale\\b/i.test(chosen?.name || '');
     accentStatus.textContent = !chosen
       ? 'No British voice is available. I will not silently play a robotic fallback; choose a voice manually.'
       : british
