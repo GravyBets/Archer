@@ -97,7 +97,7 @@ public sealed class ProjectDevelopmentWorker(
         if (await store.ReadAsync(s => s.DevelopmentBatches.Any(b => b.Armed && b.ExpiresAtUtc <= now), ct))
             await store.UpdateAsync(s => { foreach (var b in s.DevelopmentBatches.Where(b => b.Armed && b.ExpiresAtUtc <= now)) b.Armed = false; return true; }, ct);
         var active = await store.ReadAsync(s => ProjectPolicy.Select(s, now), ct);
-        if (active is null) return;
+        if (active is null) { await PlanDelegatedAsync(ct); return; }
         var project = await store.ReadAsync(s => s.Projects.SingleOrDefault(p => p.Id == active.ProjectId), ct);
         if (project is null || !CanArm(project)) { await PauseAsync(active.Id, ct); return; }
         var repositoryUrl = "https://github.com/" + project.Repository;
@@ -228,6 +228,94 @@ public sealed class ProjectDevelopmentWorker(
                 (await store.ReadAsync(s => s.DevelopmentBatches.Single(b => b.Id == active.Id)
                     .Tasks.Single(t => t.Id == task.Id).Proposal?.Id.ToString("N")[..12], CancellationToken.None)
                     ?? "not-created") + " before retrying. No automatic retry of ambiguous writes.", CancellationToken.None);
+        }
+    }
+
+    private async Task PlanDelegatedAsync(CancellationToken ct)
+    {
+        var candidate = await store.ReadAsync(s => s.Projects.Where(CanArm)
+            .OrderByDescending(p => p.Priority)
+            .SelectMany(p => p.Objectives.OrderBy(o => o.CreatedAtUtc).Select(o => (Project: p, Objective: o)))
+            .FirstOrDefault(x => ProjectPolicy.CanPlanDelegated(x.Project, x.Objective, DateTimeOffset.UtcNow)
+                && ProjectPolicy.AttemptsToday(s, x.Project.Id, DateTimeOffset.UtcNow) < x.Project.DailyAttemptLimit
+                && !s.DevelopmentBatches.Any(b => b.ProjectId == x.Project.Id &&
+                    (b.Armed || b.Tasks.Any(t => t.Status is "Editing" or "Publishing")))), ct);
+        if (candidate.Project is null) return;
+        var project = candidate.Project;
+        var objective = candidate.Objective;
+        // No model call if independent project CI is not available.
+        var ready = false;
+        try { ready = await ci.ReadyAsync(project, ct); }
+        catch (Exception) when (!ct.IsCancellationRequested) { }
+        if (!ready)
+        {
+            await store.UpdateAsync(s =>
+            {
+                var p = s.Projects.Single(x => x.Id == project.Id);
+                var o = p.Objectives.Single(x => x.Id == objective.Id);
+                if (o.PlanningState == "Delegated")
+                { o.PlanningState = "Not delegated"; o.DelegatedUntilUtc = null; o.PlanningDetail = "Independent CI unavailable; no paid planning attempt made."; }
+                return true;
+            }, ct);
+            return;
+        }
+        var claimed = await store.UpdateAsync(s =>
+        {
+            var p = s.Projects.Single(x => x.Id == project.Id);
+            var o = p.Objectives.Single(x => x.Id == objective.Id);
+            if (!CanArm(p) || s.DevelopmentBatches.Count >= 100 ||
+                s.DevelopmentBatches.Any(b => b.ProjectId == p.Id &&
+                    (b.ObjectiveId == o.Id || b.Armed || b.Tasks.Any(t => t.Status is "Editing" or "Publishing"))) ||
+                ProjectPolicy.AttemptsToday(s, p.Id, DateTimeOffset.UtcNow) >= p.DailyAttemptLimit)
+                return false;
+            return ProjectPolicy.ClaimDelegated(p, o, DateTimeOffset.UtcNow);
+        }, ct);
+        if (!claimed) return;
+        try
+        {
+            var batch = await PlanAsync(project, objective.Description, objective.Id, ct);
+            await store.UpdateAsync(s =>
+            {
+                var p = s.Projects.Single(x => x.Id == project.Id);
+                var o = p.Objectives.Single(x => x.Id == objective.Id);
+                var now = DateTimeOffset.UtcNow;
+                var remaining = p.DailyAttemptLimit - ProjectPolicy.AttemptsToday(s, p.Id, now);
+                if (o.PlanningState != "Planning" || !CanArm(p) || !ProjectPolicy.ObjectiveReady(p, o) ||
+                    o.DelegatedUntilUtc is null || o.DelegatedUntilUtc <= now || remaining <= 0 ||
+                    s.DevelopmentBatches.Count >= 100 || s.DevelopmentBatches.Any(b => b.ProjectId == p.Id &&
+                        (b.ObjectiveId == o.Id || b.Armed || b.Tasks.Any(t => t.Status is "Editing" or "Publishing"))))
+                {
+                    o.PlanningState = "Blocked"; o.DelegatedUntilUtc = null;
+                    o.PlanningDetail = "Authorization changed during planning; no automatic batch published.";
+                    return false;
+                }
+                // The owner authorized the registered repository roots, one
+                // planning call, and at most six coding attempts, not arbitrary
+                // model tools. Never renew the original delegation deadline.
+                batch.Armed = true;
+                batch.ResumeAfterRestart = o.ResumeDelegationAfterRestart;
+                batch.ExpiresAtUtc = o.DelegatedUntilUtc;
+                batch.AttemptsRemaining = Math.Min(remaining, Math.Min(6, batch.Tasks.Count * 2));
+                s.DevelopmentBatches.Add(batch);
+                o.PlanningState = "Batch created";
+                o.PlanningDetail = "Authorized task batch created. CI verification does not mean release or deployment.";
+                ProjectPolicy.AddMemory(p, "Execution plan", o.Description + " | " + batch.Tasks.Count + " bounded tasks queued.", true);
+                return true;
+            }, CancellationToken.None);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogWarning("Delegated project planning stopped: {Type}", ex.GetType().Name);
+            await store.UpdateAsync(s =>
+            {
+                var p = s.Projects.Single(x => x.Id == project.Id);
+                var o = p.Objectives.Single(x => x.Id == objective.Id);
+                o.PlanningState = "Blocked"; o.DelegatedUntilUtc = null;
+                o.PlanningDetail = "Planning failed or exceeded bounds; no automatic paid retry.";
+                ProjectPolicy.AddMemory(p, "Execution blocker", o.Description + " | " + o.PlanningDetail, true);
+                return true;
+            }, CancellationToken.None);
         }
     }
 
