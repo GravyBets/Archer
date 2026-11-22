@@ -68,7 +68,9 @@ public sealed class JsonFileStore
         }
         foreach (var batch in state.DevelopmentBatches)
         {
-            batch.Armed = false;
+            if (!batch.ResumeAfterRestart || batch.ExpiresAtUtc <= DateTimeOffset.UtcNow ||
+                batch.Tasks.Any(t => t.Status is "Editing" or "Publishing" or "Blocked"))
+                batch.Armed = false;
             foreach (var task in batch.Tasks.Where(t => t.Status is "Editing" or "Publishing"))
             {
                 task.Status = "Blocked";
