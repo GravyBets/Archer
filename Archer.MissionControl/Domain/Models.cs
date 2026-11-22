@@ -11,6 +11,7 @@ public sealed class ArcherState
     public List<WebsiteIncident> WebsiteIncidents { get; set; } = [];
     // Reviewable coding drafts are local until explicitly approved for publication.
     public List<CodeProposal> CodeProposals { get; set; } = [];
+    public List<DevelopmentBatch> DevelopmentBatches { get; set; } = [];
     public CommunicationPreferences CommunicationPreferences { get; set; } = new();
     public List<CommunicationAttempt> CommunicationAttempts { get; set; } = [];
     // Persistent source-grounded local inbox. Not phone notifications or an APNs delivery queue.
@@ -220,3 +221,27 @@ public sealed class OperatorNotification
     public Guid? MissionId { get; set; }
     public Guid? WebsiteMonitorId { get; set; }
 }
+
+public sealed class DevelopmentBatch
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Objective { get; set; } = "";
+    public bool Armed { get; set; }
+    public DateTimeOffset? ExpiresAtUtc { get; set; }
+    public int AttemptsRemaining { get; set; }
+    public List<DevelopmentTask> Tasks { get; set; } = [];
+}
+public sealed class DevelopmentTask
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Instruction { get; set; } = "";
+    public List<string> Paths { get; set; } = [];
+    public string Status { get; set; } = "Queued";
+    public int Attempts { get; set; }
+    public string? Detail { get; set; }
+    public DateTimeOffset? SubmittedAtUtc { get; set; }
+    public CodeProposal? Proposal { get; set; }
+    public List<string> PriorPullRequests { get; set; } = [];
+}
+public sealed record DevelopmentPlanRequest(string? Objective, bool Confirm);
+public sealed record DevelopmentArmRequest(bool Confirm);
