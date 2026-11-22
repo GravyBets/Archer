@@ -32,7 +32,7 @@ struct ArcherWelcomeView: View {
                         .tracking(-1.5)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Text("Secure owner sign-in • Development preview")
+                    Text("Secure owner sign-in")
                         .foregroundStyle(.white.opacity(0.7))
                         .font(.subheadline)
 
@@ -53,7 +53,7 @@ struct ArcherWelcomeView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Auth0 authentication", systemImage: "checkmark.circle")
                         Label("Archer device enrollment: not connected", systemImage: "lock")
-                        Label("Remote conversations: unavailable", systemImage: "lock")
+                        Label("Remote conversations: require approved private server", systemImage: "lock")
                         Label("Calls, SMS and paid actions: disabled", systemImage: "lock")
                     }
                     .font(.subheadline)
@@ -88,6 +88,7 @@ struct ArcherWelcomeView: View {
                     }
 
                     if session.signedIn {
+                        ArcherConnectedView(device: device)
                         Divider().overlay(.white.opacity(0.25))
 
                         VStack(alignment: .leading, spacing: 12) {
@@ -115,7 +116,7 @@ struct ArcherWelcomeView: View {
                                 .buttonStyle(.bordered)
                                 .disabled(device.busy || !SecureEnclave.isAvailable)
                             }
-                            Text("Hardware key preparation is local. No device has been enrolled with Archer.")
+                            Text("Hardware key preparation is local. Your server must separately approve its full fingerprint.")
                                 .font(.caption)
                                 .foregroundStyle(.white.opacity(0.62))
                         }

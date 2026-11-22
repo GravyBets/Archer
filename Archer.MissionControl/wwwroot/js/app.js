@@ -299,7 +299,7 @@ $('chatForm').addEventListener('submit', async event => {
   const mobileSource = window.ArcherMobileDrafts?.beginChat(message);
   window.ArcherPresence?.setState('thinking', 'Archer is considering your message.');
   const result = await action(
-    () => api('/api/chat', { method: 'POST', body: JSON.stringify({ message, voiceMode }) }),
+    () => api('/api/chat', { method: 'POST', body: JSON.stringify({ message, voiceMode, directOwnerInput: !mobileSource }) }),
     'Archer replied.');
   if (result && typeof result.answer === 'string') {
     $('chatText').value = '';

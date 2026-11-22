@@ -53,6 +53,17 @@ final class ArcherDeviceIdentity: ObservableObject {
         }
     }
 
+    // Full public fingerprint is safe to compare with the separately approved
+    // server configuration. The private hardware key never leaves Keychain.
+    var approvalFingerprint: String {
+        guard let key = try? read() else { return "" }
+        return SHA256.hash(data: key.publicKey.x963Representation).map { String(format: "%02X", $0) }.joined()
+    }
+    func gatewayProof(_ payload: Data) throws -> (publicKey: Data, signature: Data) {
+        guard let key = try read() else { throw IdentityError.storage }
+        return (key.publicKey.x963Representation, try key.signature(for: payload).rawRepresentation)
+    }
+
     func refresh() {
         do { describe(try read()) }
         catch {

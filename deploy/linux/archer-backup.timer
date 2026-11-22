@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily encrypted Archer backup
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=120
+Unit=archer-backup.service
+[Install]
+WantedBy=timers.target

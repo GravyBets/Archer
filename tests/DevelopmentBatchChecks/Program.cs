@@ -417,6 +417,48 @@ Check(SelfDevelopmentReview.TryCandidate(selfProfile, selfBatch) is null, "prote
 Environment.SetEnvironmentVariable("ARCHER_SELF_PROJECT_ENABLED", null);
 Environment.SetEnvironmentVariable("ARCHER_SELF_PROJECT_FILES", null);
 
+var conversationState = new ArcherState();
+var talkProject = ProjectPolicy.Register(new("Personal app", "owner/talk", ".NET", ["src"], "ci.yml", "build", ["Compile", "Test"]));
+conversationState.Projects.Add(talkProject);
+var assigned = ConversationAssignments.Assign(conversationState, "Hey Archer, work on Personal app and improve the settings empty state.", _ => true, now);
+Check(assigned.Accepted && talkProject.Objectives.Count == 1 && talkProject.Objectives[0].PlanningState == "Delegated" &&
+    talkProject.Objectives[0].DelegatedUntilUtc == now.AddHours(24), "conversation directly delegates one bounded objective");
+Check(!ConversationAssignments.Assign(conversationState, "work on Personal app and improve the settings empty state.", _ => true, now).Accepted &&
+    talkProject.Objectives.Count == 1, "repeated transcript cannot create duplicate paid assignment");
+Check(!ConversationAssignments.Assign(conversationState, "work on Other: implement the requested change", _ => true, now).Accepted,
+    "unknown project cannot be created through chat");
+Check(!ConversationAssignments.Assign(conversationState, "work on Personal app: implement another improvement", _ => false, now).Accepted,
+    "conversation does not bypass project gate");
+Check(!ConversationAssignments.LooksLikeAssignment("Can you explain how to work on Personal app?"), "discussion is not execution");
+Check(ConversationAssignments.Status(conversationState).Contains("queued"), "status uses actual persisted assignment data");
+
+var phoneState = new ArcherState();
+var phoneRequest = new CompanionBridge.MessageRequest(Guid.NewGuid(), "Hello Archer");
+Check(CompanionBridge.Reserve(phoneState, phoneRequest, now).Begin, "phone request reserved before model call");
+Check(!CompanionBridge.Reserve(phoneState, phoneRequest, now).Begin, "duplicate phone request never executes twice");
+Check(CompanionBridge.Reserve(phoneState, phoneRequest with { Message = "Changed" }, now).Result.Status == "Conflict", "request identity bound to exact content");
+Check(CompanionBridge.Receipt(phoneState, phoneRequest.RequestId).Status == "Pending", "receipt lookup does not execute");
+CompanionBridge.Complete(phoneState, phoneRequest, "Hello");
+Check(CompanionBridge.Receipt(phoneState, phoneRequest.RequestId).Answer == "Hello" && phoneState.Conversation.Count == 2, "completed phone reply shared with desktop");
+Check(!CompanionBridge.Reserve(phoneState, phoneRequest, now).Begin && phoneState.Conversation.Count == 2, "completed receipt is idempotent");
+var originalBridgeKey = Environment.GetEnvironmentVariable("ARCHER_COMPANION_BRIDGE_KEY");
+try
+{
+    Environment.SetEnvironmentVariable("ARCHER_COMPANION_BRIDGE_KEY", new string('a', 64));
+    var context = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+    context.Connection.RemoteIpAddress = IPAddress.Loopback;
+    Check(!CompanionBridge.Authorized(context), "missing bridge key refused");
+    context.Request.Headers["X-Archer-Bridge"] = new string('a', 64);
+    Check(CompanionBridge.Authorized(context), "authenticated local bridge accepted");
+    context.Connection.RemoteIpAddress = IPAddress.Parse("192.0.2.1");
+    Check(!CompanionBridge.Authorized(context), "non-loopback bridge refused");
+    context.Connection.RemoteIpAddress = IPAddress.Loopback;
+    context.Request.Headers["Origin"] = "https://example.invalid";
+    Check(!CompanionBridge.Authorized(context), "browser-origin bridge refused");
+}
+finally { Environment.SetEnvironmentVariable("ARCHER_COMPANION_BRIDGE_KEY", originalBridgeKey); }
+
+
 sealed class FakeGitHub : HttpMessageHandler
 {
     public string Mode = "success";

@@ -70,7 +70,7 @@ ensure(".disabled(!ArcherAuthConfiguration.configured)" in VIEW,
 ensure("Gateway access still awaits" in SESSION or "gateway access still" in SESSION,
        "server authorization never inferred from client sign-in")
 ensure("device enrollment" in VIEW.lower(), "device gate clearly disclosed")
-ensure("Remote conversations: unavailable" in VIEW, "chat routes not falsely represented")
+ensure("Remote conversations: require approved private server" in VIEW, "server and device approval are required")
 ensure("no token" in README.lower(), "readme documents token-redaction policy")
 ensure("client secret" in README.lower(), "README rejects client secret")
 
@@ -107,8 +107,15 @@ ensure("device.prepare()" in VIEW and "device.testLocalProof()" in VIEW and
 ensure("notificationTest.requestPermission()" in VIEW and
        "notificationTest.sendLocalTest()" in VIEW, "notification is only requested after tap")
 ensure("if session.signedIn" in VIEW and
-       "Remote conversations: unavailable" in VIEW,
+       "Remote conversations: require approved private server" in VIEW,
        "new capabilities remain separate from unavailable remote chat")
+CLIENT = (APP / "ArcherPrivateClient.swift").read_text()
+CONNECTED = (APP / "ArcherConnectedView.swift").read_text()
+ensure("RejectRedirects" in CLIENT and "completionHandler(nil)" in CLIENT, "token-bearing redirects rejected")
+ensure("ARCHER_PRIVATE_V1" in CLIENT and "gatewayProof" in CLIENT, "each request has hardware proof")
+ensure("URLSessionConfiguration.ephemeral" in CLIENT and "https://" in CLIENT, "HTTPS-only private client")
+ensure("client.receipt" in CONNECTED and "ArcherPendingReceipt" in CONNECTED, "reconnect checks never resend message")
+ensure("REPLACE_WITH_APPROVED_PRIVATE_TS_HOST" in (APP / "Gateway.plist").read_text(), "private host is not committed")
 for text in (DEVICE, NOTIFICATION):
     for forbidden in ("http://", "https://", "URLSession", "APNs", "getToken", "sendMessage",
                       "OPENAI_API_KEY", "client_secret"):
