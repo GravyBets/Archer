@@ -97,7 +97,11 @@ if [[ -f "$core" && -f "$gateway" ]]; then
       fail "$name is missing, a placeholder or invalid"
     fi
   }
-  check_gateway_field ARCHER_PRIVATE_HOST '^[a-z0-9][a-z0-9.-]+\.ts\\.net
+  check_gateway_field ARCHER_PRIVATE_HOST '^[a-z0-9][a-z0-9.-]+\.ts\.net$'
+  check_gateway_field ARCHER_PRIVATE_AUTH0_DOMAIN '^[a-z0-9][a-z0-9.-]+\.auth0\.com$'
+  check_gateway_field ARCHER_PRIVATE_NATIVE_CLIENT_ID '^[A-Za-z0-9_-]{12,128}$'
+  check_gateway_field ARCHER_PRIVATE_OWNER_SUBJECT '^auth0\|[A-Za-z0-9_-]{1,120}$'
+  check_gateway_field ARCHER_COMPANION_DEVICE_SHA256 '^[A-Fa-f0-9]{64}$'
   if grep -q '^ARCHER_COMPANION_BRIDGE_KEY=' "$core"; then
     pass 'Core companion bridge is configured'
   else fail 'Core companion bridge key missing'; fi
