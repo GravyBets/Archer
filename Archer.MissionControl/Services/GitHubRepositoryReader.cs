@@ -195,7 +195,10 @@ public sealed class GitHubRepositoryReader(HttpClient http)
     // API endpoints remain loopback-only; the allowed repository list still applies.
     public sealed record ReviewableFile(string Path, string Sha, long Size);
     public sealed record RepositoryInventory(string Repository, string Branch, string TreeSha,
-        int TotalReviewableFiles, bool Truncated, List<ReviewableFile> Files);
+        int TotalReviewableFiles, bool Truncated, List<ReviewableFile> Files)
+    {
+        public List<string> AllPaths { get; init; } = [];
+    }
     public sealed record SourcePreviewFile(string Path, string Url, string Content,
         long Size, bool Truncated);
     public sealed record SourcePreview(string Repository, string Branch, string TreeSha,
@@ -256,10 +259,10 @@ public sealed class GitHubRepositoryReader(HttpClient http)
             normalized.EndsWith(".md", StringComparison.OrdinalIgnoreCase);
     }
 
-    public async Task<RepositoryInventory> ListReviewableFilesAsync(string repositoryUrl, CancellationToken ct)
+    public async Task<RepositoryInventory> ListReviewableFilesAsync(string repositoryUrl, CancellationToken ct, bool fresh = false)
     {
         var (owner, name, repository) = ValidateReviewRepository(repositoryUrl);
-        if (_inventories.TryGetValue(repository, out var cached) &&
+        if (!fresh && _inventories.TryGetValue(repository, out var cached) &&
             cached.Expires > DateTimeOffset.UtcNow)
             return cached.Value;
 
@@ -277,7 +280,9 @@ public sealed class GitHubRepositoryReader(HttpClient http)
             truncated.ValueKind == JsonValueKind.True)
             throw new InvalidOperationException("GitHub returned a partial repository tree. Source selection is unavailable.");
 
-        var fileList = root.GetProperty("tree").EnumerateArray()
+        var entries = root.GetProperty("tree").EnumerateArray().ToArray();
+        if (entries.Length > 12_000) throw new InvalidOperationException("Repository tree exceeds the bounded workspace inventory limit.");
+        var fileList = entries
             .Where(x => x.TryGetProperty("type", out var kind) && kind.GetString() == "blob" &&
                 x.TryGetProperty("mode", out var mode) && mode.GetString() == "100644" &&
                 x.TryGetProperty("path", out _) && x.TryGetProperty("sha", out _))
@@ -290,26 +295,28 @@ public sealed class GitHubRepositoryReader(HttpClient http)
 
         var value = new RepositoryInventory(repository, branch,
             root.GetProperty("sha").GetString() ?? "",
-            fileList.Count, fileList.Count > 300, fileList.Take(300).ToList());
+            fileList.Count, fileList.Count > 1200, fileList.Take(1200).ToList())
+        { AllPaths = entries.Select(x => x.GetProperty("path").GetString() ?? "").ToList() };
         _inventories[repository] = (DateTimeOffset.UtcNow.AddMinutes(5), value);
         return value;
     }
 
     public async Task<SourcePreview> PreviewFilesAsync(string repositoryUrl,
-        IReadOnlyList<string> paths, CancellationToken ct)
+        IReadOnlyList<string> paths, CancellationToken ct, RepositoryInventory? snapshot = null)
     {
         if (paths.Count is < 1 or > 6 || paths.Any(string.IsNullOrWhiteSpace) ||
             paths.Distinct(StringComparer.Ordinal).Count() != paths.Count)
             throw new ArgumentException("Select 1 to 6 distinct source files.");
 
         var (owner, name, repository) = ValidateReviewRepository(repositoryUrl);
-        var inventory = await ListReviewableFilesAsync(repositoryUrl, ct);
+        var inventory = snapshot ?? await ListReviewableFilesAsync(repositoryUrl, ct);
+        if (!string.Equals(inventory.Repository, repository, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Workspace snapshot belongs to a different repository.");
         var byPath = inventory.Files.ToDictionary(x => x.Path, StringComparer.Ordinal);
         if (paths.Any(path => !byPath.ContainsKey(path)))
             throw new ArgumentException(
                 "One or more selected paths aren't eligible files in the current repository inventory.");
 
-        const int maximumTotal = 34_000;
+        const int maximumTotal = 54_000;
         const int maximumPerFile = 9_000;
         var result = new List<SourcePreviewFile>();
         var remaining = maximumTotal;
