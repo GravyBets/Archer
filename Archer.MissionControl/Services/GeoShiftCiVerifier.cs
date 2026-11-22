@@ -60,9 +60,32 @@ public sealed class GeoShiftCiVerifier(HttpClient client)
             .Select(s => s.GetProperty("name").GetString()).ToArray();
         if (!failed.Any(s => s is "Build Web" or "Run core regression tests"))
             return new("Blocked", "CI did not complete successfully for an actionable code failure: " + url);
-        // Only bounded step names, never raw logs or credentials. A later
-        // integration may add sanitized compiler annotations.
-        return new("Failed", "Failed CI steps: " + string.Join(", ", failed) + ". " + url);
+        // Only allow diagnostic codes and source positions from approved
+        // files. Do not transmit arbitrary log/annotation text or secrets.
+        var feedback = new List<string>();
+        if (job.TryGetProperty("check_run_url", out var checkUrl) &&
+            Regex.Match(checkUrl.GetString() ?? "",
+                @"^https://api\.github\.com/repos/GravyBets/GeoShift/check-runs/([0-9]+)$") is { Success: true } match)
+        {
+            try
+            {
+                using var annotations = await ReadAsync("/check-runs/" + match.Groups[1].Value + "/annotations?per_page=30", ct);
+                foreach (var annotation in annotations.RootElement.EnumerateArray())
+                {
+                    var path = annotation.GetProperty("path").GetString() ?? "";
+                    if (!proposal.Files.Any(f => f.Path == path)) continue;
+                    var text = annotation.GetProperty("message").GetString() ?? "";
+                    var code = Regex.Match(text, @"\b(?:CS|RZ)[0-9]{4,5}\b");
+                    if (!code.Success) continue;
+                    var line = annotation.GetProperty("start_line").GetInt32();
+                    feedback.Add(code.Value + " at " + path + ":" + line);
+                    if (feedback.Count >= 10) break;
+                }
+            }
+            catch (Exception) when (!ct.IsCancellationRequested) { /* step names remain available */ }
+        }
+        return new("Failed", "Failed CI steps: " + string.Join(", ", failed) +
+            (feedback.Count == 0 ? "" : ". Compiler diagnostics: " + string.Join("; ", feedback)) + ". " + url);
     }
 
     private async Task<JsonDocument> ReadAsync(string path, CancellationToken ct)
