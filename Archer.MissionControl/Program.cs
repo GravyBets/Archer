@@ -926,7 +926,6 @@ app.MapPost("/api/voice/mission-list", async Task<IResult> (
 
 app.MapPost("/api/chat", async Task<IResult> (HttpContext context, ChatRequest request, JsonFileStore store, ArcherAiService ai, ProjectDevelopmentWorker worker, CancellationToken ct) =>
 {
-    if (!ai.IsConfigured) return MissingApiKey();
     var message = request.Message?.Trim() ?? "";
     if (message.Length is < 1 or > 3000) return Results.BadRequest(new { error = "Message must be 1–3000 characters." });
     try
@@ -949,6 +948,7 @@ app.MapPost("/api/chat", async Task<IResult> (HttpContext context, ChatRequest r
             }, ct);
             return Results.Ok(new { answer = localAnswer });
         }
+        if (!ai.IsConfigured) return MissingApiKey();
         var snapshot = await store.ReadAsync(state => state, ct);
         var answer = await ai.ChatAsync(message, snapshot, ct, request.VoiceMode);
         await store.UpdateAsync(state =>
