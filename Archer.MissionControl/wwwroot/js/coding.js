@@ -96,8 +96,8 @@
     const selection = window.ArcherDeveloper?.getCodeSelection?.();
     const paths = selection?.paths || [];
     const instruction = el('codingInstruction').value.trim();
-    if (!selection?.repository || paths.length < 1 || paths.length > 2) {
-      notice('Load GeoShift and select one or two .cs or .razor files first.', true);
+    if (!selection?.repository || paths.length > 2 || (paths.length === 0 && !/^https:\/\/github\.com\/GravyBets\/GeoShift\/?$/i.test(selection.repository))) {
+      notice('Load GeoShift (automatic selection) or select one or two .cs or .razor files.', true);
       return;
     }
     if (instruction.length < 15 || instruction.length > 1200) {
@@ -105,7 +105,7 @@
       return;
     }
     if (!window.confirm(
-      'Generate an AI code proposal using ' + paths.length + ' actual source file(s)? ' +
+      (paths.length ? 'Generate an AI code proposal using ' + paths.length + ' actual source file(s)? ' : 'Let Archer select up to two GeoShift source files based on this task? ') +
       'This sends selected source to OpenAI and uses your local spending allowance. No GitHub changes will be made.'))
       return;
 

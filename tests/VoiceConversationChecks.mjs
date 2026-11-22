@@ -414,6 +414,18 @@ check('voice quality guard rejects automatic robotic fallback if en-GB disappear
   onVoicesChanged();
   assert.equal(elt('voiceTestButton').disabled,false);
 });
+check('empty provider voice list clears stale playback selection',()=>{
+  providedVoices.splice(0,providedVoices.length);
+  onVoicesChanged();
+  assert.equal(elt('voiceTestButton').disabled,true);
+  pendingUtterance=null;
+  presence.reply('No automatic system fallback.');
+  advance(300);
+  assert.equal(pendingUtterance,null);
+  providedVoices.splice(0,providedVoices.length,voice);
+  onVoicesChanged();
+  assert.equal(elt('voiceTestButton').disabled,false);
+});
 check('voice diagnostics reveal no tokens or captured speech',()=>{
   const info=elt('voiceDiagnosticStatus').textContent;
   assert.match(info,/Browser recognition supported: yes/);

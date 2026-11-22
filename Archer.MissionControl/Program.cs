@@ -522,6 +522,26 @@ app.MapPost("/api/development/code-proposals", async Task<IResult> (
     var repo = request.Repository?.Trim() ?? "";
     var paths = request.Paths ?? [];
     var instruction = request.Instruction?.Trim() ?? "";
+    // Empty selections may be resolved automatically for an explicit GeoShift
+    // task. This is a bounded proposal only, not permission to publish.
+    GitHubRepositoryReader.RepositoryInventory? selectedInventory = null;
+    if (paths.Count == 0 && instruction.Length is >= 15 and <= 1200 &&
+        repo.TrimEnd('/').Equals("https://github.com/GravyBets/GeoShift", StringComparison.OrdinalIgnoreCase))
+    {
+        try
+        {
+            selectedInventory = await reader.ListReviewableFilesAsync(repo, ct);
+            if (selectedInventory.Truncated)
+                return Results.BadRequest(new { error = "Automatic selection requires a complete reviewable inventory." });
+            paths = GeoShiftSourceSelection.Select(selectedInventory.Files, instruction).ToList();
+        }
+        catch (ArgumentException error) { return Results.BadRequest(new { error = error.Message }); }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception)
+        {
+            return Results.Problem(title: "GeoShift source selection unavailable", statusCode: 502);
+        }
+    }
     if (paths.Count is < 1 or > 2 || paths.Distinct(StringComparer.Ordinal).Count() != paths.Count ||
         paths.Any(p => !(p.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
                          p.EndsWith(".razor", StringComparison.OrdinalIgnoreCase))) ||
@@ -536,6 +556,10 @@ app.MapPost("/api/development/code-proposals", async Task<IResult> (
             return Results.BadRequest(new { error = "Source is truncated or too large to edit safely. Choose smaller files." });
 
         var inventory = await reader.ListReviewableFilesAsync(repo, ct);
+        if ((selectedInventory is not null && selectedInventory.TreeSha != inventory.TreeSha) ||
+            !string.Equals(preview.TreeSha, inventory.TreeSha, StringComparison.Ordinal) ||
+            !string.Equals(preview.Branch, inventory.Branch, StringComparison.Ordinal))
+            return Results.Conflict(new { error = "Repository changed during source review. Refresh and try again." });
         var originals = inventory.Files.ToDictionary(x => x.Path, StringComparer.Ordinal);
         var generated = await ai.GenerateCodeDraftAsync(inventory.Repository, instruction,
             preview.Files, ct);

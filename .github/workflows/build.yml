@@ -16,6 +16,8 @@ jobs:
         run: dotnet restore Archer.MissionControl/Archer.MissionControl.csproj
       - name: Build
         run: dotnet build Archer.MissionControl/Archer.MissionControl.csproj --configuration Release --no-restore
+      - name: Validate automatic GeoShift source selection
+        run: dotnet run --project tests/GeoShiftSourceSelectionChecks/GeoShiftSourceSelectionChecks.csproj --configuration Release
       - name: Restore standalone mobile gateway
         run: dotnet restore Archer.MobileGateway/Archer.MobileGateway.csproj
       - name: Build standalone mobile gateway

@@ -58,24 +58,28 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
         var baseUri = $"https://api.github.com/repos/{Uri.EscapeDataString(owner)}/{Uri.EscapeDataString(repo)}";
         var branch = "archer/draft-" + proposal.Id.ToString("N")[..12];
 
-        // Check every file is unchanged ON GitHub before creating any branch.
+        // Capture the exact base commit FIRST, and validate all reviewed blobs
+        // against that immutable snapshot. A moving default branch cannot
+        // invalidate the checks between verification and branch creation.
+        using var head = await RequestAsync(HttpMethod.Get,
+            baseUri + "/git/ref/heads/" + Uri.EscapeDataString(proposal.BaseBranch),
+            null, ct);
+        var commit = head.RootElement.GetProperty("object").GetProperty("sha").GetString() ??
+            throw new InvalidOperationException("GitHub did not return the base branch commit.");
+        if (!Regex.IsMatch(commit, @"^[0-9a-fA-F]{40}$"))
+            throw new InvalidOperationException("GitHub returned an invalid base commit.");
+
         foreach (var file in proposal.Files)
         {
             var path = string.Join("/", file.Path.Split('/').Select(Uri.EscapeDataString));
             using var existing = await RequestAsync(HttpMethod.Get,
-                baseUri + "/contents/" + path + "?ref=" + Uri.EscapeDataString(proposal.BaseBranch),
+                baseUri + "/contents/" + path + "?ref=" + Uri.EscapeDataString(commit),
                 null, ct);
             if (!existing.RootElement.TryGetProperty("sha", out var current) ||
                 !string.Equals(current.GetString(), file.ExpectedBlobSha, StringComparison.Ordinal))
                 throw new InvalidOperationException(
                     $"File {file.Path} has changed on GitHub since the proposal was generated. Create a fresh proposal; no changes were published.");
         }
-
-        using var head = await RequestAsync(HttpMethod.Get,
-            baseUri + "/git/ref/heads/" + Uri.EscapeDataString(proposal.BaseBranch),
-            null, ct);
-        var commit = head.RootElement.GetProperty("object").GetProperty("sha").GetString() ??
-            throw new InvalidOperationException("GitHub did not return the base branch commit.");
 
         await RequestAsyncDiscard(HttpMethod.Post, baseUri + "/git/refs",
             new { @ref = "refs/heads/" + branch, sha = commit }, ct);
