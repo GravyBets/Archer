@@ -82,10 +82,26 @@ if [[ -f "$core" && -f "$gateway" ]]; then
   else
     fail 'Private companion gateway not enabled'
   fi
-  for name in ARCHER_PRIVATE_HOST ARCHER_PRIVATE_NATIVE_CLIENT_ID ARCHER_PRIVATE_OWNER_SUBJECT ARCHER_COMPANION_DEVICE_SHA256; do
-    if grep -Eq "^$name=.{12,256}$" "$gateway"; then pass "$name is configured"
-    else fail "$name has not been configured"; fi
-  done
+  # Validate exact production gateway input formats without sourcing env or
+  # disclosing identity/key values. Placeholder-looking values fail closed.
+  read_env_value() {
+    local name="$2"
+    awk -v target="$name" 'index($0,target "=")==1 {print substr($0,length(target)+2)}' "$1"
+  }
+  check_gateway_field() {
+    local name="$1" pattern="$2" value
+    value="$(read_env_value "$gateway" "$name")"
+    if [[ "$value" =~ $pattern && "$value" != REPLACE_* ]]; then
+      pass "$name has a valid format"
+    else
+      fail "$name is missing, a placeholder or invalid"
+    fi
+  }
+  check_gateway_field ARCHER_PRIVATE_HOST '^[a-z0-9][a-z0-9.-]+\.ts\.net$'
+  check_gateway_field ARCHER_PRIVATE_AUTH0_DOMAIN '^[a-z0-9][a-z0-9.-]+\.auth0\.com$'
+  check_gateway_field ARCHER_PRIVATE_NATIVE_CLIENT_ID '^[A-Za-z0-9_-]{12,128}$'
+  check_gateway_field ARCHER_PRIVATE_OWNER_SUBJECT '^auth0\|[A-Za-z0-9_-]{1,120}$'
+  check_gateway_field ARCHER_COMPANION_DEVICE_SHA256 '^[A-Fa-f0-9]{64}$'
   if grep -q '^ARCHER_COMPANION_BRIDGE_KEY=' "$core"; then
     pass 'Core companion bridge is configured'
   else fail 'Core companion bridge key missing'; fi

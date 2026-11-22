@@ -31,6 +31,16 @@ var wrong=Convert.ToBase64String(new byte[]{4}.Concat(a.Q.X!).Concat(a.Q.Y!).ToA
 Check(!guard.Consume(challenge.Ticket,"POST",DeviceProof.Message,body,wrong,Sign(challenge),now),"unapproved device rejected");
 Check(guard.Begin("POST","/api/projects",DeviceProof.Hash(body),now)==null,"no admin route proof");
 Check(guard.Begin("GET",DeviceProof.Overview,DeviceProof.Hash(body),now)==null,"read proof requires empty body");
+
+ClaimsPrincipal Scopes(string scope, bool authenticated = true) =>
+    new(new ClaimsIdentity([new Claim("scope", scope)], authenticated ? "verified-owner" : null));
+Check(GatewayScopes.Allows(Scopes("conversation:read"), "conversation:read"), "owner read token permits overview");
+Check(!GatewayScopes.Allows(Scopes("conversation:read"), "conversation:write"), "read-only token cannot send or recover write receipts");
+Check(!GatewayScopes.Allows(Scopes("conversation:write"), "conversation:read"), "write-only token cannot read overview");
+Check(GatewayScopes.Allows(Scopes("conversation:write"), "conversation:write"), "write token permits bounded messages");
+Check(!GatewayScopes.Allows(Scopes("conversation:read", false), "conversation:read"), "unsigned identity cannot read");
+Check(!GatewayScopes.Allows(Scopes("conversation:read conversation:write"), "admin:all"), "no admin operation can be implied by owner scopes");
+
 var config=new Dictionary<string,string>{
  ["ARCHER_PRIVATE_GATEWAY_ENABLED"]="true",["ARCHER_PRIVATE_HOST"]="archer.owner.ts.net",
  ["ARCHER_PRIVATE_AUTH0_DOMAIN"]="dev-example.us.auth0.com",["ARCHER_PRIVATE_NATIVE_CLIENT_ID"]="example_native_client",
