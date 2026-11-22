@@ -951,7 +951,7 @@ app.MapGet("/api/projects", async (JsonFileStore store, ProjectDevelopmentWorker
     Results.Ok(await store.ReadAsync(s => s.Projects.Select(p => new
     {
         p.Id, p.Name, p.Repository, p.Technology, p.SourceRoots, p.WorkflowFile, p.VerificationJob,
-        p.RequiredSteps, p.Priority, p.DailyAttemptLimit, p.Paused, p.AllowNewSourceFiles, p.CumulativeWorkspaces, p.RegressionTestRoots, p.RequireSandbox, sandboxConfigured = SandboxPolicy.Configured(p), p.Objectives, p.Memory,
+        p.RequiredSteps, p.Priority, p.DailyAttemptLimit, p.Paused, p.AllowNewSourceFiles, p.CumulativeWorkspaces, p.RegressionTestRoots, p.RequireSandbox, selfProject = SelfDevelopmentPolicy.IsSelf(p.Repository), sandboxConfigured = SandboxPolicy.Configured(p), p.Objectives, p.Memory,
         enabled = worker.CanArm(p), credentialPrefix = ProjectGitHubCredentials.Prefix(p.Repository),
         attemptsToday = ProjectPolicy.AttemptsToday(s, p.Id, DateTimeOffset.UtcNow)
     }).ToArray(), ct)));
@@ -975,6 +975,64 @@ app.MapPost("/api/projects", async Task<IResult> (HttpContext context, RegisterP
             Results.Conflict(new { error = "Duplicate project or project registry full." });
     }
     catch (ArgumentException error) { return Results.BadRequest(new { error = error.Message }); }
+});
+
+// Owner-local self-development status and a protected preset; no paid requests or writes to GitHub.
+app.MapGet("/api/self-development", async (JsonFileStore store, CancellationToken ct) =>
+    Results.Ok(await store.ReadAsync(s => new
+    {
+        registered = s.Projects.Any(p => SelfDevelopmentPolicy.IsSelf(p.Repository)),
+        enabled = SelfDevelopmentPolicy.Enabled,
+        pilotPaths = SelfDevelopmentPolicy.PilotPaths,
+        approvedPaths = SelfDevelopmentPolicy.ApprovedPaths,
+        findings = SelfDevelopmentReview.Audit(s)
+    }, ct)));
+
+app.MapPost("/api/self-development/register", async Task<IResult> (HttpContext context,
+    AcceptObjectiveRequest request, JsonFileStore store, CancellationToken ct) =>
+{
+    if (!LocalDevelopmentRequest(context) || !request.Confirm) return Results.StatusCode(403);
+    var project = ProjectPolicy.Register(SelfDevelopmentPolicy.Profile());
+    var saved = await store.UpdateAsync(s =>
+    {
+        if (s.Projects.Count >= 20 || s.Projects.Any(p => SelfDevelopmentPolicy.IsSelf(p.Repository) ||
+            p.Name.Equals(project.Name, StringComparison.OrdinalIgnoreCase))) return false;
+        s.Projects.Add(project);
+        return true;
+    }, ct);
+    return saved ? Results.Ok(new { id = project.Id, message = "Protected Archer workspace registered. External opt-in and scoped credentials still required." }) : Results.Conflict();
+});
+
+app.MapGet("/api/self-development/candidates/{id:guid}", async Task<IResult> (Guid id,
+    JsonFileStore store, ProjectCiVerifier ci, CancellationToken ct) =>
+{
+    var snapshot = await store.ReadAsync(s =>
+    {
+        var p = s.Projects.SingleOrDefault(p => SelfDevelopmentPolicy.IsSelf(p.Repository));
+        var b = s.DevelopmentBatches.SingleOrDefault(b => b.Id == id);
+        var candidate = p is null || b is null ? null : SelfDevelopmentReview.TryCandidate(p, b);
+        return (Project: p, Batch: b, Candidate: candidate);
+    }, ct);
+    if (snapshot.Project is not { } project || snapshot.Batch is not { } batch || snapshot.Candidate is not { } candidate)
+        return Results.Conflict(new { error = "No completed, authorized, immutable self-development candidate is available." });
+    if (!ProjectGitHubCredentials.IsConfigured(project.Repository))
+        return Results.Conflict(new { error = "Scoped credentials are not configured." });
+    try
+    {
+        if (!await ci.ReadyAsync(project, ct) || (await ci.InspectAsync(project, batch.Tasks.Last().Proposal!, ct, requireDraft: true)).Status != "Verified")
+            return Results.Conflict(new { error = "The exact draft is no longer independently verified." });
+        var unchanged = await store.ReadAsync(s =>
+        {
+            var p = s.Projects.SingleOrDefault(p => p.Id == project.Id);
+            var b = s.DevelopmentBatches.SingleOrDefault(b => b.Id == id);
+            return p is not null && b is not null &&
+                SelfDevelopmentReview.TryCandidate(p, b)?.HeadSha == candidate.HeadSha;
+        }, ct);
+        if (!unchanged) return Results.Conflict(new { error = "Local candidate changed during verification." });
+        return Results.Ok(candidate with { Status = "Draft CI rechecked — owner review required" });
+    }
+    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+    catch (Exception) { return Results.Conflict(new { error = "Live verification unavailable. No release authorization issued." }); }
 });
 
 app.MapPost("/api/projects/{id:guid}/pause", async Task<IResult> (HttpContext context, Guid id,
