@@ -43,6 +43,21 @@ public static class ProjectPolicy
     public static bool NewSourceAllowed(ManagedProject project, string path) =>
         project.AllowNewSourceFiles && IsApplicationPath(path) && InSourceRoot(project, path);
 
+    // Additive regression files only. Existing checks and test harness configuration
+    // remain outside the model's writable scope. Require a cumulative draft so a
+    // failed regression file remains unchanged when repairing application code.
+    public static bool NewRegressionAllowed(ManagedProject project, string path) =>
+        project.CumulativeWorkspaces && ValidPath(path) &&
+        project.RegressionTestRoots.Any(root => path.StartsWith(root + "/", StringComparison.Ordinal)) &&
+        !path.Split('/').Any(p => p.Equals("fixtures", StringComparison.OrdinalIgnoreCase) ||
+            p.Equals("scripts", StringComparison.OrdinalIgnoreCase) || p.Equals("tools", StringComparison.OrdinalIgnoreCase) ||
+            p.Equals("node_modules", StringComparison.OrdinalIgnoreCase) || p.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
+            p.Equals("obj", StringComparison.OrdinalIgnoreCase) || p.Equals("Data", StringComparison.OrdinalIgnoreCase)) &&
+        Regex.IsMatch(Path.GetFileName(path),
+            @"^(?:Archer[A-Za-z0-9_]+Tests\.cs|archer-[a-zA-Z0-9_-]+\.test\.[jt]sx?|test_archer_[a-zA-Z0-9_]+\.py)$");
+    public static bool NewFileAllowed(ManagedProject project, string path) =>
+        NewSourceAllowed(project, path) || NewRegressionAllowed(project, path);
+
     public static bool Eligible(ManagedProject project, string path, long size) =>
         size is > 0 and <= 9000 && IsApplicationPath(path) &&
         project.SourceRoots.Any(root => path.StartsWith(root + "/", StringComparison.Ordinal));
@@ -53,12 +68,16 @@ public static class ProjectPolicy
         var repo = input.Repository?.Trim() ?? "";
         var technology = input.Technology?.Trim() ?? "";
         var roots = (input.SourceRoots ?? []).Select(s => s.Trim().TrimEnd('/')).ToList();
+        var testRoots = (input.RegressionTestRoots ?? []).Select(s => s.Trim().TrimEnd('/')).ToList();
         var workflow = input.WorkflowFile?.Trim() ?? "";
         var job = input.VerificationJob?.Trim() ?? "";
         var steps = (input.RequiredSteps ?? []).Select(s => s.Trim()).ToList();
         if (name.Length is < 2 or > 80 || !ValidRepository(repo) ||
             technology.Length is < 2 or > 80 || roots.Count is < 1 or > 8 ||
             roots.Any(r => !ValidPath(r)) || roots.Distinct(StringComparer.Ordinal).Count() != roots.Count ||
+            testRoots.Count > 4 || (testRoots.Count > 0 && !input.CumulativeWorkspaces) ||
+            testRoots.Any(r => !ValidPath(r) || !r.Split('/').Any(p => p.Equals("tests", StringComparison.OrdinalIgnoreCase) || p.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase))) ||
+            testRoots.Distinct(StringComparer.OrdinalIgnoreCase).Count() != testRoots.Count ||
             !Regex.IsMatch(workflow, @"^[A-Za-z0-9_-]{1,80}\.ya?ml$") ||
             job.Length is < 1 or > 120 || steps.Count is < 2 or > 6 ||
             steps.Any(s => s.Length is < 1 or > 120 || s.Any(char.IsControl)) ||
@@ -69,7 +88,7 @@ public static class ProjectPolicy
         {
             Name = name, Repository = repo, Technology = technology, SourceRoots = roots,
             WorkflowFile = workflow, VerificationJob = job, RequiredSteps = steps,
-            Priority = input.Priority, DailyAttemptLimit = input.DailyAttemptLimit, AllowNewSourceFiles = input.AllowNewSourceFiles, CumulativeWorkspaces = input.CumulativeWorkspaces
+            Priority = input.Priority, DailyAttemptLimit = input.DailyAttemptLimit, AllowNewSourceFiles = input.AllowNewSourceFiles, CumulativeWorkspaces = input.CumulativeWorkspaces, RegressionTestRoots = testRoots
         };
     }
 
@@ -91,8 +110,10 @@ public static class ProjectPolicy
                 task.Paths is null || task.NewPaths is null || task.ContextPaths is null ||
                 task.Paths.Count + task.NewPaths.Count is < 1 or > MaxWorkspaceFiles ||
                 task.NewPaths.Count > 2 || task.ContextPaths.Count > MaxContextFiles ||
+                (project is not null && task.NewPaths.Count(path => NewRegressionAllowed(project, path)) > 1) ||
+                (project is not null && task.NewPaths.Any(path => NewRegressionAllowed(project, path)) && task.Paths.Count == 0 && !task.NewPaths.Any(path => NewSourceAllowed(project, path))) ||
                 task.Paths.Any(path => !eligible.Contains(path) || !current.Add(path) || (!cumulative && !used.Add(path))) ||
-                task.NewPaths.Any(path => project is null || !NewSourceAllowed(project, path) ||
+                task.NewPaths.Any(path => project is null || !NewFileAllowed(project, path) ||
                     occupied.Contains(path) || occupied.Any(p => p.StartsWith(path + "/", StringComparison.OrdinalIgnoreCase)) ||
                     !current.Add(path) || !used.Add(path)) ||
                 task.ContextPaths.Any(path => !eligible.Contains(path)) ||
@@ -101,7 +122,7 @@ public static class ProjectPolicy
                 throw new InvalidOperationException("The plan includes conflicting, missing or unapproved files.");
             if (cumulative)
             {
-                foreach (var path in task.NewPaths) { eligible.Add(path); occupied.Add(path); }
+                foreach (var path in task.NewPaths) { if (NewSourceAllowed(project!, path)) eligible.Add(path); occupied.Add(path); }
             }
         }
         // Case-insensitive conflicts and parent/child collisions are refused for Windows and Git compatibility.
