@@ -346,7 +346,11 @@ public sealed class ArcherAiService(
         // Local context + separate role-labelled dialogue: the model can
         // resolve follow-up questions without guessing who said what.
         // Recent turns are read from the existing, private, persisted state.
+        var development = string.Join("\n", state.DevelopmentBatches.TakeLast(5).Select(b =>
+            $"- {b.Objective} | armed: {b.Armed} | attempts remaining: {b.AttemptsRemaining} | " +
+            string.Join("; ", b.Tasks.Select(t => $"{t.Status}: {t.Instruction}"))));
         var localSnapshot = $"CURRENT MISSIONS (local state only):\n{missions}\n" +
+            $"GEOSHIFT DEVELOPMENT BATCHES (recorded local state; Verified means draft CI, not merge/deployment):\n{development}\n" +
             $"OWNER PRESENCE (explicitly opted in only):\n{personalPresence}\n" +
             $"LOCAL WEBSITE AVAILABILITY (not revenue or customer telemetry):\n{websiteHealth}\n" +
             $"Unacknowledged availability incidents: {unacknowledged}. " +
