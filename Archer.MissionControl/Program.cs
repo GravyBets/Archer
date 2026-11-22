@@ -536,6 +536,9 @@ app.MapPost("/api/development/code-proposals", async Task<IResult> (
             return Results.BadRequest(new { error = "Source is truncated or too large to edit safely. Choose smaller files." });
 
         var inventory = await reader.ListReviewableFilesAsync(repo, ct);
+        if (!string.Equals(preview.TreeSha, inventory.TreeSha, StringComparison.Ordinal) ||
+            !string.Equals(preview.Branch, inventory.Branch, StringComparison.Ordinal))
+            return Results.Conflict(new { error = "Repository changed during source review. Refresh and try again." });
         var originals = inventory.Files.ToDictionary(x => x.Path, StringComparer.Ordinal);
         var generated = await ai.GenerateCodeDraftAsync(inventory.Repository, instruction,
             preview.Files, ct);
