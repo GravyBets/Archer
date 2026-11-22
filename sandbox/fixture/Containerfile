@@ -1,0 +1,3 @@
+FROM scratch
+COPY verify /usr/local/bin/archer-verify
+ENTRYPOINT ["/usr/local/bin/archer-verify"]
