@@ -101,6 +101,20 @@ Check(!ProjectPolicy.ObjectiveReady(other, dependent), "unaccepted prerequisite 
 predecessor.AcceptedAtUtc = now;
 Check(ProjectPolicy.ObjectiveReady(other, dependent), "owner acceptance releases dependent objective");
 Check(!ProjectPolicy.ObjectiveReady(geo, dependent), "dependencies cannot be satisfied across projects");
+dependent.PlanningState = "Delegated";
+dependent.DelegatedUntilUtc = now.AddHours(1);
+dependent.ResumeDelegationAfterRestart = true;
+Check(ProjectPolicy.CanPlanDelegated(other, dependent, now), "accepted prerequisites unlock delegated planning");
+Check(ProjectPolicy.ClaimDelegated(other, dependent, now), "delegated planning reserves exactly one attempt");
+Check(!ProjectPolicy.ClaimDelegated(other, dependent, now), "repeated planning claim refused");
+ProjectPolicy.RecoverDelegation(dependent, now);
+Check(dependent.PlanningState == "Blocked" && dependent.DelegatedUntilUtc is null, "interrupted paid plan cannot automatically retry");
+var delegated = new ProjectObjective { PlanningState = "Delegated", DelegatedUntilUtc = now.AddHours(1), ResumeDelegationAfterRestart = true };
+ProjectPolicy.RecoverDelegation(delegated, now);
+Check(delegated.PlanningState == "Delegated", "explicit restart authorization preserves unclaimed objective");
+ProjectPolicy.RecoverDelegation(delegated, now.AddHours(2));
+Check(delegated.PlanningState == "Not delegated" && delegated.DelegatedUntilUtc is null, "expired delegated objective disarmed");
+
 ProjectPolicy.AddMemory(geo, "Decision", "unique geoshift context", true);
 ProjectPolicy.AddMemory(other, "Architecture", "map rendering uses canvas", true);
 ProjectPolicy.AddMemory(other, "Owner note", "private local note", false);
