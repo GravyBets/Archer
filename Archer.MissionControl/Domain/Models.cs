@@ -183,6 +183,7 @@ public sealed class CodeProposalFile
     public string Path { get; set; } = "";
     public string ExpectedBlobSha { get; set; } = "";
     public bool IsNew { get; set; }
+    public bool IsRegressionTest { get; set; }
     public string OriginalContent { get; set; } = "";
     public string ProposedContent { get; set; } = "";
 }
@@ -283,6 +284,7 @@ public sealed class ManagedProject
     public bool Paused { get; set; }
     public bool AllowNewSourceFiles { get; set; }
     public bool CumulativeWorkspaces { get; set; }
+    public List<string> RegressionTestRoots { get; set; } = [];
     public List<ProjectObjective> Objectives { get; set; } = [];
     public List<ProjectMemoryEntry> Memory { get; set; } = [];
 }
@@ -309,7 +311,7 @@ public sealed class ProjectMemoryEntry
 }
 public sealed record RegisterProjectRequest(string? Name, string? Repository, string? Technology,
     List<string>? SourceRoots, string? WorkflowFile, string? VerificationJob, List<string>? RequiredSteps,
-    int Priority = 3, int DailyAttemptLimit = 6, bool AllowNewSourceFiles = false, bool CumulativeWorkspaces = false);
+    int Priority = 3, int DailyAttemptLimit = 6, bool AllowNewSourceFiles = false, bool CumulativeWorkspaces = false, List<string>? RegressionTestRoots = null);
 public sealed record ProjectPauseRequest(bool Paused);
 public sealed record ProjectObjectiveRequest(string? Description, List<Guid>? DependsOn);
 public sealed record ProjectMemoryRequest(string? Kind, string? Content, bool ShareWithAi);
