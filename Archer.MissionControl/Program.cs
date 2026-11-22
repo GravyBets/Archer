@@ -924,13 +924,28 @@ app.MapPost("/api/voice/mission-list", async Task<IResult> (
         ArcherVoiceMissionJournal.RecordStatus, ct));
 });
 
-app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore store, ArcherAiService ai, CancellationToken ct) =>
+app.MapPost("/api/chat", async Task<IResult> (HttpContext context, ChatRequest request, JsonFileStore store, ArcherAiService ai, ProjectDevelopmentWorker worker, CancellationToken ct) =>
 {
     if (!ai.IsConfigured) return MissingApiKey();
     var message = request.Message?.Trim() ?? "";
     if (message.Length is < 1 or > 3000) return Results.BadRequest(new { error = "Message must be 1–3000 characters." });
     try
     {
+        if (request.DirectOwnerInput && LocalDevelopmentRequest(context) &&
+            (ConversationAssignments.LooksLikeAssignment(message) || ConversationAssignments.IsStatusRequest(message)))
+        {
+            var localAnswer = await store.UpdateAsync(state =>
+            {
+                var result = ConversationAssignments.IsStatusRequest(message)
+                    ? ConversationAssignments.Status(state)
+                    : ConversationAssignments.Assign(state, message, worker.CanArm, DateTimeOffset.UtcNow).Answer;
+                state.Conversation.Add(new ConversationEntry { Role = "user", Content = message });
+                state.Conversation.Add(new ConversationEntry { Role = "assistant", Content = result });
+                if (state.Conversation.Count > 100) state.Conversation.RemoveRange(0, state.Conversation.Count - 100);
+                return result;
+            }, ct);
+            return Results.Ok(new { answer = localAnswer });
+        }
         var snapshot = await store.ReadAsync(state => state, ct);
         var answer = await ai.ChatAsync(message, snapshot, ct, request.VoiceMode);
         await store.UpdateAsync(state =>
