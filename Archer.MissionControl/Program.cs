@@ -926,7 +926,6 @@ app.MapPost("/api/voice/mission-list", async Task<IResult> (
 
 app.MapPost("/api/chat", async Task<IResult> (HttpContext context, ChatRequest request, JsonFileStore store, ArcherAiService ai, ProjectDevelopmentWorker worker, CancellationToken ct) =>
 {
-    if (!ai.IsConfigured) return MissingApiKey();
     var message = request.Message?.Trim() ?? "";
     if (message.Length is < 1 or > 3000) return Results.BadRequest(new { error = "Message must be 1–3000 characters." });
     try
@@ -949,6 +948,7 @@ app.MapPost("/api/chat", async Task<IResult> (HttpContext context, ChatRequest r
             }, ct);
             return Results.Ok(new { answer = localAnswer });
         }
+        if (!ai.IsConfigured) return MissingApiKey();
         var snapshot = await store.ReadAsync(state => state, ct);
         var answer = await ai.ChatAsync(message, snapshot, ct, request.VoiceMode);
         await store.UpdateAsync(state =>
@@ -1338,7 +1338,13 @@ static void Log(ArcherState state, Guid? missionId, string message, string level
 
 static bool LocalDevelopmentRequest(HttpContext context)
 {
-    if (!context.Request.HasJsonContentType()) return false;
+    if (!context.Request.HasJsonContentType() ||
+        context.Connection.RemoteIpAddress is not { } peer ||
+        !System.Net.IPAddress.IsLoopback(peer)) return false;
+    // Never treat forwarded network requests or host headers as authority
+    // for mutating owner-only developer operations.
+    if (context.Request.Headers.ContainsKey("Forwarded") ||
+        context.Request.Headers.ContainsKey("X-Forwarded-For")) return false;
     var origin = context.Request.Headers.Origin.ToString();
     return origin.Length == 0 || origin == "http://127.0.0.1:5087" || origin == "http://localhost:5087";
 }
