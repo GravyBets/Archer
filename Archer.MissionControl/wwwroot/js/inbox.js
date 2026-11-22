@@ -42,10 +42,19 @@
     container.replaceChildren();
 
     if (!items.length) {
-      const box = textNode('p', mode === 'all'
+      const box = textNode('p', !latest.length
         ? 'No events recorded. This only means the local connected sources have no inbox items.'
         : 'No inbox items match this filter.', 'developer-empty');
       container.appendChild(box);
+      if (latest.length) {
+        const reset = textNode('button', 'Show all', 'button secondary');
+        reset.type = 'button';
+        reset.addEventListener('click', () => {
+          filter.value = 'all';
+          render();
+        });
+        container.appendChild(reset);
+      }
       return;
     }
 
