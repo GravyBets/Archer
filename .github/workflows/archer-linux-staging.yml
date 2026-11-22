@@ -1,0 +1,69 @@
+name: Archer Linux — Verified Private Staging Bundle
+
+# Packages only an exact trusted, successfully tested main commit.
+# Delivers a download, NEVER deploys, changes firewall, or starts services.
+on:
+  workflow_run:
+    workflows: ["Archer Build"]
+    types: [completed]
+permissions:
+  contents: read
+concurrency:
+  group: archer-linux-staging
+  cancel-in-progress: false
+jobs:
+  linux-staging-bundle:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == 'GravyBets/Archer' &&
+      github.repository == 'GravyBets/Archer'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Verify exact trusted tested revision
+        shell: bash
+        env:
+          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TESTED_SHA"
+          test "$(git remote get-url origin)" = "https://github.com/GravyBets/Archer"
+      - name: Publish reviewed Linux core and companion
+        shell: bash
+        run: bash deploy/linux/publish.sh "$RUNNER_TEMP/archer-linux-staging"
+      - name: Assemble source-labelled SHA256 release bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          release="$RUNNER_TEMP/archer-linux-staging"
+          test -f "$release/core/Archer.MissionControl.dll"
+          test -f "$release/core/wwwroot/index.html"
+          test -f "$release/gateway/Archer.PrivateGateway.dll"
+          test -f "$release/SOURCE_COMMIT"
+          test "$(cat "$release/SOURCE_COMMIT")" = "$(git rev-parse HEAD)"
+          mkdir -p "$release/setup" dist
+          cp deploy/linux/*.service deploy/linux/*.timer deploy/linux/*.example \
+             deploy/linux/preflight.sh deploy/linux/README.md "$release/setup/"
+          tar --sort=name --owner=0 --group=0 --numeric-owner \
+              -czf dist/Archer-Linux-Staging.tar.gz -C "$release" .
+          (cd dist && sha256sum Archer-Linux-Staging.tar.gz > SHA256SUMS)
+          sha256sum --check dist/SHA256SUMS
+      - name: Upload verified main-only staging bundle, never deploy
+        uses: actions/upload-artifact@v4
+        with:
+          name: Archer-Linux-Staging
+          path: |
+            dist/Archer-Linux-Staging.tar.gz
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
