@@ -181,6 +181,37 @@ workspace.Files[1].Path = "src/components/map.tsx";
 try { await publisher.PublishWorkspaceAsync(other, workspace, default); throw new Exception("Case collision accepted"); }
 catch (InvalidOperationException) { Check(fakePublisher.Writes.Count == 0, "case collision never writes"); }
 
+other.CumulativeWorkspaces = true;
+workspacePlan.Tasks.Add(new ProjectPlanTaskDraft { Title = "Integrate", Description = "Use earlier state", Paths = ["src/components/MapState.ts"], ContextPaths = ["src/components/Map.tsx"] });
+ProjectPolicy.ValidatePlan(workspacePlan, eligibleWorkspace, other);
+Check(true, "ordered cumulative plan can consume earlier new source");
+workspacePlan.Tasks.Reverse();
+Check(Refused(() => ProjectPolicy.ValidatePlan(workspacePlan, eligibleWorkspace, other)), "future files are not eligible before creation");
+workspacePlan.Tasks.Reverse();
+
+fakePublisher.Writes.Clear();
+fakePublisher.CumulativeBranch = resultWorkspace.Branch;
+workspace.Files[1].Path = "src/components/MapState.ts";
+workspace.WorkspaceBranch = resultWorkspace.Branch;
+workspace.WorkspaceParentSha = new string('a', 40);
+workspace.WorkspacePullRequestNumber = 9;
+var nextWorkspace = await publisher.PublishWorkspaceAsync(other, workspace, default);
+Check(nextWorkspace.Url == resultWorkspace.Url && nextWorkspace.Branch == resultWorkspace.Branch,
+    "continuation retains the same draft PR");
+Check(fakePublisher.Writes.SequenceEqual(new[] { "/git/trees", "/git/commits", "/git/refs/heads/" + resultWorkspace.Branch }),
+    "continuation commits once, fast-forwards once, never creates another PR");
+fakePublisher.Writes.Clear();
+fakePublisher.ExternalChange = true;
+try { await publisher.PublishWorkspaceAsync(other, workspace, default); throw new Exception("External head change accepted"); }
+catch (InvalidOperationException) { Check(fakePublisher.Writes.Count == 0, "external head changes prevent all writes"); }
+fakePublisher.ExternalChange = false;
+fakePublisher.DraftOpen = false;
+try { await publisher.PublishWorkspaceAsync(other, workspace, default); throw new Exception("Ready-for-review PR accepted"); }
+catch (InvalidOperationException) { Check(fakePublisher.Writes.Count == 0, "no writes after PR leaves draft state"); }
+other.CumulativeWorkspaces = false;
+try { await publisher.PublishWorkspaceAsync(other, workspace, default); throw new Exception("Unapproved continuation accepted"); }
+catch (InvalidOperationException) { Check(fakePublisher.Writes.Count == 0, "continuation requires project opt-in"); }
+
 sealed class FakeGitHub : HttpMessageHandler
 {
     public string Mode = "success";
@@ -221,6 +252,9 @@ sealed class FakeGitHub : HttpMessageHandler
 sealed class FakeWorkspaceGitHub(string repository) : HttpMessageHandler
 {
     public List<string> Writes { get; } = [];
+    public string? CumulativeBranch;
+    public bool ExternalChange;
+    public bool DraftOpen = true;
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         if (request.Headers.Authorization?.Parameter != "synthetic-writer")
@@ -233,7 +267,8 @@ sealed class FakeWorkspaceGitHub(string repository) : HttpMessageHandler
         string h(char c) => new string(c, 40);
         if (request.Method == HttpMethod.Get)
         {
-            if (path == "/git/ref/heads/master") payload = new { @object = new { sha = h('a') } };
+            if (path == "/git/ref/heads/master" || path == "/git/ref/heads/" + CumulativeBranch) payload = new { @object = new { sha = h('a') } };
+            else if (path == "/pulls/9") payload = new { state = "open", draft = DraftOpen, head = new { @ref = CumulativeBranch, sha = ExternalChange ? h('f') : h('a'), repo = new { full_name = repository } }, @base = new { @ref = "master" } };
             else if (path == "/git/commits/" + h('a')) payload = new { tree = new { sha = h('b') } };
             else if (path == "/git/trees/" + h('b')) payload = new { truncated = false, tree = new[] {
                 new { path = "src", mode = "040000", type = "tree", sha = h('f') },
@@ -244,7 +279,7 @@ sealed class FakeWorkspaceGitHub(string repository) : HttpMessageHandler
         }
         else
         {
-            if (request.Method != HttpMethod.Post) throw new Exception("Unsafe write " + request.Method);
+            if (request.Method != HttpMethod.Post && !(request.Method == HttpMethod.Patch && path == "/git/refs/heads/" + CumulativeBranch)) throw new Exception("Unsafe write " + request.Method);
             Writes.Add(path);
             using var body = System.Text.Json.JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct));
             var root = body.RootElement;
@@ -265,6 +300,11 @@ sealed class FakeWorkspaceGitHub(string repository) : HttpMessageHandler
                 if (!(root.GetProperty("ref").GetString() ?? "").StartsWith("refs/heads/archer/draft-") ||
                     root.GetProperty("sha").GetString() != h('e')) throw new Exception("Unsafe branch");
                 payload = new { };
+            }
+            else if (path == "/git/refs/heads/" + CumulativeBranch)
+            {
+                if (root.GetProperty("force").GetBoolean() || root.GetProperty("sha").GetString() != h('e')) throw new Exception("Not a safe fast-forward");
+                payload = new { @object = new { sha = h('e') } };
             }
             else if (path == "/pulls")
             {
