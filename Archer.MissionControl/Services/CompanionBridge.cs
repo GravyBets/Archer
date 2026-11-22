@@ -36,6 +36,7 @@ public static class CompanionBridge
             o.Id, project = p.Name, title = o.Description,
             status = ConversationAssignments.PlainStatus(o, s.DevelopmentBatches.Where(b => b.ProjectId == p.Id && b.ObjectiveId == o.Id))
         })).TakeLast(40).ToArray(),
+        research = s.Missions.Where(m => m.Summary == "Owner-authorized conversational research").Take(20).Select(m => new { m.Id, m.Title, m.Status }).ToArray(),
         alerts = s.Notifications.Take(20).Select(n => new { n.Id, n.Title, n.Summary, n.Priority, n.ReadAtUtc }).ToArray()
     };
 
