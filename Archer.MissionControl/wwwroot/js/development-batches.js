@@ -50,6 +50,7 @@
         p.attemptsToday + '/' + p.dailyAttemptLimit + ' attempts in last 24h · ' +
         (p.allowNewSourceFiles ? 'New source allowed' : 'Existing source only') + ' · ' +
         (p.cumulativeWorkspaces ? 'Cumulative drafts' : 'Independent drafts') + ' · ' +
+        ((p.regressionTestRoots || []).length ? 'Additive regression tests enabled' : 'Regression authoring disabled') + ' · ' +
         (p.enabled ? 'Configured' : 'Not configured or paused') +
         ' · credential variables: ' + p.credentialPrefix + '_READ_TOKEN and _WRITE_TOKEN'
       : 'No project registered. Registration itself grants no GitHub or model access.';
@@ -164,7 +165,7 @@
       sourceRoots: el('projectRoots').value.split(',').map(x => x.trim()).filter(Boolean),
       workflowFile: el('projectWorkflow').value, verificationJob: el('projectJob').value,
       requiredSteps: el('projectSteps').value.split('\n').map(x => x.trim()).filter(Boolean),
-      priority: Number(el('projectPriority').value), dailyAttemptLimit: Number(el('projectAttemptLimit').value), allowNewSourceFiles: el('projectAllowNewSource').checked, cumulativeWorkspaces: el('projectCumulativeWorkspaces').checked
+      priority: Number(el('projectPriority').value), dailyAttemptLimit: Number(el('projectAttemptLimit').value), allowNewSourceFiles: el('projectAllowNewSource').checked, cumulativeWorkspaces: el('projectCumulativeWorkspaces').checked, regressionTestRoots: el('projectRegressionRoots').value.split(',').map(x => x.trim()).filter(Boolean)
     }, 'POST', () => el('projectRegistryForm').reset());
   });
   el('pauseProjectButton').addEventListener('click', () => {
