@@ -94,8 +94,15 @@ public sealed class ProjectDevelopmentWorker(
     private async Task RunOneAsync(CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
-        if (await store.ReadAsync(s => s.DevelopmentBatches.Any(b => b.Armed && b.ExpiresAtUtc <= now), ct))
-            await store.UpdateAsync(s => { foreach (var b in s.DevelopmentBatches.Where(b => b.Armed && b.ExpiresAtUtc <= now)) b.Armed = false; return true; }, ct);
+        if (await store.ReadAsync(s => s.DevelopmentBatches.Any(b => b.Armed && b.ExpiresAtUtc <= now) ||
+            s.Projects.SelectMany(p => p.Objectives).Any(o => o.PlanningState == "Delegated" && o.DelegatedUntilUtc <= now), ct))
+            await store.UpdateAsync(s =>
+            {
+                foreach (var b in s.DevelopmentBatches.Where(b => b.Armed && b.ExpiresAtUtc <= now)) b.Armed = false;
+                foreach (var o in s.Projects.SelectMany(p => p.Objectives).Where(o => o.PlanningState == "Delegated" && o.DelegatedUntilUtc <= now))
+                { o.PlanningState = "Not delegated"; o.DelegatedUntilUtc = null; o.PlanningDetail = "Authorization expired before planning."; }
+                return true;
+            }, ct);
         var active = await store.ReadAsync(s => ProjectPolicy.Select(s, now), ct);
         if (active is null) { await PlanDelegatedAsync(ct); return; }
         var project = await store.ReadAsync(s => s.Projects.SingleOrDefault(p => p.Id == active.ProjectId), ct);
