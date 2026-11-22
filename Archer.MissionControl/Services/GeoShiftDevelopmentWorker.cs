@@ -111,10 +111,7 @@ public sealed class GeoShiftDevelopmentWorker(
             {
                 var b = s.DevelopmentBatches.Single(x => x.Id == active.Id);
                 var t = b.Tasks.Single(x => x.Id == task.Id);
-                t.Detail = verdict.Detail;
-                t.Status = verdict.Status == "Failed" && t.Attempts < 2 && b.AttemptsRemaining > 0
-                    ? "Repair queued" : verdict.Status == "Verified" ? "Verified" : "Blocked";
-                if (t.Status == "Blocked" || b.Tasks.All(x => x.Status == "Verified")) b.Armed = false;
+                DevelopmentBatchPolicy.CompleteCi(b, t, verdict.Status, verdict.Detail);
                 return true;
             }, ct);
             return;
@@ -128,13 +125,7 @@ public sealed class GeoShiftDevelopmentWorker(
         {
             var b = s.DevelopmentBatches.Single(x => x.Id == active.Id);
             var t = b.Tasks.Single(x => x.Id == task.Id);
-            if (!b.Armed || b.ExpiresAtUtc <= DateTimeOffset.UtcNow ||
-                b.AttemptsRemaining <= 0 || t.Attempts >= 2 ||
-                t.Status is not ("Queued" or "Repair queued")) return false;
-            b.AttemptsRemaining--;
-            t.Attempts++;
-            t.Status = "Editing";
-            return true;
+            return DevelopmentBatchPolicy.Claim(b, t, DateTimeOffset.UtcNow);
         }, ct);
         if (!claim) return;
 
