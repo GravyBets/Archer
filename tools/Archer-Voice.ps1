@@ -127,8 +127,10 @@ function Ask-Archer([string]$words) {
   $script:dictation.Enabled = $false
   Write-VoiceStatus 'thinking' 'Archer is processing the latest spoken request.'
   try {
-    # No mission creation/execution is enabled from unattended microphone
-    # input. Approval and edits continue to require physical UI controls.
+    # Standby speech is never a generic admin API. Only explicit owner
+    # research or registered-project work directives may use the same bounded
+    # local conversation assignment gate as typed chat. Mission execution,
+    # approvals, purchases and deployments still require separate controls.
     if ($text -match '^(?:please\s+)?(?:create|add|delete|run|start|approve|execute|cancel)\s+(?:a\s+|my\s+|the\s+)?mission\b') {
       Speak-Reply 'That needs your approval in Mission Control. I can discuss it, but I will not execute it from the microphone.'
       return
@@ -137,7 +139,7 @@ function Ask-Archer([string]$words) {
       $result = Invoke-RestMethod -Method Post -Uri ($script:base + '/api/voice/mission-list') -ContentType 'application/json' -Body '' -TimeoutSec 15
       $answer = [string]$result.reply
     } else {
-      $payload = @{message=$text;voiceMode=$true} | ConvertTo-Json -Compress
+      $payload = @{message=$text;voiceMode=$true;directOwnerInput=$true} | ConvertTo-Json -Compress
       $result = Invoke-RestMethod -Method Post -Uri ($script:base + '/api/chat') -ContentType 'application/json' -Body $payload -TimeoutSec 250
       $answer = [string]$result.answer
     }
