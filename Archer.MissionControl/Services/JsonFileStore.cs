@@ -67,7 +67,10 @@ public sealed class JsonFileStore
             if (interrupted) mission.Status = "Paused";
         }
         foreach (var batch in state.DevelopmentBatches)
+        {
             DevelopmentBatchPolicy.Recover(batch, DateTimeOffset.UtcNow);
+            if (!state.Projects.Any(p => p.Id == batch.ProjectId && !p.Paused)) batch.Armed = false;
+        }
         return true;
     });
 
