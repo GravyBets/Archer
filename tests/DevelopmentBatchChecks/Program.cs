@@ -68,17 +68,25 @@ sealed class FakeGitHub : HttpMessageHandler
     {
         var sha = new string(Mode == "changed" ? 'b' : 'a',40);
         var path = request.RequestUri!.AbsolutePath;
-        string json;
+        object payload;
         if (path.EndsWith("/pulls/7"))
-            json = $$"""{"state":"open","head":{"sha":"{{sha}}","ref":"archer/draft-example","repo":{"full_name":"GravyBets/GeoShift"}},"base":{"ref":"master"}}""";
+            payload = new { state = "open", head = new { sha, @ref = "archer/draft-example",
+                repo = new { full_name = "GravyBets/GeoShift" } }, @base = new { @ref = "master" } };
         else if (path.EndsWith("/archer-ci.yml"))
-            json = """{"state":"active","path":".github/workflows/archer-ci.yml"}""";
+            payload = new { state = "active", path = ".github/workflows/archer-ci.yml" };
         else if (path.EndsWith("/archer-ci.yml/runs"))
-            json = Mode == "pending" ? """{"workflow_runs":[]}""" :
-                $$"""{"workflow_runs":[{"id":10,"head_sha":"{{sha}}","head_branch":"archer/draft-example","event":"pull_request","status":"completed","conclusion":"{{(Mode == "failed" ? "failure" : "success")}}"}]}""";
+            payload = new { workflow_runs = Mode == "pending" ? Array.Empty<object>() :
+                new object[] { new { id = 10, head_sha = sha, head_branch = "archer/draft-example",
+                    @event = "pull_request", status = "completed",
+                    conclusion = Mode == "failed" ? "failure" : "success" } } };
         else if (path.EndsWith("/runs/10/jobs"))
-            json = $$"""{"jobs":[{"name":"GeoShift build and tests","conclusion":"{{(Mode == "failed" ? "failure" : "success")}}","steps":[{"name":"Build Web","conclusion":"{{(Mode == "failed" ? "failure" : "success")}}"},{"name":"Run core regression tests","conclusion":"{{(Mode == "skipped" || Mode == "failed" ? "skipped" : "success")}}"}]}]}""";
+            payload = new { jobs = new[] { new { name = "GeoShift build and tests",
+                conclusion = Mode == "failed" ? "failure" : "success", steps = new[] {
+                    new { name = "Build Web", conclusion = Mode == "failed" ? "failure" : "success" },
+                    new { name = "Run core regression tests", conclusion = Mode is "skipped" or "failed" ? "skipped" : "success" }
+                } } } };
         else throw new Exception("Unexpected CI request: " + path);
+        var json = System.Text.Json.JsonSerializer.Serialize(payload);
         return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) {
             Content = new StringContent(json, Encoding.UTF8, "application/json") });
     }
