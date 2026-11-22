@@ -54,7 +54,7 @@ if ($StateFile) {
   $candidates+=@{label='Visual Studio Archer';path=(Join-Path $repository 'Archer.MissionControl/Data/archer-state.json')}
   $candidates+=@{label='Repository root';path=(Join-Path $repository 'Data/archer-state.json')}
 }
-$seen=New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+$seen=[System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 foreach($candidate in $candidates) {
   $path=[IO.Path]::GetFullPath([string]$candidate.path)
   if (-not $seen.Add($path) -or -not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
