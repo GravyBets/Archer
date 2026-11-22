@@ -86,6 +86,36 @@ public static class ProjectPolicy
         objective.AcceptedAtUtc is null &&
         objective.DependsOn.All(id => project.Objectives.Any(o => o.Id == id && o.AcceptedAtUtc is not null));
 
+    public static bool CanPlanDelegated(ManagedProject project, ProjectObjective objective, DateTimeOffset now) =>
+        !project.Paused && ObjectiveReady(project, objective) &&
+        objective.PlanningState == "Delegated" && !objective.PlanningAttempted &&
+        objective.DelegatedUntilUtc > now;
+
+    public static bool ClaimDelegated(ManagedProject project, ProjectObjective objective, DateTimeOffset now)
+    {
+        if (!CanPlanDelegated(project, objective, now)) return false;
+        objective.PlanningAttempted = true;
+        objective.PlanningState = "Planning";
+        objective.PlanningDetail = "One budget-checked planning attempt reserved.";
+        return true;
+    }
+
+    public static void RecoverDelegation(ProjectObjective objective, DateTimeOffset now)
+    {
+        if (objective.PlanningState == "Planning")
+        {
+            objective.PlanningState = "Blocked";
+            objective.PlanningDetail = "Planning interrupted; no automatic paid retry.";
+            objective.DelegatedUntilUtc = null;
+        }
+        else if (objective.PlanningState == "Delegated" &&
+            (!objective.ResumeDelegationAfterRestart || objective.DelegatedUntilUtc <= now))
+        {
+            objective.PlanningState = "Not delegated";
+            objective.DelegatedUntilUtc = null;
+        }
+    }
+
     public static int AttemptsToday(ArcherState state, Guid projectId, DateTimeOffset now) =>
         state.DevelopmentBatches.Where(b => b.ProjectId == projectId)
             .SelectMany(b => b.Tasks).SelectMany(t => t.AttemptedAtUtc)
