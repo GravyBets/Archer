@@ -67,16 +67,7 @@ public sealed class JsonFileStore
             if (interrupted) mission.Status = "Paused";
         }
         foreach (var batch in state.DevelopmentBatches)
-        {
-            if (!batch.ResumeAfterRestart || batch.ExpiresAtUtc <= DateTimeOffset.UtcNow ||
-                batch.Tasks.Any(t => t.Status is "Editing" or "Publishing" or "Blocked"))
-                batch.Armed = false;
-            foreach (var task in batch.Tasks.Where(t => t.Status is "Editing" or "Publishing"))
-            {
-                task.Status = "Blocked";
-                task.Detail = "Interrupted before a recorded result. Inspect any GitHub branch/PR before creating a new batch; no automatic retry.";
-            }
-        }
+            DevelopmentBatchPolicy.Recover(batch, DateTimeOffset.UtcNow);
         return true;
     });
 
