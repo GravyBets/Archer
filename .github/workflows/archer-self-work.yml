@@ -1,7 +1,7 @@
 name: Archer Self-Work — Approved Issues to Tested Draft PRs
 
 # No service hosting: scheduled Actions only, strictly owner opt-in.
-# Disabled by default unless repository variable ARCHER_SELF_WORK_ENABLED=true.
+# Retired legacy implementation; no scheduled or manual execution. The protected managed self-project replaces this path.
 on:
   workflow_dispatch:
     inputs:
@@ -9,8 +9,6 @@ on:
         description: "Approved issue number (optional; blank selects oldest approved)"
         required: false
         type: string
-  schedule:
-    - cron: '15 17 * * *'
 
 permissions:
   contents: read
@@ -22,7 +20,7 @@ concurrency:
 jobs:
   claim:
     # Intentional one-time owner opt-in. No API or GitHub write if disabled.
-    if: ${{ vars.ARCHER_SELF_WORK_ENABLED == 'true' }}
+    if: ${{ false }} # Retired: use the protected managed self-project instead.
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

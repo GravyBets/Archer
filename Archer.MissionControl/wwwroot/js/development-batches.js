@@ -6,7 +6,7 @@
   const plan = el('developmentPlanButton');
   const objective = el('developmentObjective');
   const picker = el('managedProjectSelect');
-  let busy = false, refreshing = false, projects = [], batches = [], selectedObjective = null;
+  let busy = false, refreshing = false, projects = [], batches = [], selectedObjective = null, selfAudit = null;
   const current = () => projects.find(p => p.id === picker.value);
   function element(tag, value) {
     const node = document.createElement(tag);
@@ -42,6 +42,14 @@
   }
   function render() {
     const p = current();
+    const audit = el('selfDevelopmentAudit');
+    audit.replaceChildren();
+    if (selfAudit) {
+      audit.append(element('p', 'Protected pilot · ' + (selfAudit.enabled ? 'External opt-in enabled' : 'External opt-in required')));
+      for (const finding of selfAudit.findings || []) audit.append(element('p', finding.status + ' — ' + finding.detail));
+      audit.append(element('p', 'Approved files: ' + ((selfAudit.approvedPaths || []).join(', ') || 'None')));
+    }
+    el('registerSelfProjectButton').disabled = !!selfAudit?.registered || busy;
     plan.disabled = !p?.enabled || busy;
     el('pauseProjectButton').disabled = !p;
     el('pauseProjectButton').textContent = p?.paused ? 'Make project available' : 'Pause project';
@@ -151,6 +159,27 @@
       }, !batch.armed && (batch.continuous || !p.enabled || batch.tasks.some(t => t.status === 'Blocked') ||
           batch.tasks.every(t => t.status === 'Verified') ||
           (batch.expiresAtUtc && Date.parse(batch.expiresAtUtc) <= Date.now()))));
+      if (p.selfProject && !batch.armed && batch.tasks.length && batch.tasks.every(t => t.status === 'Verified'))
+        section.append(action('Recheck self-development candidate', async () => {
+          const target = el('selfDevelopmentCandidate');
+          target.replaceChildren(element('p', 'Rechecking exact draft CI…'));
+          try {
+            const candidate = await api('/api/self-development/candidates/' + batch.id);
+            target.replaceChildren(element('p', candidate.status), element('p', 'Head ' + candidate.headSha),
+              element('p', 'Source baseline ' + candidate.baselineSha), element('p', candidate.nextAction));
+            const pr = link(candidate.pullRequestUrl, 'Review draft PR', candidate.repository);
+            if (pr) target.append(pr);
+            for (const [url, label] of [[candidate.baselineUrl, 'Baseline commit'], [candidate.compareUrl, 'Compare baseline to candidate']]) {
+              const u = new URL(url);
+              if (u.origin === 'https://github.com' && !u.username && !u.password && !u.search && !u.hash &&
+                  (u.pathname === '/' + candidate.repository + '/commit/' + candidate.baselineSha ||
+                   u.pathname === '/' + candidate.repository + '/compare/' + candidate.baselineSha + '...' + candidate.headSha)) {
+                const a = element('a', label); a.href = u.href; a.target = '_blank'; a.rel = 'noopener noreferrer';
+                target.append(document.createElement('br'), a);
+              }
+            }
+          } catch (error) { target.replaceChildren(element('p', error.message)); }
+        }));
       list.append(section);
     }
     if (!list.children.length) list.append(element('p', 'No development batches for this project.'));
@@ -160,13 +189,17 @@
     refreshing = true;
     try {
       const selected = picker.value;
-      [projects, { batches }] = await Promise.all([api('/api/projects'), api('/api/development/batches')]);
+      [projects, { batches }, selfAudit] = await Promise.all([api('/api/projects'), api('/api/development/batches'), api('/api/self-development')]);
       picker.replaceChildren(...projects.map(p => option(p.id, p.name)));
       if (projects.some(p => p.id === selected)) picker.value = selected;
       render();
     } catch (error) { status.textContent = 'Could not load project state: ' + error.message; }
     finally { refreshing = false; }
   }
+  el('registerSelfProjectButton').addEventListener('click', () => {
+    if (window.confirm('Register Archer as a protected project? This grants no credentials or automatic deployment.'))
+      command('/api/self-development/register', { confirm: true });
+  });
   picker.addEventListener('change', () => { selectedObjective = null; objective.value = ''; objective.readOnly = false; render(); });
   el('projectRegistryForm').addEventListener('submit', event => {
     event.preventDefault();
