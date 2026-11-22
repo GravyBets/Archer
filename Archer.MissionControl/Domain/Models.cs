@@ -11,6 +11,8 @@ public sealed class ArcherState
     public List<WebsiteIncident> WebsiteIncidents { get; set; } = [];
     // Reviewable coding drafts are local until explicitly approved for publication.
     public List<CodeProposal> CodeProposals { get; set; } = [];
+    public List<DevelopmentBatch> DevelopmentBatches { get; set; } = [];
+    public List<ManagedProject> Projects { get; set; } = [];
     public CommunicationPreferences CommunicationPreferences { get; set; } = new();
     public List<CommunicationAttempt> CommunicationAttempts { get; set; } = [];
     // Persistent source-grounded local inbox. Not phone notifications or an APNs delivery queue.
@@ -166,6 +168,8 @@ public sealed class CodeProposal
     public string Status { get; set; } = "Draft";
     public string? PullRequestUrl { get; set; }
     public string? BranchName { get; set; }
+    public string? PublishedHeadSha { get; set; }
+    public int? PullRequestNumber { get; set; }
     public List<CodeProposalFile> Files { get; set; } = [];
 }
 
@@ -220,3 +224,91 @@ public sealed class OperatorNotification
     public Guid? MissionId { get; set; }
     public Guid? WebsiteMonitorId { get; set; }
 }
+
+public sealed class DevelopmentBatch
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid ProjectId { get; set; }
+    public Guid? ObjectiveId { get; set; }
+    public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+    public string Objective { get; set; } = "";
+    public bool Armed { get; set; }
+    public bool ResumeAfterRestart { get; set; }
+    public DateTimeOffset? ExpiresAtUtc { get; set; }
+    public int AttemptsRemaining { get; set; }
+    public List<DevelopmentTask> Tasks { get; set; } = [];
+}
+public sealed class DevelopmentTask
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Instruction { get; set; } = "";
+    public List<string> Paths { get; set; } = [];
+    public string Status { get; set; } = "Queued";
+    public int Attempts { get; set; }
+    public List<DateTimeOffset> AttemptedAtUtc { get; set; } = [];
+    public string? Detail { get; set; }
+    public DateTimeOffset? SubmittedAtUtc { get; set; }
+    public CodeProposal? Proposal { get; set; }
+    public List<string> PriorPullRequests { get; set; } = [];
+}
+public sealed record DevelopmentPlanRequest(string? Objective, bool Confirm, Guid ProjectId = default, Guid? ObjectiveId = null);
+public sealed record DevelopmentArmRequest(bool Confirm, bool ResumeAfterRestart = false);
+
+public sealed class ManagedProject
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = "";
+    public string Repository { get; set; } = "";
+    public string Technology { get; set; } = "";
+    public List<string> SourceRoots { get; set; } = [];
+    public string WorkflowFile { get; set; } = "";
+    public string VerificationJob { get; set; } = "";
+    public List<string> RequiredSteps { get; set; } = [];
+    public int Priority { get; set; } = 3;
+    public int DailyAttemptLimit { get; set; } = 6;
+    public bool Paused { get; set; }
+    public List<ProjectObjective> Objectives { get; set; } = [];
+    public List<ProjectMemoryEntry> Memory { get; set; } = [];
+}
+public sealed class ProjectObjective
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Description { get; set; } = "";
+    public List<Guid> DependsOn { get; set; } = [];
+    public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? AcceptedAtUtc { get; set; }
+    public DateTimeOffset? DelegatedUntilUtc { get; set; }
+    public bool ResumeDelegationAfterRestart { get; set; }
+    public bool PlanningAttempted { get; set; }
+    public string PlanningState { get; set; } = "Not delegated";
+    public string? PlanningDetail { get; set; }
+}
+public sealed class ProjectMemoryEntry
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+    public string Kind { get; set; } = "Owner note";
+    public string Content { get; set; } = "";
+    public bool ShareWithAi { get; set; }
+}
+public sealed record RegisterProjectRequest(string? Name, string? Repository, string? Technology,
+    List<string>? SourceRoots, string? WorkflowFile, string? VerificationJob, List<string>? RequiredSteps,
+    int Priority = 3, int DailyAttemptLimit = 6);
+public sealed record ProjectPauseRequest(bool Paused);
+public sealed record ProjectObjectiveRequest(string? Description, List<Guid>? DependsOn);
+public sealed record ProjectMemoryRequest(string? Kind, string? Content, bool ShareWithAi);
+public sealed record AcceptObjectiveRequest(bool Confirm);
+
+public sealed class ProjectPlanDraft
+{
+    public string Summary { get; set; } = "";
+    public List<ProjectPlanTaskDraft> Tasks { get; set; } = [];
+}
+public sealed class ProjectPlanTaskDraft
+{
+    public string Title { get; set; } = "";
+    public string Description { get; set; } = "";
+    public List<string> Paths { get; set; } = [];
+}
+
+public sealed record DelegateObjectiveRequest(bool Confirm, bool ResumeAfterRestart = false);

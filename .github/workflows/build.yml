@@ -18,6 +18,8 @@ jobs:
         run: dotnet build Archer.MissionControl/Archer.MissionControl.csproj --configuration Release --no-restore
       - name: Validate automatic GeoShift source selection
         run: dotnet run --project tests/GeoShiftSourceSelectionChecks/GeoShiftSourceSelectionChecks.csproj --configuration Release
+      - name: Verify development queue, repair caps, recovery and exact-head CI
+        run: dotnet run --project tests/DevelopmentBatchChecks/DevelopmentBatchChecks.csproj --configuration Release
       - name: Restore standalone mobile gateway
         run: dotnet restore Archer.MobileGateway/Archer.MobileGateway.csproj
       - name: Build standalone mobile gateway
@@ -110,6 +112,7 @@ jobs:
           node --check Archer.MissionControl/wwwroot/js/operator-context.js
           node --check Archer.MissionControl/wwwroot/js/spending.js
           node --check Archer.MissionControl/wwwroot/js/coding.js
+          node --check Archer.MissionControl/wwwroot/js/development-batches.js
           node --check Archer.MissionControl/wwwroot/js/communications.js
           node --check Archer.MissionControl/wwwroot/js/inbox.js
           node --check Archer.MissionControl/wwwroot/js/mobile-drafts.js

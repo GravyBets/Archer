@@ -12,6 +12,7 @@ DEVELOPER_JS = (ROOT / "js" / "developer.js").read_text(encoding="utf-8")
 OPERATOR_JS = (ROOT / "js" / "operator-context.js").read_text(encoding="utf-8")
 SPEND_JS = (ROOT / "js" / "spending.js").read_text(encoding="utf-8")
 CODING_JS = (ROOT / "js" / "coding.js").read_text(encoding="utf-8")
+DEVELOPMENT_JS = (ROOT / "js" / "development-batches.js").read_text(encoding="utf-8")
 COMMUNICATIONS_JS = (ROOT / "js" / "communications.js").read_text(encoding="utf-8")
 INBOX_JS = (ROOT / "js" / "inbox.js").read_text(encoding="utf-8")
 MOBILE_DRAFTS_JS = (ROOT / "js" / "mobile-drafts.js").read_text(encoding="utf-8")
@@ -75,7 +76,10 @@ required = {
     "spendSaveButton", "spendPauseIndicator",
     "codingHeading", "codingInstruction", "codingGenerateButton",
     "codingStatus", "codingProposalPreview", "codingPublishStatus",
-    "codingPublishButton",
+    "codingPublishButton", "developmentBatchHeading", "developmentObjective", "projectRegistryHeading", "managedProjectSelect", "managedProjectStatus",
+    "projectRegistryForm", "projectObjectiveForm", "projectMemoryForm", "projectObjectives", "projectMemories",
+    "developmentPlanButton", "developmentRefreshButton", "developmentResumeAfterRestart",
+    "developmentBatchStatus", "developmentBatchList",
     "communicationHeading", "communicationsProviderStatus", "communicationsDestination",
     "communicationsSmsTest", "communicationsCallTest", "communicationsTestStatus",
     "communicationsPreferencesForm", "communicationsDailySms",
@@ -92,13 +96,13 @@ assert required.issubset(page.ids), f"Missing expected IDs: {required.difference
 
 # Only check literal calls. Dynamically generated IDs are intentionally excluded.
 literal_id_pattern = re.compile(r"(?:\$\(|\bel\()\s*'([A-Za-z][A-Za-z0-9-]+)'\s*\)")
-referred_ids = set(literal_id_pattern.findall(JS + "\n" + HOME_JS + "\n" + FIELD_JS + "\n" + DEVELOPER_JS + "\n" + OPERATOR_JS + "\n" + SPEND_JS + "\n" + CODING_JS + "\n" + COMMUNICATIONS_JS + "\n" + INBOX_JS + "\n" + MOBILE_DRAFTS_JS + "\n" + MOBILE_SESSIONS_JS))
+referred_ids = set(literal_id_pattern.findall(JS + "\n" + HOME_JS + "\n" + FIELD_JS + "\n" + DEVELOPER_JS + "\n" + OPERATOR_JS + "\n" + SPEND_JS + "\n" + CODING_JS + "\n" + DEVELOPMENT_JS + "\n" + COMMUNICATIONS_JS + "\n" + INBOX_JS + "\n" + MOBILE_DRAFTS_JS + "\n" + MOBILE_SESSIONS_JS))
 # Created dynamically in the mission-list empty state.
 dynamic_ids = {"starterMission"}
 missing = referred_ids.difference(page.ids).difference(dynamic_ids)
 assert not missing, f"JavaScript references missing DOM IDs: {missing}"
 
-assert [src.split("?")[0] for src in page.scripts[-14:]] == ["/js/mission-voice.js", "/js/app.js", "/js/archer-home.js", "/js/desktop-voice.js", "/js/realtime-voice.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js", "/js/coding.js", "/js/communications.js", "/js/inbox.js", "/js/mobile-drafts.js", "/js/mobile-sessions.js"]
+assert [src.split("?")[0] for src in page.scripts[-15:]] == ["/js/mission-voice.js", "/js/app.js", "/js/archer-home.js", "/js/desktop-voice.js", "/js/realtime-voice.js", "/js/orb-field.js", "/js/developer.js", "/js/operator-context.js", "/js/spending.js", "/js/coding.js", "/js/development-batches.js", "/js/communications.js", "/js/inbox.js", "/js/mobile-drafts.js", "/js/mobile-sessions.js"]
 assert "/js/desktop-voice.js?v=20261120-native1" in page.scripts
 assert 'desktop-voice-status.json' in (ROOT.parent / "Services" / "ArcherDesktopVoiceStatus.cs").read_text(encoding="utf-8")
 assert "Archer-Voice.ps1" in (ROOT.parents[1] / "tools" / "Start-Archer.ps1").read_text(encoding="utf-8")
@@ -127,6 +131,11 @@ assert "window.confirm(" in COMMUNICATIONS_JS
 assert "/api/development/code-proposals" in CODING_JS
 assert "window.confirm(" in CODING_JS
 assert "publish" in CODING_JS
+assert "/api/development/batches" in DEVELOPMENT_JS
+assert "/api/projects" in DEVELOPMENT_JS
+assert "projectId: p.id" in DEVELOPMENT_JS
+assert "window.confirm(" in DEVELOPMENT_JS
+assert "textContent" in DEVELOPMENT_JS and "innerHTML" not in DEVELOPMENT_JS
 assert "/api/spending" in SPEND_JS
 assert "/api/presence" in OPERATOR_JS
 assert "/api/operations" in OPERATOR_JS

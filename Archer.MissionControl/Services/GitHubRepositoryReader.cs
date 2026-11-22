@@ -249,7 +249,8 @@ public sealed class GitHubRepositoryReader(HttpClient http)
         ];
         if (excluded.Any(x => normalized.Contains(x, StringComparison.OrdinalIgnoreCase)))
             return false;
-        return normalized.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
+        return new[] { ".js", ".jsx", ".ts", ".tsx", ".py" }.Contains(Path.GetExtension(normalized), StringComparer.OrdinalIgnoreCase) ||
+            normalized.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
             normalized.EndsWith(".razor", StringComparison.OrdinalIgnoreCase) ||
             normalized.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ||
             normalized.EndsWith(".md", StringComparison.OrdinalIgnoreCase);
@@ -278,6 +279,7 @@ public sealed class GitHubRepositoryReader(HttpClient http)
 
         var fileList = root.GetProperty("tree").EnumerateArray()
             .Where(x => x.TryGetProperty("type", out var kind) && kind.GetString() == "blob" &&
+                x.TryGetProperty("mode", out var mode) && mode.GetString() == "100644" &&
                 x.TryGetProperty("path", out _) && x.TryGetProperty("sha", out _))
             .Select(x => new ReviewableFile(
                 x.GetProperty("path").GetString() ?? "",
@@ -347,7 +349,7 @@ public sealed class GitHubRepositoryReader(HttpClient http)
 
         // Optional fine-grained read-only token for specifically allowed private repositories.
         // Never store in GitHub or send the credential to an AI model.
-        var token = Environment.GetEnvironmentVariable("ARCHER_GITHUB_READ_TOKEN");
+        var token = ProjectGitHubCredentials.ForApiUrl(url, false);
         if (!string.IsNullOrWhiteSpace(token))
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 

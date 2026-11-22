@@ -35,7 +35,8 @@ builder.Services.AddHttpClient<TwilioGateway>(client =>
     client.Timeout = TimeSpan.FromSeconds(25));
 builder.Services.AddSingleton<CommunicationCoordinator>();
 builder.Services.AddHostedService<CommunicationWorker>();
-builder.Services.AddHttpClient("github-reader", client => client.Timeout = TimeSpan.FromSeconds(90));
+builder.Services.AddHttpClient("github-reader", client => client.Timeout = TimeSpan.FromSeconds(90))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
 builder.Services.AddSingleton<GitHubRepositoryReader>(service =>
     new GitHubRepositoryReader(service.GetRequiredService<IHttpClientFactory>().CreateClient("github-reader")));
 // Separate local-only opt-in realtime audio integration. This NEVER exposes
@@ -57,7 +58,14 @@ builder.Services.AddHttpClient<ArcherAiService>(client =>
 builder.Services.AddHttpClient<GitHubDraftPrPublisher>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(45);
-});
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
+
+builder.Services.AddHttpClient<ProjectCiVerifier>(client => client.Timeout = TimeSpan.FromSeconds(30))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    { AllowAutoRedirect = false, UseCookies = false });
+builder.Services.AddSingleton<ProjectDevelopmentWorker>();
+builder.Services.AddHostedService<ProjectDevelopmentWorker>(services =>
+    services.GetRequiredService<ProjectDevelopmentWorker>());
 
 var app = builder.Build();
 
@@ -933,6 +941,229 @@ app.MapPost("/api/chat", async Task<IResult> (ChatRequest request, JsonFileStore
     catch (Exception error) { return Results.Problem(title: "Archer could not respond", detail: error.Message, statusCode: 502); }
 });
 
+// Owner-local project management and development mission control.
+app.MapGet("/api/projects", async (JsonFileStore store, ProjectDevelopmentWorker worker, CancellationToken ct) =>
+    Results.Ok(await store.ReadAsync(s => s.Projects.Select(p => new
+    {
+        p.Id, p.Name, p.Repository, p.Technology, p.SourceRoots, p.WorkflowFile, p.VerificationJob,
+        p.RequiredSteps, p.Priority, p.DailyAttemptLimit, p.Paused, p.Objectives, p.Memory,
+        enabled = worker.CanArm(p), credentialPrefix = ProjectGitHubCredentials.Prefix(p.Repository),
+        attemptsToday = ProjectPolicy.AttemptsToday(s, p.Id, DateTimeOffset.UtcNow)
+    }).ToArray(), ct)));
+
+app.MapPost("/api/projects", async Task<IResult> (HttpContext context, RegisterProjectRequest request,
+    JsonFileStore store, CancellationToken ct) =>
+{
+    if (!LocalDevelopmentRequest(context)) return Results.StatusCode(403);
+    try
+    {
+        var project = ProjectPolicy.Register(request);
+        var saved = await store.UpdateAsync(s =>
+        {
+            if (s.Projects.Count >= 20 || s.Projects.Any(p =>
+                p.Repository.Equals(project.Repository, StringComparison.OrdinalIgnoreCase) ||
+                p.Name.Equals(project.Name, StringComparison.OrdinalIgnoreCase))) return false;
+            s.Projects.Add(project);
+            return true;
+        }, ct);
+        return saved ? Results.Ok(new { id = project.Id, message = "Project registered. Configure scoped credentials and allowlists separately." }) :
+            Results.Conflict(new { error = "Duplicate project or project registry full." });
+    }
+    catch (ArgumentException error) { return Results.BadRequest(new { error = error.Message }); }
+});
+
+app.MapPost("/api/projects/{id:guid}/pause", async Task<IResult> (HttpContext context, Guid id,
+    ProjectPauseRequest request, JsonFileStore store, CancellationToken ct) =>
+{
+    if (!LocalDevelopmentRequest(context)) return Results.StatusCode(403);
+    var saved = await store.UpdateAsync(s =>
+    {
+        var p = s.Projects.SingleOrDefault(p => p.Id == id);
+        if (p is null) return false;
+        p.Paused = request.Paused;
+        if (p.Paused)
+        {
+            foreach (var b in s.DevelopmentBatches.Where(b => b.ProjectId == id)) b.Armed = false;
+            foreach (var o in p.Objectives.Where(o => o.PlanningState is "Delegated" or "Planning"))
+            {
+                o.DelegatedUntilUtc = null;
+                o.PlanningState = o.PlanningAttempted ? "Blocked" : "Not delegated";
+                o.PlanningDetail = "Project paused by owner.";
+            }
+        }
+        return true;
+    }, ct);
+    return saved ? Results.Ok(new { message = request.Paused ? "Project paused. In-flight operations may finish." : "Project available; batches remain disarmed." }) : Results.NotFound();
+});
+
+app.MapPost("/api/projects/{id:guid}/objectives", async Task<IResult> (HttpContext context, Guid id,
+    ProjectObjectiveRequest request, JsonFileStore store, CancellationToken ct) =>
+{
+    if (!LocalDevelopmentRequest(context)) return Results.StatusCode(403);
+    var description = request.Description?.Trim() ?? "";
+    var deps = request.DependsOn ?? [];
+    if (description.Length is < 15 or > 1000 || deps.Count > 8 || deps.Distinct().Count() != deps.Count)
+        return Results.BadRequest(new { error = "Give a bounded objective and up to eight distinct dependencies." });
+    var objective = new ProjectObjective { Description = description, DependsOn = deps };
+    var saved = await store.UpdateAsync(s =>
+    {
+        var p = s.Projects.SingleOrDefault(p => p.Id == id);
+        if (p is null || p.Objectives.Count >= 50 || deps.Any(d => !p.Objectives.Any(o => o.Id == d))) return false;
+        p.Objectives.Add(objective);
+        return true;
+    }, ct);
+    return saved ? Results.Ok(new { id = objective.Id, message = "Objective saved; dependencies must be accepted before planning." }) :
+        Results.Conflict(new { error = "Invalid project, cross-project dependency, or objective limit." });
+});
+app.MapPost("/api/projects/{id:guid}/objectives/{objectiveId:guid}/accept", async Task<IResult> (
+    HttpContext context, Guid id, Guid objectiveId, AcceptObjectiveRequest request, JsonFileStore store, CancellationToken ct) =>
+{
+    if (!LocalDevelopmentRequest(context) || !request.Confirm) return Results.StatusCode(403);
+    var saved = await store.UpdateAsync(s =>
+    {
+        var p = s.Projects.SingleOrDefault(p => p.Id == id);
+        var objective = p?.Objectives.SingleOrDefault(o => o.Id == objectiveId);
+        if (p is null || objective is null || !ProjectPolicy.ObjectiveReady(p, objective)) return false;
+        // Explicit owner acceptance is not evidence of a production deployment.
+        // Prevent accepting completed objectives while external writes are underway.
+        if (s.DevelopmentBatches.Any(b => b.ProjectId == id && b.ObjectiveId == objectiveId &&
+            (b.Armed || b.Tasks.Any(t => t.Status is "Editing" or "Publishing")))) return false;
+        if (objective.PlanningState == "Planning") return false;
+        objective.DelegatedUntilUtc = null;
+        objective.AcceptedAtUtc = DateTimeOffset.UtcNow;
+        ProjectPolicy.AddMemory(p, "Owner acceptance", objective.Description + " — accepted by owner, not independently verified as deployed.", true);
+        return true;
+    }, ct);
+    return saved ? Results.Ok(new { message = "Objective accepted; dependent objectives may now be planned." }) : Results.Conflict();
+});
+app.MapPost("/api/projects/{id:guid}/objectives/{objectiveId:guid}/delegate", async Task<IResult> (
+    HttpContext context, Guid id, Guid objectiveId, DelegateObjectiveRequest request,
+    JsonFileStore store, ProjectDevelopmentWorker worker, CancellationToken ct) =>
+{
+    if (!LocalDevelopmentRequest(context) || !request.Confirm) return Results.StatusCode(403);
+    var saved = await store.UpdateAsync(s =>
+    {
+        var p = s.Projects.SingleOrDefault(p => p.Id == id);
+        var o = p?.Objectives.SingleOrDefault(o => o.Id == objectiveId);
+        if (p is null || o is null || !worker.CanArm(p) || o.AcceptedAtUtc is not null ||
+            o.PlanningAttempted || o.PlanningState == "Delegated" && o.DelegatedUntilUtc > DateTimeOffset.UtcNow ||
+            s.DevelopmentBatches.Any(b => b.ProjectId == id && b.ObjectiveId == objectiveId))
+            return false;
+        o.DelegatedUntilUtc = DateTimeOffset.UtcNow.AddHours(24);
+        o.ResumeDelegationAfterRestart = request.ResumeAfterRestart;
+        o.PlanningState = "Delegated";
+        o.PlanningDetail = "Owner authorized one planning call and bounded coding attempts when dependencies are accepted.";
+        return true;
+    }, ct);
+    return saved ? Results.Ok(new { message = "Objective delegated for 24 hours. Archer will plan and draft automatically once prerequisites are accepted, within limits." }) :
+        Results.Conflict(new { error = "Cannot delegate this objective: check project setup, prior attempts and existing batches." });
+});
+app.MapPost("/api/projects/{id:guid}/objectives/{objectiveId:guid}/cancel-delegation", async Task<IResult> (
+    HttpContext context, Guid id, Guid objectiveId, AcceptObjectiveRequest request, JsonFileStore store, CancellationToken ct) =>
+{
+    if (!LocalDevelopmentRequest(context) || !request.Confirm) return Results.StatusCode(403);
+    var saved = await store.UpdateAsync(s =>
+    {
+        var o = s.Projects.SingleOrDefault(p => p.Id == id)?.Objectives.SingleOrDefault(o => o.Id == objectiveId);
+        if (o is null || o.PlanningState is not ("Delegated" or "Planning")) return false;
+        o.DelegatedUntilUtc = null;
+        o.PlanningState = o.PlanningAttempted ? "Blocked" : "Not delegated";
+        o.PlanningDetail = "Delegation canceled by owner. An in-flight planning call may finish, but no batch will be armed.";
+        return true;
+    }, ct);
+    return saved ? Results.Ok(new { message = "Delegation canceled." }) : Results.Conflict();
+});
+
+app.MapPost("/api/projects/{id:guid}/memory", async Task<IResult> (HttpContext context, Guid id,
+    ProjectMemoryRequest request, JsonFileStore store, CancellationToken ct) =>
+{
+    if (!LocalDevelopmentRequest(context)) return Results.StatusCode(403);
+    var content = request.Content?.Trim() ?? "";
+    var kind = request.Kind?.Trim() ?? "";
+    if (content.Length is < 1 or > 1200 || kind is not ("Owner note" or "Decision" or "Preference" or "Architecture" or "Lesson"))
+        return Results.BadRequest(new { error = "Choose a supported memory type and text up to 1200 characters. Never store secrets." });
+    var saved = await store.UpdateAsync(s =>
+    {
+        var p = s.Projects.SingleOrDefault(p => p.Id == id);
+        if (p is null) return false;
+        ProjectPolicy.AddMemory(p, kind, content, request.ShareWithAi);
+        return true;
+    }, ct);
+    return saved ? Results.Ok(new { message = "Project memory saved." }) : Results.NotFound();
+});
+app.MapDelete("/api/projects/{id:guid}/memory/{entryId:guid}", async Task<IResult> (
+    HttpContext context, Guid id, Guid entryId, JsonFileStore store, CancellationToken ct) =>
+{
+    if (!LocalDevelopmentRequest(context)) return Results.StatusCode(403);
+    var removed = await store.UpdateAsync(s => s.Projects.SingleOrDefault(p => p.Id == id)?.Memory.RemoveAll(m => m.Id == entryId) > 0, ct);
+    return removed ? Results.Ok(new { message = "Local memory entry removed." }) : Results.NotFound();
+});
+
+app.MapGet("/api/development/batches", async (JsonFileStore store, ProjectDevelopmentWorker worker, CancellationToken ct) =>
+    Results.Ok(await store.ReadAsync(s => new
+    {
+        enabled = s.Projects.Any(worker.CanArm),
+        batches = s.DevelopmentBatches.Select(b => new
+        {
+            b.Id, b.ProjectId, b.ObjectiveId, b.Objective, b.Armed, b.ResumeAfterRestart, b.ExpiresAtUtc, b.AttemptsRemaining,
+            projectName = s.Projects.SingleOrDefault(p => p.Id == b.ProjectId)?.Name ?? "Unassigned",
+            repository = s.Projects.SingleOrDefault(p => p.Id == b.ProjectId)?.Repository ?? "",
+            tasks = b.Tasks.Select(t => new { t.Id, t.Instruction, t.Paths, t.Status, t.Attempts, t.Detail,
+                pullRequestUrl = t.Proposal == null ? null : t.Proposal.PullRequestUrl, t.PriorPullRequests }).ToArray()
+        }).ToArray()
+    }, ct)));
+
+app.MapPost("/api/development/batches", async Task<IResult> (HttpContext context,
+    DevelopmentPlanRequest request, ProjectDevelopmentWorker worker, JsonFileStore store, CancellationToken ct) =>
+{
+    if (!LocalDevelopmentRequest(context)) return Results.StatusCode(403);
+    var project = await store.ReadAsync(s => s.Projects.SingleOrDefault(p => p.Id == request.ProjectId), ct);
+    if (project is null || !worker.CanArm(project))
+        return Results.BadRequest(new { error = "Choose a registered, available project with scoped credentials and allowlists." });
+    var objective = request.Objective?.Trim() ?? "";
+    if (request.ObjectiveId is { } objectiveId)
+    {
+        var existing = project.Objectives.SingleOrDefault(o => o.Id == objectiveId);
+        if (existing is null || !ProjectPolicy.ObjectiveReady(project, existing) || existing.PlanningState is "Delegated" or "Planning")
+            return Results.Conflict(new { error = "Objective missing, accepted, or dependencies unresolved." });
+        objective = existing.Description;
+        if (await store.ReadAsync(s => s.DevelopmentBatches.Any(b => b.ProjectId == project.Id &&
+            b.ObjectiveId == objectiveId && (b.Armed || b.Tasks.Any(t => t.Status != "Blocked"))), ct))
+            return Results.Conflict(new { error = "A batch already exists for this objective." });
+    }
+    if (!request.Confirm || objective.Length is < 15 or > 1000)
+        return Results.BadRequest(new { error = "Confirm one billed planning call with a concrete objective (15–1000 characters)." });
+    try
+    {
+        var batch = await worker.PlanAsync(project, objective, request.ObjectiveId, ct);
+        if (!await worker.SavePlanAsync(batch, ct))
+            return Results.Conflict(new { error = "Batch could not be saved; check project and objective state." });
+        return Results.Ok(new { id = batch.Id, message = "Plan saved, unarmed. Review all proposed tasks before authorizing." });
+    }
+    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+    catch (Exception error) { return Results.BadRequest(new { error = error.Message }); }
+});
+app.MapPost("/api/development/batches/{id:guid}/arm", async Task<IResult> (HttpContext context,
+    Guid id, DevelopmentArmRequest request, ProjectDevelopmentWorker worker, CancellationToken ct) =>
+{
+    if (!LocalDevelopmentRequest(context)) return Results.StatusCode(403);
+    if (!request.Confirm) return Results.BadRequest(new { error = "Explicit batch authorization required." });
+    try
+    {
+        return await worker.ArmAsync(id, request.ResumeAfterRestart, ct) ? Results.Ok(new { message = "Armed within remaining attempt and time limits." }) :
+            Results.Conflict(new { error = "Cannot arm. Check configuration, independent CI, expiration, and other active or blocked batches." });
+    }
+    catch (Exception) when (!ct.IsCancellationRequested)
+    { return Results.Conflict(new { error = "Independent project CI could not be verified. No coding authorized." }); }
+});
+app.MapPost("/api/development/batches/{id:guid}/pause", async Task<IResult> (HttpContext context,
+    Guid id, DevelopmentArmRequest request, ProjectDevelopmentWorker worker, CancellationToken ct) =>
+{
+    if (!LocalDevelopmentRequest(context)) return Results.StatusCode(403);
+    return await worker.PauseAsync(id, ct) ? Results.Ok(new { message = "Paused; an in-flight operation may finish." }) :
+        Results.NotFound();
+});
+
 app.MapFallbackToFile("index.html");
 
 Console.WriteLine("ARCHER Mission Control V1.13.0 — http://127.0.0.1:5087");
@@ -947,4 +1178,12 @@ static void Log(ArcherState state, Guid? missionId, string message, string level
 {
     state.Activity.Insert(0, new ActivityEntry { MissionId = missionId, Message = message, Level = level });
     if (state.Activity.Count > 250) state.Activity.RemoveRange(250, state.Activity.Count - 250);
+}
+
+
+static bool LocalDevelopmentRequest(HttpContext context)
+{
+    if (!context.Request.HasJsonContentType()) return false;
+    var origin = context.Request.Headers.Origin.ToString();
+    return origin.Length == 0 || origin == "http://127.0.0.1:5087" || origin == "http://localhost:5087";
 }

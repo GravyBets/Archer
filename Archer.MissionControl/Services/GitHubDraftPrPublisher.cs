@@ -20,6 +20,10 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
             StringComparison.OrdinalIgnoreCase) &&
         !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ARCHER_GITHUB_WRITE_TOKEN"));
 
+    public bool CanPublishRepository(string repo) =>
+        string.Equals(Environment.GetEnvironmentVariable("ARCHER_CODING_ENABLED"), "true", StringComparison.OrdinalIgnoreCase) &&
+        !string.IsNullOrWhiteSpace(ProjectGitHubCredentials.Scoped(repo, true) ?? Environment.GetEnvironmentVariable("ARCHER_GITHUB_WRITE_TOKEN"));
+
     private static (string Owner, string Repo) CheckRepository(CodeProposal proposal)
     {
         if (proposal.Repository.Length > 140 ||
@@ -40,8 +44,7 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
             proposal.Files.Any(x => x.ProposedContent.Length is < 1 or > 12000 ||
                 x.ExpectedBlobSha.Length != 40 ||
                 !Regex.IsMatch(x.Path, @"^[A-Za-z0-9_.\-/]{1,180}$") ||
-                !(x.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
-                    x.Path.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)) ||
+                !(new[] { ".cs", ".razor", ".js", ".jsx", ".ts", ".tsx", ".py" }.Contains(Path.GetExtension(x.Path), StringComparer.OrdinalIgnoreCase)) ||
                 x.Path.Split('/').Any(part => part is "." or "..") ||
                 x.Path.StartsWith(".github/", StringComparison.OrdinalIgnoreCase)))
             throw new InvalidOperationException("Proposal includes an unsupported file or oversized code change.");
@@ -50,7 +53,7 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
 
     public async Task<(string Url, string Branch)> PublishAsync(CodeProposal proposal, CancellationToken ct)
     {
-        if (!IsEnabled)
+        if (!CanPublishRepository(proposal.Repository))
             throw new InvalidOperationException(
                 "GitHub code publishing is disabled. Explicitly configure ARCHER_CODING_ENABLED=true and a repo-scoped ARCHER_GITHUB_WRITE_TOKEN before trying again.");
 
@@ -127,6 +130,8 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
             uri.Host != "github.com" || uri.Scheme != "https")
             throw new InvalidOperationException("GitHub returned an unexpected pull request URL.");
 
+        proposal.PublishedHeadSha = pull.RootElement.GetProperty("head").GetProperty("sha").GetString();
+        proposal.PullRequestNumber = pull.RootElement.GetProperty("number").GetInt32();
         return (url, branch);
     }
 
@@ -142,7 +147,7 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
         request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Archer", "0.9.0"));
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         request.Headers.Authorization = new AuthenticationHeaderValue(
-            "Bearer", Environment.GetEnvironmentVariable("ARCHER_GITHUB_WRITE_TOKEN"));
+            "Bearer", ProjectGitHubCredentials.ForApiUrl(url, true));
         if (body is not null)
             request.Content = new StringContent(JsonSerializer.Serialize(body, JsonOptions),
                 Encoding.UTF8, "application/json");

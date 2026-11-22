@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Archer.MissionControl/Domain/Models.cs" Link="Models.cs" />
+    <Compile Include="../../Archer.MissionControl/Services/DevelopmentBatchPolicy.cs" Link="DevelopmentBatchPolicy.cs" />
+    <Compile Include="../../Archer.MissionControl/Services/GeoShiftCiVerifier.cs" Link="ProjectCiVerifier.cs" />
+    <Compile Include="../../Archer.MissionControl/Services/ProjectPolicy.cs" Link="ProjectPolicy.cs" />
+    <Compile Include="../../Archer.MissionControl/Services/ProjectGitHubCredentials.cs" Link="ProjectGitHubCredentials.cs" />
+  </ItemGroup>
+</Project>
