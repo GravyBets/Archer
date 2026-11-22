@@ -238,6 +238,8 @@ public sealed class DevelopmentBatch
     public Guid ProjectId { get; set; }
     public Guid? ObjectiveId { get; set; }
     public bool Cumulative { get; set; }
+    public bool Continuous { get; set; }
+    public int PlanningCycles { get; set; } = 1;
     public string? WorkspaceBranch { get; set; }
     public string? WorkspaceHeadSha { get; set; }
     public int? WorkspacePullRequestNumber { get; set; }
@@ -300,6 +302,10 @@ public sealed class ProjectObjective
     public DateTimeOffset? DelegatedUntilUtc { get; set; }
     public bool ResumeDelegationAfterRestart { get; set; }
     public bool PlanningAttempted { get; set; }
+    public int MaxPlanningCycles { get; set; } = 1;
+    public int MaxCodingAttempts { get; set; } = 6;
+    public int PlanningCyclesUsed { get; set; }
+    public bool Continuous { get; set; }
     public string PlanningState { get; set; } = "Not delegated";
     public string? PlanningDetail { get; set; }
 }
@@ -321,6 +327,7 @@ public sealed record AcceptObjectiveRequest(bool Confirm);
 
 public sealed class ProjectPlanDraft
 {
+    public string Disposition { get; set; } = "continue";
     public string Summary { get; set; } = "";
     public List<ProjectPlanTaskDraft> Tasks { get; set; } = [];
 }
@@ -333,7 +340,7 @@ public sealed class ProjectPlanTaskDraft
     public List<string> ContextPaths { get; set; } = [];
 }
 
-public sealed record DelegateObjectiveRequest(bool Confirm, bool ResumeAfterRestart = false);
+public sealed record DelegateObjectiveRequest(bool Confirm, bool ResumeAfterRestart = false, int MaxPlanningCycles = 1, int MaxCodingAttempts = 6);
 
 public sealed class SandboxEvidence
 {

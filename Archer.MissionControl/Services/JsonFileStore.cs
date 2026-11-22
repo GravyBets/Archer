@@ -72,7 +72,9 @@ public sealed class JsonFileStore
         foreach (var batch in state.DevelopmentBatches)
         {
             DevelopmentBatchPolicy.Recover(batch, DateTimeOffset.UtcNow);
-            if (!state.Projects.Any(p => p.Id == batch.ProjectId && !p.Paused)) batch.Armed = false;
+            if (!state.Projects.Any(p => p.Id == batch.ProjectId && !p.Paused &&
+                (!batch.Continuous || p.Objectives.Any(o => o.Id == batch.ObjectiveId && o.PlanningState == "Batch created" &&
+                    ContinuousObjectivePolicy.Authorized(o, DateTimeOffset.UtcNow))))) batch.Armed = false;
         }
         return true;
     });

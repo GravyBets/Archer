@@ -54,6 +54,9 @@ var proposal = new CodeProposal { Repository = "GravyBets/GeoShift", BaseBranch 
     BranchName = "archer/draft-example", PublishedHeadSha = new string('a',40), PullRequestNumber = 7 };
 Check(await verifier.ReadyAsync(geo, default), "expected workflow present");
 Check((await verifier.InspectAsync(geo, proposal, default)).Status == "Verified", "exact-head successful build and tests");
+fake.Draft = false;
+Check((await verifier.InspectAsync(geo, proposal, default, requireDraft: true)).Status == "Blocked", "reassessment cannot continue a draft marked ready for review");
+fake.Draft = true;
 fake.Mode = "failed";
 Check((await verifier.InspectAsync(geo, proposal, default)).Status == "Failed", "failed build is not green");
 fake.Mode = "skipped";
@@ -312,9 +315,69 @@ if (Environment.GetEnvironmentVariable("ARCHER_SANDBOX_SMOKE_IMAGE") is { Length
 Environment.SetEnvironmentVariable("OPENAI_API_KEY", null);
 Environment.SetEnvironmentVariable("CONTAINER_HOST", null);
 
+// A continuous objective consumes one total authorization across multiple cycles.
+var continuousProject = ProjectPolicy.Register(new("Continuous app", "owner/continuous", ".NET",
+    ["src"], "ci.yml", "Build", ["Compile", "Test"], 3, 12, true, true));
+var continuousObjective = new ProjectObjective
+{
+    Description = "Implement the assigned feature with regression coverage",
+    Continuous = true, MaxPlanningCycles = 3, MaxCodingAttempts = 4, PlanningCyclesUsed = 1,
+    PlanningAttempted = true, PlanningState = "Batch created", DelegatedUntilUtc = now.AddHours(4)
+};
+continuousProject.Objectives.Add(continuousObjective);
+var firstHead = new string('a', 40);
+var continuousBatch = new DevelopmentBatch
+{
+    ProjectId = continuousProject.Id, ObjectiveId = continuousObjective.Id, Cumulative = true,
+    Continuous = true, PlanningCycles = 1, ExpiresAtUtc = continuousObjective.DelegatedUntilUtc,
+    WorkspaceHeadSha = firstHead, WorkspaceBranch = "archer/draft-123456789abc",
+    WorkspacePullRequestNumber = 42, WorkspaceBaseBranch = "main",
+    Tasks = [new DevelopmentTask { Instruction = "First verified change", Status = "Verified", Attempts = 2,
+        Proposal = new CodeProposal { Repository = continuousProject.Repository, PublishedHeadSha = firstHead, BranchName = "archer/draft-123456789abc", BaseBranch = "main", PullRequestNumber = 42 } }]
+};
+Check(ContinuousObjectivePolicy.RemainingAttempts(continuousObjective, continuousBatch) == 2, "continuous allowance counts earlier-cycle repairs");
+ContinuousObjectivePolicy.Reconcile(continuousProject, continuousObjective, continuousBatch, now);
+Check(continuousObjective.PlanningState == "Reassessment queued", "only fully verified cycle queues reassessment");
+Check(ContinuousObjectivePolicy.Claim(continuousProject, continuousObjective, continuousBatch, now), "continuous planning reserves next call");
+Check(!ContinuousObjectivePolicy.Claim(continuousProject, continuousObjective, continuousBatch, now), "duplicate reassessment refused");
+Check(!ContinuousObjectivePolicy.Append(continuousProject, continuousObjective, continuousBatch, [new DevelopmentTask { Instruction = "First verified change" }], 5, now), "exact duplicate task cannot consume another cycle");
+var extraTasks = new[] { new DevelopmentTask { Instruction = "Next change" } };
+Check(!ContinuousObjectivePolicy.Append(continuousProject, continuousObjective, continuousBatch, extraTasks, 0, now), "reassessment cannot overrun project quota");
+Check(ContinuousObjectivePolicy.Append(continuousProject, continuousObjective, continuousBatch, extraTasks, 5, now), "verified workspace gains another cycle");
+Check(continuousBatch.Armed && continuousBatch.Tasks.Count == 2 && continuousBatch.PlanningCycles == 2 &&
+    continuousBatch.WorkspaceHeadSha == firstHead && continuousBatch.WorkspacePullRequestNumber == 42 &&
+    continuousBatch.AttemptsRemaining == 2 && continuousBatch.ExpiresAtUtc == now.AddHours(4), "same draft, history, deadline and total budget preserved");
+Check(!ContinuousObjectivePolicy.Append(continuousProject, continuousObjective, continuousBatch, extraTasks, 5, now), "append cannot be replayed");
+Check(DevelopmentBatchPolicy.Claim(continuousBatch, extraTasks[0], now), "next cycle executes in order");
+extraTasks[0].Status = "Testing";
+extraTasks[0].Proposal = new CodeProposal { Repository = continuousProject.Repository, PublishedHeadSha = new string('b',40), BranchName = continuousBatch.WorkspaceBranch, BaseBranch = "main", PullRequestNumber = 42 };
+continuousBatch.WorkspaceHeadSha = extraTasks[0].Proposal.PublishedHeadSha;
+DevelopmentBatchPolicy.CompleteCi(continuousBatch, extraTasks[0], "Verified", "passed");
+ContinuousObjectivePolicy.Reconcile(continuousProject, continuousObjective, continuousBatch, now);
+Check(ContinuousObjectivePolicy.Claim(continuousProject, continuousObjective, continuousBatch, now), "third and final permitted planning cycle reserved");
+var third = new DevelopmentTask { Instruction = "Final change" };
+Check(ContinuousObjectivePolicy.Append(continuousProject, continuousObjective, continuousBatch, [third], 4, now) &&
+    continuousBatch.AttemptsRemaining == 1, "only final unused attempt granted");
+third.Status = "Testing"; third.Attempts = 1;
+third.Proposal = new CodeProposal { Repository = continuousProject.Repository, PublishedHeadSha = new string('c',40), BranchName = continuousBatch.WorkspaceBranch, BaseBranch = "main", PullRequestNumber = 42 };
+continuousBatch.WorkspaceHeadSha = third.Proposal.PublishedHeadSha;
+DevelopmentBatchPolicy.CompleteCi(continuousBatch, third, "Verified", "passed");
+ContinuousObjectivePolicy.Reconcile(continuousProject, continuousObjective, continuousBatch, now);
+Check(continuousObjective.PlanningState == "Review required" && continuousObjective.DelegatedUntilUtc is null &&
+    continuousObjective.AcceptedAtUtc is null, "limits stop work without self-acceptance or renewal");
+Check(!ContinuousObjectivePolicy.Claim(continuousProject, continuousObjective, continuousBatch, now), "no calls after exhaustion");
+Check(ContinuousObjectivePolicy.History(continuousBatch).Contains("First verified change"), "reassessment has verified evidence");
+var interruptedContinuous = new ProjectObjective { Continuous = true, PlanningState = "Planning", PlanningCyclesUsed = 2, DelegatedUntilUtc = now.AddHours(1) };
+ProjectPolicy.RecoverDelegation(interruptedContinuous, now);
+Check(interruptedContinuous.PlanningState == "Blocked" && interruptedContinuous.DelegatedUntilUtc is null, "interrupted reassessment is not retried");
+interruptedContinuous.PlanningState = "Reassessment queued"; interruptedContinuous.DelegatedUntilUtc = now.AddHours(1);
+ProjectPolicy.RecoverDelegation(interruptedContinuous, now);
+Check(interruptedContinuous.PlanningState == "Blocked", "restart without permission stops future reassessment");
+
 sealed class FakeGitHub : HttpMessageHandler
 {
     public string Mode = "success";
+    public bool Draft = true;
     public string Repository = "GravyBets/GeoShift";
     public string Workflow = "archer-ci.yml";
     public string Job = "GeoShift build and tests";
@@ -327,7 +390,7 @@ sealed class FakeGitHub : HttpMessageHandler
         if (!path.StartsWith("/repos/" + Repository + "/")) throw new Exception("Cross-project request: " + path);
         object payload;
         if (path.EndsWith("/pulls/7"))
-            payload = new { state = "open", head = new { sha, @ref = "archer/draft-example",
+            payload = new { state = "open", draft = Draft, head = new { sha, @ref = "archer/draft-example",
                 repo = new { full_name = Repository } }, @base = new { @ref = "master" } };
         else if (path.EndsWith("/" + Workflow))
             payload = new { state = "active", path = ".github/workflows/" + Workflow };

@@ -147,6 +147,7 @@ public static class ProjectPolicy
     {
         if (!CanPlanDelegated(project, objective, now)) return false;
         objective.PlanningAttempted = true;
+        objective.PlanningCyclesUsed = 1;
         objective.PlanningState = "Planning";
         objective.PlanningDetail = "One budget-checked planning attempt reserved.";
         return true;
@@ -160,10 +161,12 @@ public static class ProjectPolicy
             objective.PlanningDetail = "Planning interrupted; no automatic paid retry.";
             objective.DelegatedUntilUtc = null;
         }
-        else if (objective.PlanningState == "Delegated" &&
+        else if (objective.PlanningState is ("Delegated" or "Reassessment queued" or "Batch created") &&
+            (objective.PlanningState != "Batch created" || objective.Continuous) &&
             (!objective.ResumeDelegationAfterRestart || objective.DelegatedUntilUtc <= now))
         {
-            objective.PlanningState = "Not delegated";
+            objective.PlanningState = objective.Continuous ? "Blocked" : "Not delegated";
+            objective.PlanningDetail = "Restart or expired authorization stopped planning."; 
             objective.DelegatedUntilUtc = null;
         }
     }

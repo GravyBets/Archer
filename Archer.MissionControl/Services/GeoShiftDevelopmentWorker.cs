@@ -69,6 +69,7 @@ public sealed class ProjectDevelopmentWorker(
                 batch.AttemptsRemaining = Math.Min(6, batch.Tasks.Count * 2);
             }
             if (batch.ExpiresAtUtc <= DateTimeOffset.UtcNow) return false;
+            if (batch.Continuous) return false; // An explicitly stopped continuous objective may not be rearmed through the standalone batch endpoint.
             batch.ResumeAfterRestart = resumeAfterRestart;
             batch.Armed = true;
             return true;
@@ -81,6 +82,8 @@ public sealed class ProjectDevelopmentWorker(
             var batch = s.DevelopmentBatches.SingleOrDefault(b => b.Id == id);
             if (batch is null) return false;
             batch.Armed = false;
+            if (batch.Continuous && batch.ObjectiveId is { } oid && s.Projects.SingleOrDefault(p => p.Id == batch.ProjectId)?.Objectives.SingleOrDefault(o => o.Id == oid) is { } objective)
+                ContinuousObjectivePolicy.Stop(objective, "Blocked", "Continuous objective paused by owner; no automatic renewal.");
             return true;
         }, ct);
 
@@ -109,7 +112,7 @@ public sealed class ProjectDevelopmentWorker(
                 return true;
             }, ct);
         var active = await store.ReadAsync(s => ProjectPolicy.Select(s, now), ct);
-        if (active is null) { await PlanDelegatedAsync(ct); return; }
+        if (active is null) { if (!await ReassessAsync(ct)) await PlanDelegatedAsync(ct); return; }
         var project = await store.ReadAsync(s => s.Projects.SingleOrDefault(p => p.Id == active.ProjectId), ct);
         if (project is null || !CanArm(project)) { await PauseAsync(active.Id, ct); return; }
         var repositoryUrl = "https://github.com/" + project.Repository;
@@ -166,7 +169,8 @@ public sealed class ProjectDevelopmentWorker(
             var t = b.Tasks.Single(x => x.Id == task.Id);
             var p = s.Projects.Single(x => x.Id == b.ProjectId);
             var claimTime = DateTimeOffset.UtcNow;
-            if (!CanArm(p) || ProjectPolicy.AttemptsToday(s, p.Id, claimTime) >= p.DailyAttemptLimit)
+            if (!CanArm(p) || ProjectPolicy.AttemptsToday(s, p.Id, claimTime) >= p.DailyAttemptLimit ||
+                (b.Continuous && !p.Objectives.Any(o => o.Id == b.ObjectiveId && o.PlanningState == "Batch created" && ContinuousObjectivePolicy.Authorized(o, claimTime) && ContinuousObjectivePolicy.RemainingAttempts(o, b) > 0)))
             { b.Armed = false; t.Detail = "Project authorization or rolling 24-hour coding allowance exhausted."; return false; }
             if (!DevelopmentBatchPolicy.Claim(b, t, claimTime)) return false;
             t.AttemptedAtUtc.Add(claimTime);
@@ -318,6 +322,112 @@ public sealed class ProjectDevelopmentWorker(
         }
     }
 
+    private async Task<bool> ReassessAsync(CancellationToken ct)
+    {
+        if (!await store.ReadAsync(s => s.Projects.Any(p => p.Objectives.Any(o => o.Continuous &&
+            o.PlanningState is ("Batch created" or "Reassessment queued"))), ct)) return false;
+        var selected = await store.UpdateAsync(s =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            foreach (var p in s.Projects)
+            foreach (var o in p.Objectives.Where(o => o.Continuous))
+            {
+                var b = s.DevelopmentBatches.SingleOrDefault(b => b.ProjectId == p.Id && b.ObjectiveId == o.Id && b.Continuous);
+                if (b is not null) ContinuousObjectivePolicy.Reconcile(p, o, b, now);
+                if (o.PlanningState == "Reassessment queued" && ProjectPolicy.AttemptsToday(s, p.Id, now) >= p.DailyAttemptLimit)
+                    ContinuousObjectivePolicy.Stop(o, "Review required", "Project rolling coding allowance reached. No further paid reassessment.");
+                if (o.PlanningState == "Reassessment queued" && (b is null || !ContinuousObjectivePolicy.CanContinue(p, o, b, now)))
+                    ContinuousObjectivePolicy.Stop(o, "Blocked", "Reassessment authorization or recorded workspace is no longer valid.");
+            }
+            foreach (var p in s.Projects.OrderByDescending(p => p.Priority))
+            {
+                if (!CanArm(p) || ProjectPolicy.AttemptsToday(s, p.Id, now) >= p.DailyAttemptLimit) continue;
+                foreach (var o in p.Objectives.OrderBy(o => o.CreatedAtUtc))
+                {
+                    var b = s.DevelopmentBatches.SingleOrDefault(b => b.ProjectId == p.Id && b.ObjectiveId == o.Id && b.Continuous);
+                    if (b is not null && ContinuousObjectivePolicy.Claim(p, o, b, now))
+                        return (Project: p, Objective: o, Batch: b);
+                }
+            }
+            return (Project: (ManagedProject?)null, Objective: (ProjectObjective?)null, Batch: (DevelopmentBatch?)null);
+        }, ct);
+        if (selected.Project is not { } project || selected.Objective is not { } objective || selected.Batch is not { } batch)
+            return false;
+        try
+        {
+            var published = batch.Tasks.Last().Proposal!;
+            // Revalidate the exact previous head before any new model call.
+            if (!await ci.ReadyAsync(project, ct) || (await ci.InspectAsync(project, published, ct, requireDraft: true)).Status != "Verified")
+                throw new InvalidOperationException("Previously verified draft no longer has passing exact-head CI.");
+            if (project.RequireSandbox && (batch.Tasks.Last().Sandbox is not { Status: "Passed" } evidence ||
+                evidence.HeadSha != batch.WorkspaceHeadSha || evidence.ImageId != SandboxPolicy.ImageFor(project)))
+                throw new InvalidOperationException("Previously verified sandbox evidence is no longer current.");
+            var url = "https://github.com/" + project.Repository;
+            var inventory = await reader.ListReviewableFilesAsync(url, ct, fresh: true, commitSha: batch.WorkspaceHeadSha);
+            if (inventory.Truncated || inventory.Branch != batch.WorkspaceBaseBranch)
+                throw new InvalidOperationException("The cumulative workspace inventory or default branch changed.");
+            var eligible = inventory.Files.Where(f => ProjectPolicy.Eligible(project, f.Path, f.Size)).ToArray();
+            if (eligible.Length == 0) throw new InvalidOperationException("No eligible files in the cumulative snapshot.");
+            var ranked = ProjectRepositoryContext.Rank(eligible, objective.Description);
+            var sourceContext = ranked.Count == 0 ? "" :
+                ProjectRepositoryContext.Excerpts((await reader.PreviewFilesAsync(url, ranked, ct, inventory)).Files);
+            var stillAuthorized = await store.ReadAsync(s =>
+            {
+                var p = s.Projects.Single(x => x.Id == project.Id);
+                var o = p.Objectives.Single(x => x.Id == objective.Id);
+                return CanArm(p) && ContinuousObjectivePolicy.Authorized(o, DateTimeOffset.UtcNow) &&
+                    o.PlanningState == "Planning" && o.PlanningCyclesUsed == objective.PlanningCyclesUsed;
+            }, ct);
+            if (!stillAuthorized) throw new InvalidOperationException("Authorization changed before reassessment.");
+            var plan = await ai.PlanDevelopmentAsync(project, objective.Description, eligible.Select(f => f.Path).ToArray(),
+                ct, inventory.AllPaths, sourceContext, ContinuousObjectivePolicy.History(batch));
+            var tasks = plan.Tasks.Select(step => new DevelopmentTask
+            {
+                Instruction = step.Title + ": " + step.Description, Paths = step.Paths,
+                NewPaths = step.NewPaths, ContextPaths = step.ContextPaths
+            }).ToArray();
+            await store.UpdateAsync(s =>
+            {
+                var p = s.Projects.Single(x => x.Id == project.Id);
+                var o = p.Objectives.Single(x => x.Id == objective.Id);
+                var b = s.DevelopmentBatches.Single(x => x.Id == batch.Id);
+                var now = DateTimeOffset.UtcNow;
+                if (!CanArm(p) || !ContinuousObjectivePolicy.Authorized(o, now) || o.PlanningState != "Planning" ||
+                    o.PlanningCyclesUsed != objective.PlanningCyclesUsed || b.WorkspaceHeadSha != batch.WorkspaceHeadSha)
+                {
+                    if (o.PlanningState == "Planning") ContinuousObjectivePolicy.Stop(o, "Blocked", "Authorization or workspace changed during reassessment.");
+                    return false;
+                }
+                if (plan.Disposition is "review" or "blocked")
+                {
+                    ContinuousObjectivePolicy.Stop(o, plan.Disposition == "review" ? "Review required" : "Blocked",
+                        "Archer's reassessment recommendation: " + plan.Summary);
+                }
+                else if (!ContinuousObjectivePolicy.Append(p, o, b, tasks,
+                    p.DailyAttemptLimit - ProjectPolicy.AttemptsToday(s, p.Id, now), now))
+                {
+                    ContinuousObjectivePolicy.Stop(o, "Review required", "Next cycle exceeds the remaining authorization or attempt allowance.");
+                }
+                ProjectPolicy.AddMemory(p, "Objective reassessment", o.Description + " | " + o.PlanningDetail, true);
+                return true;
+            }, CancellationToken.None);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogWarning("Continuous reassessment stopped: {Type}", ex.GetType().Name);
+            await store.UpdateAsync(s =>
+            {
+                var p = s.Projects.Single(x => x.Id == project.Id);
+                var o = p.Objectives.Single(x => x.Id == objective.Id);
+                if (o.PlanningState == "Planning")
+                    ContinuousObjectivePolicy.Stop(o, "Blocked", "Reassessment failed or the draft changed. No automatic paid retry.");
+                return true;
+            }, CancellationToken.None);
+        }
+        return true;
+    }
+
     private async Task PlanDelegatedAsync(CancellationToken ct)
     {
         var candidate = await store.ReadAsync(s => s.Projects.Where(CanArm)
@@ -382,10 +492,17 @@ public sealed class ProjectDevelopmentWorker(
                 batch.Armed = true;
                 batch.ResumeAfterRestart = o.ResumeDelegationAfterRestart;
                 batch.ExpiresAtUtc = o.DelegatedUntilUtc;
-                batch.AttemptsRemaining = Math.Min(remaining, Math.Min(6, batch.Tasks.Count * 2));
+                batch.Continuous = o.Continuous;
+                batch.PlanningCycles = o.PlanningCyclesUsed;
+                batch.AttemptsRemaining = Math.Min(remaining, Math.Min(o.MaxCodingAttempts, batch.Tasks.Count * 2));
+                if (batch.AttemptsRemaining < batch.Tasks.Count)
+                {
+                    ContinuousObjectivePolicy.Stop(o, "Blocked", "Insufficient coding allowance for the initial cycle.");
+                    return false;
+                }
                 s.DevelopmentBatches.Add(batch);
                 o.PlanningState = "Batch created";
-                o.PlanningDetail = "Authorized task batch created. CI verification does not mean release or deployment.";
+                o.PlanningDetail = o.Continuous ? "Continuous objective started; verified cycles may queue reassessment within original limits." : "Authorized task batch created. CI verification does not mean release or deployment.";
                 ProjectPolicy.AddMemory(p, "Execution plan", o.Description + " | " + batch.Tasks.Count + " bounded tasks queued.", true);
                 return true;
             }, CancellationToken.None);

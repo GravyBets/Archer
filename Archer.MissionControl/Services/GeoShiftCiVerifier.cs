@@ -18,7 +18,7 @@ public sealed class ProjectCiVerifier(HttpClient client)
             workflow.RootElement.GetProperty("path").GetString() == ".github/workflows/" + project.WorkflowFile;
     }
 
-    public async Task<Verdict> InspectAsync(ManagedProject project, CodeProposal proposal, CancellationToken ct)
+    public async Task<Verdict> InspectAsync(ManagedProject project, CodeProposal proposal, CancellationToken ct, bool requireDraft = false)
     {
         if (!string.Equals(proposal.Repository, project.Repository, StringComparison.OrdinalIgnoreCase) ||
             proposal.PullRequestNumber is not > 0 ||
@@ -28,6 +28,7 @@ public sealed class ProjectCiVerifier(HttpClient client)
         var p = pr.RootElement;
         var head = p.GetProperty("head");
         if (p.GetProperty("state").GetString() != "open" ||
+            (requireDraft && (!p.TryGetProperty("draft", out var draft) || draft.ValueKind != JsonValueKind.True)) ||
             head.GetProperty("sha").GetString() != proposal.PublishedHeadSha ||
             head.GetProperty("ref").GetString() != proposal.BranchName ||
             !string.Equals(head.GetProperty("repo").GetProperty("full_name").GetString(), proposal.Repository, StringComparison.OrdinalIgnoreCase) ||

@@ -71,10 +71,11 @@
       const ready = !o.acceptedAtUtc && o.dependsOn.every(id => p.objectives.some(other => other.id === id && other.acceptedAtUtc));
       const related = batches.filter(b => b.projectId === p.id && b.objectiveId === o.id);
       const alreadyPlanned = related.some(b => b.armed || b.tasks.some(t => t.status !== 'Blocked'));
-      const delegated = ['Delegated', 'Planning'].includes(o.planningState);
+      const delegated = ['Delegated', 'Planning', 'Reassessment queued'].includes(o.planningState) || (o.continuous && o.planningState === 'Batch created');
       const box = element('section', ''); box.className = 'coding-file-diff';
       box.append(element('p', (o.acceptedAtUtc ? 'Accepted' : ready ? 'Ready' : 'Waiting on dependencies') + ' · ' + o.description));
       box.append(element('p', o.planningState + (o.planningDetail ? ' · ' + o.planningDetail : '') + (o.delegatedUntilUtc ? ' · until ' + new Date(o.delegatedUntilUtc).toLocaleString() : '')));
+      if (o.continuous) box.append(element('p', 'Continuous objective · ' + o.planningCyclesUsed + '/' + o.maxPlanningCycles + ' planning calls reserved · ' + related.reduce((sum, b) => sum + b.tasks.reduce((n,t) => n+t.attempts,0),0) + '/' + o.maxCodingAttempts + ' coding attempts used'));
       if (delegated) box.append(action('Cancel delegation', () => command('/api/projects/' + p.id + '/objectives/' + o.id + '/cancel-delegation', { confirm: true })));
       if (!o.acceptedAtUtc && !o.planningAttempted && !delegated && related.length === 0) {
         box.append(action('Delegate to Archer', () => {
@@ -82,12 +83,18 @@
           if (window.confirm('Delegate this objective to Archer for 24 hours? Archer may select files within ' + p.sourceRoots.join(', ') + ', make one paid planning call and automatically publish draft PRs within the project coding allowance. No merge or deployment. Dependencies must be accepted first.'))
             command('/api/projects/' + p.id + '/objectives/' + o.id + '/delegate', { confirm: true, resumeAfterRestart });
         }, !p.enabled));
+        if (p.cumulativeWorkspaces) box.append(action('Delegate continuous objective', () => {
+          const maxPlanningCycles = 4, maxCodingAttempts = Math.min(12, p.dailyAttemptLimit);
+          const resumeAfterRestart = el('developmentResumeAfterRestart').checked;
+          if (window.confirm('Authorize Archer to work on this objective for up to 24 hours, with at most ' + maxPlanningCycles + ' paid planning calls and ' + maxCodingAttempts + ' total coding attempts? It may reassess the same draft after passed CI and append more work. No automatic merge, deployment, permission expansion, or renewal.'))
+            command('/api/projects/' + p.id + '/objectives/' + o.id + '/delegate', { confirm: true, resumeAfterRestart, maxPlanningCycles, maxCodingAttempts });
+        }, !p.enabled));
       }
       if (ready) {
         box.append(action('Use objective for next plan', () => {
           selectedObjective = o.id; objective.value = o.description; objective.readOnly = true; objective.focus();
           status.textContent = 'Saved objective selected. Create its development plan.';
-        }, !p.enabled || alreadyPlanned || delegated));
+        }, !p.enabled || alreadyPlanned || delegated || o.continuous));
         box.append(action('Accept objective', () => {
           if (window.confirm('Mark this objective accepted by you? This releases dependencies but does not certify a deployment.'))
             command('/api/projects/' + p.id + '/objectives/' + o.id + '/accept', { confirm: true });
@@ -110,6 +117,7 @@
     for (const batch of batches.filter(b => b.projectId === p.id).reverse()) {
       const section = element('section', ''); section.className = 'coding-file-diff';
       section.append(element('h3', batch.objective),
+        element('p', batch.continuous ? 'Continuous objective · cycle ' + batch.planningCycles : 'Single planning cycle'),
         element('p', batch.cumulative ? 'Cumulative workspace · ' + (batch.workspaceHeadSha?.slice(0, 12) || 'Not published') : 'Independent drafts'),
         element('p', (batch.armed ? 'Authorized / queued or running' : 'Not armed') + ' · ' +
           batch.tasks.filter(t => t.status === 'Verified').length + '/' + batch.tasks.length +
@@ -140,7 +148,7 @@
         if (window.confirm('Authorize these exact source tasks in ' + p.repository +
           ' for up to 24 hours and at most two coding attempts per task within your project and AI budget? Draft PRs only. No merge or deployment.'))
           command(path + '/arm', { confirm: true, resumeAfterRestart });
-      }, !batch.armed && (!p.enabled || batch.tasks.some(t => t.status === 'Blocked') ||
+      }, !batch.armed && (batch.continuous || !p.enabled || batch.tasks.some(t => t.status === 'Blocked') ||
           batch.tasks.every(t => t.status === 'Verified') ||
           (batch.expiresAtUtc && Date.parse(batch.expiresAtUtc) <= Date.now()))));
       list.append(section);
