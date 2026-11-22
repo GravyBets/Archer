@@ -374,6 +374,49 @@ interruptedContinuous.PlanningState = "Reassessment queued"; interruptedContinuo
 ProjectPolicy.RecoverDelegation(interruptedContinuous, now);
 Check(interruptedContinuous.PlanningState == "Blocked", "restart without permission stops future reassessment");
 
+// Protected self-development is a distinct opt-in, not a generic project bypass.
+var selfProfile = ProjectPolicy.Register(SelfDevelopmentPolicy.Profile());
+Environment.SetEnvironmentVariable("ARCHER_SELF_PROJECT_ENABLED", null);
+Environment.SetEnvironmentVariable("ARCHER_SELF_PROJECT_FILES", null);
+Check(!SelfDevelopmentPolicy.Configured(selfProfile), "self-project disabled by default");
+Check(!SelfDevelopmentPolicy.CanEdit("gravybets/archer", SelfDevelopmentPolicy.PilotPaths[0]), "self repository case-insensitive gate");
+Environment.SetEnvironmentVariable("ARCHER_SELF_PROJECT_ENABLED", "true");
+Environment.SetEnvironmentVariable("ARCHER_SELF_PROJECT_FILES", SelfDevelopmentPolicy.PilotPaths[0] + ",Archer.MissionControl/Program.cs,.github/workflows/build.yml");
+Check(SelfDevelopmentPolicy.Configured(selfProfile), "explicit pilot file enables reviewed profile");
+Check(SelfDevelopmentPolicy.ApprovedPaths.Count == 1, "external opt-in cannot expand baked-in self scope");
+Check(!SelfDevelopmentPolicy.CanEdit(selfProfile.Repository, "Archer.MissionControl/Program.cs"), "core permissions not writable");
+Check(!SelfDevelopmentPolicy.CanEdit(selfProfile.Repository, SelfDevelopmentPolicy.PilotPaths[1]), "non-approved pilot file not writable");
+Check(!ProjectPolicy.NewSourceAllowed(selfProfile, SelfDevelopmentPolicy.Root + "/new.js"), "self-project cannot create new source files");
+var selfState = new ArcherState();
+Check(SelfDevelopmentReview.Audit(selfState).Any(f => f.Status == "Setup required"), "unregistered self-project is reported");
+selfState.Projects.Add(selfProfile);
+var selfBatch = new DevelopmentBatch
+{
+    ProjectId = selfProfile.Id,
+    Cumulative = true,
+    WorkspaceBaseBranch = "main",
+    WorkspaceBranch = "archer/draft-test",
+    WorkspaceOriginalBaseCommitSha = new string('a',40),
+    WorkspaceHeadSha = new string('b',40),
+    WorkspacePullRequestNumber = 123,
+    Tasks = [new DevelopmentTask { Status = "Verified", Proposal = new CodeProposal
+    {
+        Repository = selfProfile.Repository, PublishedHeadSha = new string('b',40),
+        BranchName = "archer/draft-test", BaseBranch = "main", PullRequestNumber = 123,
+        Files = [new CodeProposalFile { Path = SelfDevelopmentPolicy.PilotPaths[0] }]
+    } }]
+};
+selfState.DevelopmentBatches.Add(selfBatch);
+var candidate = SelfDevelopmentReview.TryCandidate(selfProfile, selfBatch);
+Check(candidate is not null && candidate.BaselineSha == new string('a',40) && candidate.HeadSha == new string('b',40), "candidate retains immutable source baseline and draft head");
+selfBatch.Armed = true;
+Check(SelfDevelopmentReview.TryCandidate(selfProfile, selfBatch) is null, "running self-work cannot be handed off");
+selfBatch.Armed = false;
+selfBatch.Tasks[0].Proposal!.Files[0].Path = "Archer.MissionControl/Program.cs";
+Check(SelfDevelopmentReview.TryCandidate(selfProfile, selfBatch) is null, "protected source invalidates candidate");
+Environment.SetEnvironmentVariable("ARCHER_SELF_PROJECT_ENABLED", null);
+Environment.SetEnvironmentVariable("ARCHER_SELF_PROJECT_FILES", null);
+
 sealed class FakeGitHub : HttpMessageHandler
 {
     public string Mode = "success";
