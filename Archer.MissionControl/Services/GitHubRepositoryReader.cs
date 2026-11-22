@@ -274,12 +274,29 @@ public sealed class GitHubRepositoryReader(HttpClient http)
         var branch = branchValue.GetString() ??
             throw new InvalidOperationException("GitHub returned an empty default branch.");
 
+        var defaultSnapshot = commitSha is null;
         if (commitSha is not null && !Regex.IsMatch(commitSha, @"^[a-fA-F0-9]{40}$"))
             throw new ArgumentException("Invalid immutable workspace commit.");
-        var refName = commitSha ?? branch;
-        using var treeResponse = await ReadJsonAsync(
-            api + "/git/trees/" + Uri.EscapeDataString(refName) + "?recursive=1", ct);
+        // Resolve the reference to an immutable commit, then resolve that commit to
+        // its actual Git tree object. GitHub's tree-by-ref response can report the
+        // commit SHA in its root "sha" field, which is not a tree identity.
+        if (commitSha is null)
+        {
+            using var reference = await ReadJsonAsync(api + "/git/ref/heads/" + Uri.EscapeDataString(branch), ct);
+            var target = reference.RootElement.GetProperty("object");
+            if (target.GetProperty("type").GetString() != "commit")
+                throw new InvalidOperationException("Default branch did not resolve to a commit.");
+            commitSha = RequireObjectSha(target.GetProperty("sha"));
+        }
+        using var commitResponse = await ReadJsonAsync(api + "/git/commits/" + commitSha, ct);
+        var commit = commitResponse.RootElement;
+        if (!string.Equals(RequireObjectSha(commit.GetProperty("sha")), commitSha, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("GitHub returned a different commit than requested.");
+        var treeSha = RequireObjectSha(commit.GetProperty("tree").GetProperty("sha"));
+        using var treeResponse = await ReadJsonAsync(api + "/git/trees/" + treeSha + "?recursive=1", ct);
         var root = treeResponse.RootElement;
+        if (!string.Equals(RequireObjectSha(root.GetProperty("sha")), treeSha, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("GitHub returned a different tree than requested.");
         if (root.TryGetProperty("truncated", out var truncated) &&
             truncated.ValueKind == JsonValueKind.True)
             throw new InvalidOperationException("GitHub returned a partial repository tree. Source selection is unavailable.");
@@ -298,10 +315,10 @@ public sealed class GitHubRepositoryReader(HttpClient http)
             .OrderBy(x => x.Path, StringComparer.OrdinalIgnoreCase).ToList();
 
         var value = new RepositoryInventory(repository, branch,
-            root.GetProperty("sha").GetString() ?? "",
+            treeSha,
             fileList.Count, fileList.Count > 1200, fileList.Take(1200).ToList())
         { AllPaths = entries.Select(x => x.GetProperty("path").GetString() ?? "").ToList(), SnapshotCommitSha = commitSha };
-        if (commitSha is null) _inventories[repository] = (DateTimeOffset.UtcNow.AddMinutes(5), value);
+        if (defaultSnapshot) _inventories[repository] = (DateTimeOffset.UtcNow.AddMinutes(5), value);
         return value;
     }
 
@@ -350,6 +367,14 @@ public sealed class GitHubRepositoryReader(HttpClient http)
         }
         return new SourcePreview(repository, inventory.Branch, inventory.TreeSha,
             result.Any(x => x.Truncated), result);
+    }
+
+    private static string RequireObjectSha(JsonElement value)
+    {
+        var sha = value.GetString() ?? "";
+        if (!Regex.IsMatch(sha, @"^[a-fA-F0-9]{40}$"))
+            throw new InvalidOperationException("GitHub returned an invalid object SHA.");
+        return sha;
     }
 
     private async Task<JsonDocument> ReadJsonAsync(string url, CancellationToken ct)

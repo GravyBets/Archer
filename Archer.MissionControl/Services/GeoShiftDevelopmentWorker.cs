@@ -314,9 +314,10 @@ public sealed class ProjectDevelopmentWorker(
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
-            logger.LogWarning("Project coding attempt stopped: {Type}", ex.GetType().Name);
+            var safeDetail = ex is DraftPublicationException ? ex.Message : "Coding or publication failed (" + ex.GetType().Name + ").";
+            logger.LogWarning("Project coding attempt stopped: {Detail}", safeDetail);
             await BlockAsync(active.Id, task.Id,
-                "Coding or publication failed. Inspect branch " + (active.WorkspaceBranch ?? ("archer/draft-" +
+                safeDetail + " Inspect branch " + (active.WorkspaceBranch ?? ("archer/draft-" +
                 (await store.ReadAsync(s => s.DevelopmentBatches.Single(b => b.Id == active.Id)
                     .Tasks.Single(t => t.Id == task.Id).Proposal?.Id.ToString("N")[..12], CancellationToken.None)
                     ?? "not-created"))) + " before retrying. No automatic retry of ambiguous writes.", CancellationToken.None);

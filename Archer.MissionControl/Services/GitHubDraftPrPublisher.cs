@@ -11,6 +11,8 @@ namespace Archer.MissionControl.Services;
 /// DRAFT PR after a direct owner approval. Cannot merge, delete or deploy.
 /// Requires a separately configured, repo-scoped fine-grained write token.
 /// </summary>
+public sealed class DraftPublicationException(string safeDetail) : InvalidOperationException(safeDetail) { }
+
 public sealed class GitHubDraftPrPublisher(HttpClient client)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -162,7 +164,7 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
                     !ProjectPolicy.IsApplicationPath(f.Path) || !ProjectPolicy.InSourceRoot(project, f.Path) ||
                     (f.IsNew ? !ProjectPolicy.NewSourceAllowed(project, f.Path) || f.ExpectedBlobSha.Length != 0 :
                         !Regex.IsMatch(f.ExpectedBlobSha, @"^[0-9a-fA-F]{40}$")))))
-            throw new InvalidOperationException("Workspace publication refused: authorization, path or size validation failed.");
+            throw new DraftPublicationException("Workspace publication refused: authorization, path or size validation failed.");
 
         var api = "https://api.github.com/repos/" + project.Repository;
         var continuation = proposal.WorkspaceBranch is not null || proposal.WorkspaceParentSha is not null ||
@@ -171,7 +173,7 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
             !Regex.IsMatch(proposal.WorkspaceBranch ?? "", @"^archer/draft-[0-9a-f]{12}$") ||
             !Regex.IsMatch(proposal.WorkspaceParentSha ?? "", @"^[0-9a-fA-F]{40}$") ||
             proposal.WorkspacePullRequestNumber is not > 0))
-            throw new InvalidOperationException("Invalid cumulative workspace authorization.");
+            throw new DraftPublicationException("Invalid cumulative workspace authorization.");
         var branch = proposal.WorkspaceBranch ?? "archer/draft-" + proposal.Id.ToString("N")[..12];
         var sourceRef = continuation ? branch : Uri.EscapeDataString(proposal.BaseBranch);
         if (continuation)
@@ -179,16 +181,16 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
         using var head = await RequestAsync(HttpMethod.Get, api + "/git/ref/heads/" + sourceRef, null, ct);
         var baseCommit = RequireSha(head.RootElement.GetProperty("object").GetProperty("sha"));
         if (continuation && baseCommit != proposal.WorkspaceParentSha)
-            throw new InvalidOperationException("Cumulative draft head changed; no write attempted.");
+            throw new DraftPublicationException("Cumulative draft head changed; no write attempted.");
         using var commit = await RequestAsync(HttpMethod.Get, api + "/git/commits/" + baseCommit, null, ct);
         var baseTree = RequireSha(commit.RootElement.GetProperty("tree").GetProperty("sha"));
         if (!string.Equals(baseTree, proposal.BaseTreeSha, StringComparison.Ordinal))
-            throw new InvalidOperationException("Repository changed since workspace inspection; no branch created.");
+            throw new DraftPublicationException("Repository changed since workspace inspection; no branch created.");
         using var tree = await RequestAsync(HttpMethod.Get, api + "/git/trees/" + baseTree + "?recursive=1", null, ct);
         if (tree.RootElement.GetProperty("truncated").GetBoolean())
-            throw new InvalidOperationException("Cannot validate a truncated repository tree.");
+            throw new DraftPublicationException("Cannot validate a truncated repository tree.");
         var entries = tree.RootElement.GetProperty("tree").EnumerateArray().ToArray();
-        if (entries.Length > 12_000) throw new InvalidOperationException("Repository exceeds bounded workspace limit.");
+        if (entries.Length > 12_000) throw new DraftPublicationException("Repository exceeds bounded workspace limit.");
         var byPath = entries.ToDictionary(x => x.GetProperty("path").GetString()!, StringComparer.Ordinal);
         foreach (var file in proposal.Files)
         {
@@ -202,17 +204,17 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
                         (file.Path.StartsWith(p + "/", StringComparison.OrdinalIgnoreCase) &&
                             (x.GetProperty("type").GetString() != "tree" || !file.Path.StartsWith(p + "/", StringComparison.Ordinal)));
                 }))
-                    throw new InvalidOperationException("New source path conflicts with an existing entry; no branch created.");
+                    throw new DraftPublicationException("New source path conflicts with an existing entry; no branch created.");
             }
             else if (!byPath.TryGetValue(file.Path, out var existing) ||
                 existing.GetProperty("mode").GetString() != "100644" ||
                 existing.GetProperty("type").GetString() != "blob" ||
                 existing.GetProperty("sha").GetString() != file.ExpectedBlobSha)
-                throw new InvalidOperationException("Original file no longer matches its approved regular blob.");
+                throw new DraftPublicationException("Original file no longer matches its approved regular blob.");
         }
         if (proposal.Files.Any(f => proposal.Files.Any(other =>
             other.Path.StartsWith(f.Path + "/", StringComparison.OrdinalIgnoreCase))))
-            throw new InvalidOperationException("Workspace file paths collide.");
+            throw new DraftPublicationException("Workspace file paths collide.");
 
         // GitHub's tree API accepts UTF-8 file content. One tree and one commit
         // represent the whole change-set; no partially edited branch is visible.
@@ -235,11 +237,11 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
             await ConfirmWorkspacePullAsync(api, project, proposal, branch, baseCommit, ct);
             using var current = await RequestAsync(HttpMethod.Get, api + "/git/ref/heads/" + branch, null, ct);
             if (RequireSha(current.RootElement.GetProperty("object").GetProperty("sha")) != baseCommit)
-                throw new InvalidOperationException("Cumulative draft advanced; no ref update attempted.");
+                throw new DraftPublicationException("Cumulative draft advanced; no ref update attempted.");
             using var updated = await RequestAsync(HttpMethod.Patch, api + "/git/refs/heads/" + branch,
                 new { sha = commitSha, force = false }, ct);
             if (RequireSha(updated.RootElement.GetProperty("object").GetProperty("sha")) != commitSha)
-                throw new InvalidOperationException("Unexpected updated draft head; inspect manually.");
+                throw new DraftPublicationException("Unexpected updated draft head; inspect manually.");
             proposal.PublishedHeadSha = commitSha;
             proposal.PullRequestNumber = proposal.WorkspacePullRequestNumber;
             return ("https://github.com/" + project.Repository + "/pull/" + proposal.PullRequestNumber, branch);
@@ -258,7 +260,7 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
         var actualHead = RequireSha(pull.RootElement.GetProperty("head").GetProperty("sha"));
         var url = pull.RootElement.GetProperty("html_url").GetString();
         if (number <= 0 || actualHead != commitSha || !string.Equals(url, "https://github.com/" + proposal.Repository + "/pull/" + number, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Unexpected PR identity: inspect the isolated branch manually.");
+            throw new DraftPublicationException("Unexpected PR identity: inspect the isolated branch manually.");
         proposal.OriginalBaseCommitSha = baseCommit;
         proposal.PublishedHeadSha = actualHead;
         proposal.PullRequestNumber = number;
@@ -276,7 +278,7 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
             RequireSha(head.GetProperty("sha")) != expectedHead ||
             !string.Equals(head.GetProperty("repo").GetProperty("full_name").GetString(), project.Repository, StringComparison.OrdinalIgnoreCase) ||
             root.GetProperty("base").GetProperty("ref").GetString() != proposal.BaseBranch)
-            throw new InvalidOperationException("Cumulative PR is closed, no longer a draft, or changed repository/head/base.");
+            throw new DraftPublicationException("Cumulative PR is closed, no longer a draft, or changed repository/head/base.");
     }
 
     private static string RequireSha(JsonElement value)
@@ -305,8 +307,8 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
 
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException(
-                $"GitHub rejected the draft PR operation (HTTP {(int)response.StatusCode}). " +
+            throw new DraftPublicationException(
+                $"GitHub rejected the draft PR operation ({method.Method}, HTTP {(int)response.StatusCode}). " +
                 "Check write permissions (Contents and Pull requests), branch protection, and the GitHub repo. " +
                 "If a branch was created, inspect it manually; Archer will not retry automatically.");
 
