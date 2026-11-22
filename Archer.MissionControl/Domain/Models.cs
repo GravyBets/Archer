@@ -277,6 +277,11 @@ public sealed class ProjectObjective
     public List<Guid> DependsOn { get; set; } = [];
     public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? AcceptedAtUtc { get; set; }
+    public DateTimeOffset? DelegatedUntilUtc { get; set; }
+    public bool ResumeDelegationAfterRestart { get; set; }
+    public bool PlanningAttempted { get; set; }
+    public string PlanningState { get; set; } = "Not delegated";
+    public string? PlanningDetail { get; set; }
 }
 public sealed class ProjectMemoryEntry
 {
@@ -305,3 +310,5 @@ public sealed class ProjectPlanTaskDraft
     public string Description { get; set; } = "";
     public List<string> Paths { get; set; } = [];
 }
+
+public sealed record DelegateObjectiveRequest(bool Confirm, bool ResumeAfterRestart = false);
