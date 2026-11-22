@@ -82,10 +82,251 @@ if [[ -f "$core" && -f "$gateway" ]]; then
   else
     fail 'Private companion gateway not enabled'
   fi
-  for name in ARCHER_PRIVATE_HOST ARCHER_PRIVATE_NATIVE_CLIENT_ID ARCHER_PRIVATE_OWNER_SUBJECT ARCHER_COMPANION_DEVICE_SHA256; do
-    if grep -Eq "^$name=.{12,256}$" "$gateway"; then pass "$name is configured"
-    else fail "$name has not been configured"; fi
+  # Validate exact production gateway input formats without sourcing env or
+  # disclosing identity/key values. Placeholder-looking values fail closed.
+  read_env_value() {
+    local name="$2"
+    awk -v target="$name" 'index($0,target "=")==1 {print substr($0,length(target)+2)}' "$1"
+  }
+  check_gateway_field() {
+    local name="$1" pattern="$2" value
+    value="$(read_env_value "$gateway" "$name")"
+    if [[ "$value" =~ $pattern && "$value" != REPLACE_* ]]; then
+      pass "$name has a valid format"
+    else
+      fail "$name is missing, a placeholder or invalid"
+    fi
+  }
+  check_gateway_field ARCHER_PRIVATE_HOST '^[a-z0-9][a-z0-9.-]+\\.ts\\.net
+  if grep -q '^ARCHER_COMPANION_BRIDGE_KEY=' "$core"; then
+    pass 'Core companion bridge is configured'
+  else fail 'Core companion bridge key missing'; fi
+fi
+
+if command -v ss >/dev/null 2>&1; then
+  while IFS= read -r local_address; do
+    case "$local_address" in
+      *:5087|*:5094)
+        if [[ "$local_address" == "127.0.0.1:5087" || "$local_address" == "[::1]:5087" ||
+              "$local_address" == "127.0.0.1:5094" || "$local_address" == "[::1]:5094" ]]; then
+          pass 'Archer listener is restricted to loopback'
+        else
+          fail 'An Archer listener is exposed on a non-loopback network interface'
+        fi
+        ;;
+    esac
+  done < <(ss -lntH | awk '{print $4}')
+else
+  warn 'Install iproute2 and confirm no Archer listener binds outside loopback'
+fi
+
+if [[ "$mode" == "--live" ]]; then
+  for service in archer-core archer-private-gateway; do
+    if systemctl is-active --quiet "$service"; then pass "$service is running"
+    else fail "$service is not running"; fi
   done
+  if curl --silent --fail --max-time 5 http://127.0.0.1:5087/api/health >/dev/null; then
+    pass 'Core health responds locally'
+  else fail 'Core local health check failed'; fi
+  if curl --silent --fail --max-time 5 http://127.0.0.1:5094/health/live >/dev/null; then
+    pass 'Private gateway health responds locally'
+  else fail 'Private gateway local health check failed'; fi
+  if tailscale status >/dev/null 2>&1; then pass 'Private device network reports connected'
+  else fail 'Private device network is offline'; fi
+fi
+warn 'Verify firewall and tailnet ACL deny all unapproved devices, and Tailscale Serve (not Funnel) uses private HTTPS'
+warn 'Run an actual encrypted off-host backup and test restore before storing unique production data'
+warn 'Verify Auth0 scope/audience, real signed iPhone, notifications, operational costs and rollback before production'
+if (( failures > 0 )); then
+  printf 'Archer server is not ready: %d required check(s) failed.\n' "$failures"
+  exit 1
+fi
+printf 'Archer server preparation checks passed for %s. Manual validation still required.\n' "$mode"
+
+  check_gateway_field ARCHER_PRIVATE_AUTH0_DOMAIN '^[a-z0-9][a-z0-9.-]+\\.auth0\\.com
+  if grep -q '^ARCHER_COMPANION_BRIDGE_KEY=' "$core"; then
+    pass 'Core companion bridge is configured'
+  else fail 'Core companion bridge key missing'; fi
+fi
+
+if command -v ss >/dev/null 2>&1; then
+  while IFS= read -r local_address; do
+    case "$local_address" in
+      *:5087|*:5094)
+        if [[ "$local_address" == "127.0.0.1:5087" || "$local_address" == "[::1]:5087" ||
+              "$local_address" == "127.0.0.1:5094" || "$local_address" == "[::1]:5094" ]]; then
+          pass 'Archer listener is restricted to loopback'
+        else
+          fail 'An Archer listener is exposed on a non-loopback network interface'
+        fi
+        ;;
+    esac
+  done < <(ss -lntH | awk '{print $4}')
+else
+  warn 'Install iproute2 and confirm no Archer listener binds outside loopback'
+fi
+
+if [[ "$mode" == "--live" ]]; then
+  for service in archer-core archer-private-gateway; do
+    if systemctl is-active --quiet "$service"; then pass "$service is running"
+    else fail "$service is not running"; fi
+  done
+  if curl --silent --fail --max-time 5 http://127.0.0.1:5087/api/health >/dev/null; then
+    pass 'Core health responds locally'
+  else fail 'Core local health check failed'; fi
+  if curl --silent --fail --max-time 5 http://127.0.0.1:5094/health/live >/dev/null; then
+    pass 'Private gateway health responds locally'
+  else fail 'Private gateway local health check failed'; fi
+  if tailscale status >/dev/null 2>&1; then pass 'Private device network reports connected'
+  else fail 'Private device network is offline'; fi
+fi
+warn 'Verify firewall and tailnet ACL deny all unapproved devices, and Tailscale Serve (not Funnel) uses private HTTPS'
+warn 'Run an actual encrypted off-host backup and test restore before storing unique production data'
+warn 'Verify Auth0 scope/audience, real signed iPhone, notifications, operational costs and rollback before production'
+if (( failures > 0 )); then
+  printf 'Archer server is not ready: %d required check(s) failed.\n' "$failures"
+  exit 1
+fi
+printf 'Archer server preparation checks passed for %s. Manual validation still required.\n' "$mode"
+
+  check_gateway_field ARCHER_PRIVATE_NATIVE_CLIENT_ID '^[A-Za-z0-9_-]{12,128}
+  if grep -q '^ARCHER_COMPANION_BRIDGE_KEY=' "$core"; then
+    pass 'Core companion bridge is configured'
+  else fail 'Core companion bridge key missing'; fi
+fi
+
+if command -v ss >/dev/null 2>&1; then
+  while IFS= read -r local_address; do
+    case "$local_address" in
+      *:5087|*:5094)
+        if [[ "$local_address" == "127.0.0.1:5087" || "$local_address" == "[::1]:5087" ||
+              "$local_address" == "127.0.0.1:5094" || "$local_address" == "[::1]:5094" ]]; then
+          pass 'Archer listener is restricted to loopback'
+        else
+          fail 'An Archer listener is exposed on a non-loopback network interface'
+        fi
+        ;;
+    esac
+  done < <(ss -lntH | awk '{print $4}')
+else
+  warn 'Install iproute2 and confirm no Archer listener binds outside loopback'
+fi
+
+if [[ "$mode" == "--live" ]]; then
+  for service in archer-core archer-private-gateway; do
+    if systemctl is-active --quiet "$service"; then pass "$service is running"
+    else fail "$service is not running"; fi
+  done
+  if curl --silent --fail --max-time 5 http://127.0.0.1:5087/api/health >/dev/null; then
+    pass 'Core health responds locally'
+  else fail 'Core local health check failed'; fi
+  if curl --silent --fail --max-time 5 http://127.0.0.1:5094/health/live >/dev/null; then
+    pass 'Private gateway health responds locally'
+  else fail 'Private gateway local health check failed'; fi
+  if tailscale status >/dev/null 2>&1; then pass 'Private device network reports connected'
+  else fail 'Private device network is offline'; fi
+fi
+warn 'Verify firewall and tailnet ACL deny all unapproved devices, and Tailscale Serve (not Funnel) uses private HTTPS'
+warn 'Run an actual encrypted off-host backup and test restore before storing unique production data'
+warn 'Verify Auth0 scope/audience, real signed iPhone, notifications, operational costs and rollback before production'
+if (( failures > 0 )); then
+  printf 'Archer server is not ready: %d required check(s) failed.\n' "$failures"
+  exit 1
+fi
+printf 'Archer server preparation checks passed for %s. Manual validation still required.\n' "$mode"
+
+  check_gateway_field ARCHER_PRIVATE_OWNER_SUBJECT '^auth0\\|[A-Za-z0-9_-]{1,120}
+  if grep -q '^ARCHER_COMPANION_BRIDGE_KEY=' "$core"; then
+    pass 'Core companion bridge is configured'
+  else fail 'Core companion bridge key missing'; fi
+fi
+
+if command -v ss >/dev/null 2>&1; then
+  while IFS= read -r local_address; do
+    case "$local_address" in
+      *:5087|*:5094)
+        if [[ "$local_address" == "127.0.0.1:5087" || "$local_address" == "[::1]:5087" ||
+              "$local_address" == "127.0.0.1:5094" || "$local_address" == "[::1]:5094" ]]; then
+          pass 'Archer listener is restricted to loopback'
+        else
+          fail 'An Archer listener is exposed on a non-loopback network interface'
+        fi
+        ;;
+    esac
+  done < <(ss -lntH | awk '{print $4}')
+else
+  warn 'Install iproute2 and confirm no Archer listener binds outside loopback'
+fi
+
+if [[ "$mode" == "--live" ]]; then
+  for service in archer-core archer-private-gateway; do
+    if systemctl is-active --quiet "$service"; then pass "$service is running"
+    else fail "$service is not running"; fi
+  done
+  if curl --silent --fail --max-time 5 http://127.0.0.1:5087/api/health >/dev/null; then
+    pass 'Core health responds locally'
+  else fail 'Core local health check failed'; fi
+  if curl --silent --fail --max-time 5 http://127.0.0.1:5094/health/live >/dev/null; then
+    pass 'Private gateway health responds locally'
+  else fail 'Private gateway local health check failed'; fi
+  if tailscale status >/dev/null 2>&1; then pass 'Private device network reports connected'
+  else fail 'Private device network is offline'; fi
+fi
+warn 'Verify firewall and tailnet ACL deny all unapproved devices, and Tailscale Serve (not Funnel) uses private HTTPS'
+warn 'Run an actual encrypted off-host backup and test restore before storing unique production data'
+warn 'Verify Auth0 scope/audience, real signed iPhone, notifications, operational costs and rollback before production'
+if (( failures > 0 )); then
+  printf 'Archer server is not ready: %d required check(s) failed.\n' "$failures"
+  exit 1
+fi
+printf 'Archer server preparation checks passed for %s. Manual validation still required.\n' "$mode"
+
+  check_gateway_field ARCHER_COMPANION_DEVICE_SHA256 '^[A-Fa-f0-9]{64}
+  if grep -q '^ARCHER_COMPANION_BRIDGE_KEY=' "$core"; then
+    pass 'Core companion bridge is configured'
+  else fail 'Core companion bridge key missing'; fi
+fi
+
+if command -v ss >/dev/null 2>&1; then
+  while IFS= read -r local_address; do
+    case "$local_address" in
+      *:5087|*:5094)
+        if [[ "$local_address" == "127.0.0.1:5087" || "$local_address" == "[::1]:5087" ||
+              "$local_address" == "127.0.0.1:5094" || "$local_address" == "[::1]:5094" ]]; then
+          pass 'Archer listener is restricted to loopback'
+        else
+          fail 'An Archer listener is exposed on a non-loopback network interface'
+        fi
+        ;;
+    esac
+  done < <(ss -lntH | awk '{print $4}')
+else
+  warn 'Install iproute2 and confirm no Archer listener binds outside loopback'
+fi
+
+if [[ "$mode" == "--live" ]]; then
+  for service in archer-core archer-private-gateway; do
+    if systemctl is-active --quiet "$service"; then pass "$service is running"
+    else fail "$service is not running"; fi
+  done
+  if curl --silent --fail --max-time 5 http://127.0.0.1:5087/api/health >/dev/null; then
+    pass 'Core health responds locally'
+  else fail 'Core local health check failed'; fi
+  if curl --silent --fail --max-time 5 http://127.0.0.1:5094/health/live >/dev/null; then
+    pass 'Private gateway health responds locally'
+  else fail 'Private gateway local health check failed'; fi
+  if tailscale status >/dev/null 2>&1; then pass 'Private device network reports connected'
+  else fail 'Private device network is offline'; fi
+fi
+warn 'Verify firewall and tailnet ACL deny all unapproved devices, and Tailscale Serve (not Funnel) uses private HTTPS'
+warn 'Run an actual encrypted off-host backup and test restore before storing unique production data'
+warn 'Verify Auth0 scope/audience, real signed iPhone, notifications, operational costs and rollback before production'
+if (( failures > 0 )); then
+  printf 'Archer server is not ready: %d required check(s) failed.\n' "$failures"
+  exit 1
+fi
+printf 'Archer server preparation checks passed for %s. Manual validation still required.\n' "$mode"
+
   if grep -q '^ARCHER_COMPANION_BRIDGE_KEY=' "$core"; then
     pass 'Core companion bridge is configured'
   else fail 'Core companion bridge key missing'; fi
