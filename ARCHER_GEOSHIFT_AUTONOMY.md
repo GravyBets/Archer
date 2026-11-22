@@ -1,30 +1,32 @@
-# GeoShift development missions (A-track)
+# Archer managed-project autonomy
 
-The local Mission Control Developer view now supports a bounded, owner-authorized coding batch. This is draft-only autonomy, not a production deployer or a general shell agent.
+This replaces the earlier GeoShift-specific prototype. GeoShift is one optional registered project, not an execution dependency. Archer can manage another repository without code changes to Archer.
 
-## Setup (personal PC, not work computer)
+## Start on the personal Archer machine
 
-1. Pull and build Archer once the development-mission PR is merged and green. Start Archer as usual.
-2. GeoShift uses the default branch **master**. Its independent **GeoShift Archer CI** workflow builds the Web app and runs the existing core tests on each PR.
-3. Configure these environment variables in the local Archer process, then restart:
-   - `ARCHER_GEOSHIFT_AUTONOMY_ENABLED=true`
-   - `ARCHER_CODING_ENABLED=true`
-   - `ARCHER_GITHUB_WRITE_REPOS=GravyBets/GeoShift`
-   - `ARCHER_GITHUB_ALLOWLIST=GravyBets/GeoShift` (or include it in your existing list)
-   - `ARCHER_GITHUB_WRITE_TOKEN`: a fine-grained GitHub token limited to GeoShift, Contents and Pull requests read/write, no workflow or deploy access.
-   - `ARCHER_GITHUB_READ_TOKEN`: recommended separate fine-grained token limited to GeoShift with Contents, Pull requests, Actions and Checks read access. Public API calls without a token may be rate-limited.
-   - Existing `OPENAI_API_KEY` and the local spending settings. Never share or commit tokens. Do not put employer data in this project.
-4. Confirm configuration in Developer → GeoShift development missions. The worker refuses to arm if CI is unavailable.
-5. **Use first pilot objective** proposes a real, small converter compatibility change for legacy KML files missing the standard xsi namespace declaration. Click Create task plan (one budget-checked model call), review the files and task instructions, then authorize the batch once. A planned task is not an approved code change until batch authorization.
-6. Leave Archer running. It generates a bounded source proposal, opens an isolated draft PR, checks the exact published head against the required Web build and core-test job, and moves to the next independent task only after green CI. A code failure permits one repair draft with prior proposed source and limited diagnostics; earlier failed PRs are retained and must not be merged. Do not merge both drafts.
-7. Inspect evidence, review each final PR, and merge only after your own review. Archer never merges or deploys. Green CI does not guarantee the requested behavior or cross-PR compatibility.
+1. Pull the merged and verified Archer release, build, and run Mission Control.
+2. In Developer → Managed projects, register the project name, exact GitHub owner/repository, technology, editable application directory prefixes, independent CI workflow **filename**, verification job display name, and required build and regression-test step names. Priority is 1–5; 5 is highest. Set a rolling 24-hour coding-attempt limit (1–12). Registration is local metadata, not GitHub authorization.
+3. Only enable repositories you own and have reviewed. Set `ARCHER_PROJECT_AUTONOMY_ENABLED=true` and `ARCHER_CODING_ENABLED=true`. Include each authorized repository in both comma-separated `ARCHER_GITHUB_ALLOWLIST` and `ARCHER_GITHUB_WRITE_REPOS`. Set `OPENAI_API_KEY` and existing global AI spend preferences.
+4. The project panel shows a stable credential prefix derived from its repository identity (uppercase first 16 hex characters of SHA-256 of lowercase owner/repo). Configure separate environment variables `<prefix>_READ_TOKEN` and `<prefix>_WRITE_TOKEN` for that repository. Use separate fine-grained GitHub credentials: Contents, Pull requests, Actions and Checks read-only for the reader; Contents and Pull requests read/write for publication only. No workflow, deployment, billing, account-wide or organization admin rights. Never enter tokens in memory, objectives, or GitHub.
+5. Ensure the owner's independent PR CI job actually builds and runs tests. **The CI executing generated source must be isolated, read-only and have no secrets or deployment privileges.** Review repository workflows and branch protection; verify CI runs on draft pull requests, and that the build and test gates cannot be replaced by generated changes. Do not enable repositories whose untrusted PR code runs on privileged runners.
+6. The worker requires both scoped credentials, both explicit allowlists, the autonomy switches, an AI key and a working CI profile. Registering another project does not create or modify its repository.
 
-## Limits and recovery
+## Workflows
 
-- Up to three independent tasks; one or two existing small application source files per task; no test, workflow, entry-point, package/config or new-file edits. Ambiguous source scope is refused.
-- Up to two coding attempts per task, six total, one 24-hour authorization. Every AI call goes through the existing budget ledger, which estimates costs and does not replace provider billing controls. Planning is separate, explicitly initiated and billable.
-- CI must have completed successfully with both named build and test steps, not skipped or absent. CI checks time out after 45 minutes. Only bounded diagnostic codes and approved file positions, never raw logs, are used for automatic repair.
-- Pausing prevents new claims; a request/write already underway might finish. A paused pre-publication edit is retained locally and blocked; do not retry ambiguous writes.
-- Default restart behavior disarms the queue. Optional explicit restart authorization permits safe queued/CI work to resume without resetting the original time and attempt limits. Interrupted editing or publication is blocked, not retried.
-- Drafts remain isolated, not cumulative integration. This is not a guarantee of launch readiness. No background service if the PC/app is stopped. No remote mobile approval or chat-driven execution in this change.
-- The first real paid pilot must run in the owner's configured Archer instance. CI synthetic checks exercise policy and mocked GitHub evidence without credentials; they don't prove live API authorization, AI quality or owner-machine reliability.
+- Create a persistent objective and optionally link it to an earlier objective in the same project. Owner acceptance releases dependencies. Accepted means the owner says it is satisfactory; it is not an Archer deployment claim.
+- **Review-first:** select an objective or enter a small instruction, request a budget-checked plan, inspect the exact eligible file paths, authorize the batch once.
+- **Delegate to Archer:** explicitly authorize one paid planning attempt and bounded draft coding for a saved objective and its registered source roots for 24 hours. Archer selects ready objectives by priority after outstanding CI, refuses unresolved dependencies, and creates and arms a batch without per-task approval. Cancel delegation or pause the project at any time. No automatic renewal.
+- Review final and earlier failed draft PRs. Required independent CI must pass on the exact recorded head. A verified draft still needs human integration and release review. Archer cannot merge, deploy, or transact.
+- Project memory stores owner notes, architectural decisions, preferences and lessons with timestamps and optional AI sharing. CI evidence and blockers are recorded automatically in the relevant project. The planner and project code model retrieve only opted-in entries from that project. Chat retrieves notes only when exactly one project is explicitly named; project names and status summaries are included as general context. Delete local memory entries from the panel. Never put secrets or employer information in memory.
+
+## Current operating limits
+
+Existing source only: .cs, .razor, .js, .jsx, .ts, .tsx, .py inside explicit application roots, up to two existing regular files per task, each up to 9,000 bytes input. Test directories, workflow files, scripts, entrypoints and common sensitive/config files are excluded. Larger refactors, new file creation, test authoring, cumulative integration branches, automatic release/deploy, shell execution and additional languages need further implementation. CI profiles are owner-defined; their semantics are not independently proven by Archer. Source review is not security validation.
+
+One or two attempts per task, at most three independent tasks / six attempts per batch, per-project rolling attempt quota, and the existing shared local AI budget ledger. This is not an independent dollar budget per project or a provider-wide billing cap. The worker runs locally while Archer runs; multiple projects may queue, but a single worker executes serially. Pausing cancels queued authorization, not necessarily an already running request. Restart disarms by default; optional explicit restart permission preserves only safe unclaimed work and CI polling within the original deadline. Ambiguous interrupted paid planning or publication is blocked, not retried.
+
+Archer's project registry is still backed by the local state store. It is not the production multi-device database, hardened secrets vault or a full autonomous coding sandbox. The phone app has not been modified in this batch.
+
+## Example profile (only if the owner chooses to register it)
+
+GeoShift: `GravyBets/GeoShift`, .NET, roots `GeoShift.Core, GeoShift.Web`, workflow `archer-ci.yml`, job `GeoShift build and tests`, required steps `Build Web` and `Run core regression tests`. This profile is illustrative; no default project is seeded. Do not run the first paid autonomous mission until the new Archer build is verified and configured.
