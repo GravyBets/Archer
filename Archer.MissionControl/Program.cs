@@ -982,7 +982,15 @@ app.MapPost("/api/projects/{id:guid}/pause", async Task<IResult> (HttpContext co
         if (p is null) return false;
         p.Paused = request.Paused;
         if (p.Paused)
+        {
             foreach (var b in s.DevelopmentBatches.Where(b => b.ProjectId == id)) b.Armed = false;
+            foreach (var o in p.Objectives.Where(o => o.PlanningState is "Delegated" or "Planning"))
+            {
+                o.DelegatedUntilUtc = null;
+                o.PlanningState = o.PlanningAttempted ? "Blocked" : "Not delegated";
+                o.PlanningDetail = "Project paused by owner.";
+            }
+        }
         return true;
     }, ct);
     return saved ? Results.Ok(new { message = request.Paused ? "Project paused. In-flight operations may finish." : "Project available; batches remain disarmed." }) : Results.NotFound();
@@ -1020,12 +1028,52 @@ app.MapPost("/api/projects/{id:guid}/objectives/{objectiveId:guid}/accept", asyn
         // Prevent accepting completed objectives while external writes are underway.
         if (s.DevelopmentBatches.Any(b => b.ProjectId == id && b.ObjectiveId == objectiveId &&
             (b.Armed || b.Tasks.Any(t => t.Status is "Editing" or "Publishing")))) return false;
+        if (objective.PlanningState == "Planning") return false;
+        objective.DelegatedUntilUtc = null;
         objective.AcceptedAtUtc = DateTimeOffset.UtcNow;
         ProjectPolicy.AddMemory(p, "Owner acceptance", objective.Description + " — accepted by owner, not independently verified as deployed.", true);
         return true;
     }, ct);
     return saved ? Results.Ok(new { message = "Objective accepted; dependent objectives may now be planned." }) : Results.Conflict();
 });
+app.MapPost("/api/projects/{id:guid}/objectives/{objectiveId:guid}/delegate", async Task<IResult> (
+    HttpContext context, Guid id, Guid objectiveId, DelegateObjectiveRequest request,
+    JsonFileStore store, ProjectDevelopmentWorker worker, CancellationToken ct) =>
+{
+    if (!LocalDevelopmentRequest(context) || !request.Confirm) return Results.StatusCode(403);
+    var saved = await store.UpdateAsync(s =>
+    {
+        var p = s.Projects.SingleOrDefault(p => p.Id == id);
+        var o = p?.Objectives.SingleOrDefault(o => o.Id == objectiveId);
+        if (p is null || o is null || !worker.CanArm(p) || o.AcceptedAtUtc is not null ||
+            o.PlanningAttempted || o.PlanningState == "Delegated" && o.DelegatedUntilUtc > DateTimeOffset.UtcNow ||
+            s.DevelopmentBatches.Any(b => b.ProjectId == id && b.ObjectiveId == objectiveId))
+            return false;
+        o.DelegatedUntilUtc = DateTimeOffset.UtcNow.AddHours(24);
+        o.ResumeDelegationAfterRestart = request.ResumeAfterRestart;
+        o.PlanningState = "Delegated";
+        o.PlanningDetail = "Owner authorized one planning call and bounded coding attempts when dependencies are accepted.";
+        return true;
+    }, ct);
+    return saved ? Results.Ok(new { message = "Objective delegated for 24 hours. Archer will plan and draft automatically once prerequisites are accepted, within limits." }) :
+        Results.Conflict(new { error = "Cannot delegate this objective: check project setup, prior attempts and existing batches." });
+});
+app.MapPost("/api/projects/{id:guid}/objectives/{objectiveId:guid}/cancel-delegation", async Task<IResult> (
+    HttpContext context, Guid id, Guid objectiveId, AcceptObjectiveRequest request, JsonFileStore store, CancellationToken ct) =>
+{
+    if (!LocalDevelopmentRequest(context) || !request.Confirm) return Results.StatusCode(403);
+    var saved = await store.UpdateAsync(s =>
+    {
+        var o = s.Projects.SingleOrDefault(p => p.Id == id)?.Objectives.SingleOrDefault(o => o.Id == objectiveId);
+        if (o is null || o.PlanningState is not ("Delegated" or "Planning")) return false;
+        o.DelegatedUntilUtc = null;
+        o.PlanningState = o.PlanningAttempted ? "Blocked" : "Not delegated";
+        o.PlanningDetail = "Delegation canceled by owner. An in-flight planning call may finish, but no batch will be armed.";
+        return true;
+    }, ct);
+    return saved ? Results.Ok(new { message = "Delegation canceled." }) : Results.Conflict();
+});
+
 app.MapPost("/api/projects/{id:guid}/memory", async Task<IResult> (HttpContext context, Guid id,
     ProjectMemoryRequest request, JsonFileStore store, CancellationToken ct) =>
 {
@@ -1076,7 +1124,7 @@ app.MapPost("/api/development/batches", async Task<IResult> (HttpContext context
     if (request.ObjectiveId is { } objectiveId)
     {
         var existing = project.Objectives.SingleOrDefault(o => o.Id == objectiveId);
-        if (existing is null || !ProjectPolicy.ObjectiveReady(project, existing))
+        if (existing is null || !ProjectPolicy.ObjectiveReady(project, existing) || existing.PlanningState is "Delegated" or "Planning")
             return Results.Conflict(new { error = "Objective missing, accepted, or dependencies unresolved." });
         objective = existing.Description;
         if (await store.ReadAsync(s => s.DevelopmentBatches.Any(b => b.ProjectId == project.Id &&
