@@ -70,7 +70,8 @@
             </form>
             <div class="voice-preferences">
               <label class="voice-toggle"><input type="checkbox" id="voiceHandsFreeToggle" /> Hands-free</label>
-              <label class="voice-toggle"><input type="checkbox" id="voiceWakeToggle" /> Browser wake (fallback)</label>
+              <label class="voice-toggle"><input type="checkbox" id="voiceWakeToggle" /> Say “Hey Archer” to wake</label>
+              <label class="voice-toggle"><input type="checkbox" id="voiceAutoStandbyToggle" /> Listen for Hey Archer when opened</label>
               <span id="voiceWakeIndicator" class="voice-wake-indicator" role="status" aria-live="polite">Voice off</span>
               <label class="voice-rate-control" for="voicePauseSlider">Wait after I pause
                 <input id="voicePauseSlider" type="range" min="2" max="30" step="1" value="7" aria-label="Seconds of silence before Archer replies" />
@@ -93,7 +94,7 @@
                   <button type="button" class="voice-stop" id="voiceTestButton" disabled>Test selected voice</button>
                    <button type="button" class="voice-stop" id="voiceReplayButton" disabled>Read last reply</button>
                   <button type="button" class="voice-stop" id="voiceStopButton" data-allow-busy="true" disabled>Stop speaking</button>
-                  <p id="voiceSupportNote" role="status">Select Speak once to activate hands-free listening. Say “Hey Archer” to start a conversation, then talk normally. After 2 minutes without speech, say “Hey Archer” again. Browser mic stops when you end the session or leave this tab; recognition may use your browser's speech provider.</p>
+                  <p id="voiceSupportNote" role="status">Enable automatic standby, or select Speak once if your browser requires it. Say “Hey Archer” to start a conversation, then talk normally. After 2 minutes without speech, say “Hey Archer” again. Browser mic stops when you end the session or leave this tab; recognition may use your browser's speech provider.</p>
                   <p id="voiceAccentStatus" role="status">British voice availability depends on installed browser voices.</p>
                    <details class="voice-diagnostics-panel">
                      <summary>Voice diagnostics (no recording)</summary>
