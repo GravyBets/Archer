@@ -147,7 +147,7 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
         request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Archer", "0.9.0"));
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         request.Headers.Authorization = new AuthenticationHeaderValue(
-            "Bearer", Environment.GetEnvironmentVariable("ARCHER_GITHUB_WRITE_TOKEN"));
+            "Bearer", ProjectGitHubCredentials.ForApiUrl(url, true));
         if (body is not null)
             request.Content = new StringContent(JsonSerializer.Serialize(body, JsonOptions),
                 Encoding.UTF8, "application/json");
