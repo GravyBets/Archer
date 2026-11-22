@@ -67,13 +67,23 @@
       const ready = !o.acceptedAtUtc && o.dependsOn.every(id => p.objectives.some(other => other.id === id && other.acceptedAtUtc));
       const related = batches.filter(b => b.projectId === p.id && b.objectiveId === o.id);
       const alreadyPlanned = related.some(b => b.armed || b.tasks.some(t => t.status !== 'Blocked'));
+      const delegated = ['Delegated', 'Planning'].includes(o.planningState);
       const box = element('section', ''); box.className = 'coding-file-diff';
       box.append(element('p', (o.acceptedAtUtc ? 'Accepted' : ready ? 'Ready' : 'Waiting on dependencies') + ' · ' + o.description));
+      box.append(element('p', o.planningState + (o.planningDetail ? ' · ' + o.planningDetail : '') + (o.delegatedUntilUtc ? ' · until ' + new Date(o.delegatedUntilUtc).toLocaleString() : '')));
+      if (delegated) box.append(action('Cancel delegation', () => command('/api/projects/' + p.id + '/objectives/' + o.id + '/cancel-delegation', { confirm: true })));
+      if (!o.acceptedAtUtc && !o.planningAttempted && !delegated && related.length === 0) {
+        box.append(action('Delegate to Archer', () => {
+          const resumeAfterRestart = el('developmentResumeAfterRestart').checked;
+          if (window.confirm('Delegate this objective to Archer for 24 hours? Archer may select files within ' + p.sourceRoots.join(', ') + ', make one paid planning call and automatically publish draft PRs within the project coding allowance. No merge or deployment. Dependencies must be accepted first.'))
+            command('/api/projects/' + p.id + '/objectives/' + o.id + '/delegate', { confirm: true, resumeAfterRestart });
+        }, !p.enabled));
+      }
       if (ready) {
         box.append(action('Use objective for next plan', () => {
           selectedObjective = o.id; objective.value = o.description; objective.readOnly = true; objective.focus();
           status.textContent = 'Saved objective selected. Create its development plan.';
-        }, !p.enabled || alreadyPlanned));
+        }, !p.enabled || alreadyPlanned || delegated));
         box.append(action('Accept objective', () => {
           if (window.confirm('Mark this objective accepted by you? This releases dependencies but does not certify a deployment.'))
             command('/api/projects/' + p.id + '/objectives/' + o.id + '/accept', { confirm: true });
