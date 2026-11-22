@@ -66,6 +66,11 @@ struct ArcherConnectedView: View {
                         VStack(alignment:.leading,spacing:5) {
                             Text("Research · " + item.status).font(.caption.bold()).foregroundStyle(.cyan)
                             Text(item.title)
+                            if let findings = item.findings, !findings.isEmpty {
+                                DisclosureGroup("Read findings") {
+                                    Text(findings).font(.subheadline).textSelection(.enabled)
+                                }
+                            }
                         }.padding(.vertical,6)
                     }
                     ForEach(data.assignments) { item in
