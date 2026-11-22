@@ -64,3 +64,7 @@ try {
 } finally {
   Remove-Item -LiteralPath $root -Force -Recurse -ErrorAction SilentlyContinue
 }
+
+# Child-process negative tests intentionally left LASTEXITCODE=1. The test
+# assertions above completed; return explicit success to the CI parent shell.
+exit 0
