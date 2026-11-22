@@ -75,7 +75,7 @@ public sealed class ConversationEntry
 }
 
 public sealed record CreateMissionRequest(string? Title, string? Objective);
-public sealed record ChatRequest(string? Message, bool VoiceMode = false);
+public sealed record ChatRequest(string? Message, bool VoiceMode = false, bool DirectOwnerInput = false);
 public sealed record RunMissionRequest(int MaxSteps = 1);
 
 public sealed class PlanDraft
