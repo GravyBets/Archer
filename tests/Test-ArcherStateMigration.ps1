@@ -27,7 +27,7 @@ try {
   $ok=Inspect
   if ($ok.Code -ne 0) { throw ('A valid state was not recognized: '+$ok.Text) }
   if (-not $ok.Text.Contains('Visual Studio Archer') -or -not $ok.Text.Contains('missions: 1') -or
-      -not ($ok.Text -notmatch 'read-only, no data was copied or uploaded')) {
+      ($ok.Text -notmatch 'read-only, no data was copied or uploaded')) {
     throw 'Owner-friendly summary missing.'
   }
   if ($ok.Text.Contains($marker)) { throw 'State contents leaked to terminal!' }
