@@ -24,6 +24,8 @@
   const input = el('chatText');
   const handsFreeToggle = el('voiceHandsFreeToggle');
   const wakeToggle = el('voiceWakeToggle');
+  const autoStandbyToggle = el('voiceAutoStandbyToggle');
+  let autoStandbyAttempted = false;
   const wakeIndicator = el('voiceWakeIndicator');
   let desktopVoice = null; // status only; native speech is owned by the Windows tray process
   const pauseSlider = el('voicePauseSlider');
@@ -41,7 +43,7 @@
   let initialTranscript = '';
   let carriedTranscript = '';
   let currentTranscript = '';
-  let voiceSessionActive = false; // explicit Speak action only, never auto-start on page load
+  let voiceSessionActive = false; // explicit activation or saved, permission-checked standby
   let sendingVoiceTurn = false;
   let sendAfterRecognitionEnd = false;
   let waitingForVoiceReply = false;
@@ -67,6 +69,8 @@
   handsFreeToggle.checked = getPreference('archer.voice.handsFree') === 'yes';
   wakeToggle.checked = getPreference('archer.voice.wake') === 'yes';
   wakeToggle.disabled = !handsFreeToggle.checked;
+  autoStandbyToggle.checked = getPreference('archer.voice.autoStandby') === 'yes' && wakeEnabled();
+  autoStandbyToggle.disabled = !SpeechRecognitionCtor;
   const savedPause = Number(getPreference('archer.voice.pauseSeconds'));
   const pauseSeconds = Number.isInteger(savedPause) && savedPause >= 2 && savedPause <= 30
     ? savedPause : 7;
@@ -81,16 +85,64 @@
   handsFreeToggle.addEventListener('change', () => {
     setPreference('archer.voice.handsFree', handsFreeToggle.checked ? 'yes' : 'no');
     wakeToggle.disabled = !handsFreeToggle.checked;
-    if (!handsFreeToggle.checked) endVoiceConversation(false);
+    if (!handsFreeToggle.checked) { disableAutoStandby(); endVoiceConversation(false); }
   });
   wakeToggle.addEventListener('change', () => {
     setPreference('archer.voice.wake', wakeToggle.checked ? 'yes' : 'no');
+    if (!wakeToggle.checked) disableAutoStandby();
     // Do not reinterpret an already captured transcript after mode changes.
     if (voiceSessionActive) {
       endVoiceConversation(false);
       note.textContent = 'Wake phrase setting updated. Select Speak again to restart.';
     }
   });
+
+  function disableAutoStandby() {
+    autoStandbyToggle.checked = false;
+    autoStandbyAttempted = true;
+    setPreference('archer.voice.autoStandby', 'no');
+  }
+
+  autoStandbyToggle.addEventListener('change', () => {
+    if (!autoStandbyToggle.checked) {
+      disableAutoStandby();
+      endVoiceConversation();
+      return;
+    }
+    if (!window.confirm('Enable microphone standby when Archer opens? Your browser speech provider may process audio while waiting for “Hey Archer”. Stop or leave the tab to end listening.')) {
+      disableAutoStandby();
+      return;
+    }
+    endVoiceConversation();
+    handsFreeToggle.checked = true;
+    wakeToggle.checked = true;
+    wakeToggle.disabled = false;
+    setPreference('archer.voice.handsFree', 'yes');
+    setPreference('archer.voice.wake', 'yes');
+    setPreference('archer.voice.autoStandby', 'yes');
+    autoStandbyAttempted = true;
+    if (!input.value.trim() && !desktopVoice?.running) startListening();
+  });
+
+  async function maybeStartAutoStandby() {
+    if (autoStandbyAttempted || !autoStandbyToggle.checked || !wakeEnabled() ||
+        desktopVoice?.running !== false || !recognition || document.hidden ||
+        !el('archerView')?.classList || el('archerView').classList.contains('hidden') ||
+        appState.busy || voiceSessionActive || listening || speaking || input.value.trim()) return;
+    autoStandbyAttempted = true;
+    try {
+      const permission = await navigator.permissions.query({name:'microphone'});
+      if (permission.state === 'granted' && autoStandbyToggle.checked && wakeEnabled() &&
+          !desktopVoice?.running && !document.hidden && !el('archerView').classList.contains('hidden') &&
+          !appState.busy && !voiceSessionActive && !listening && !speaking && !input.value.trim()) {
+        startListening();
+      } else {
+        note.textContent = 'Standby is enabled. If your browser requires permission, select Speak once.';
+      }
+    } catch {
+      note.textContent = 'This browser needs a manual Speak tap to enable its microphone.';
+    }
+  }
 
   // Default to a conversational pace; keep the preference locally per browser.
   // Invalid/old preferences cannot push Web Speech rate beyond the offered range.
@@ -172,7 +224,7 @@
     // or pretend the browser pause/rate sliders configure native SAPI.
     mic.hidden = nativeActive;
     endConversationButton.hidden = nativeActive;
-    for (const control of [handsFreeToggle, wakeToggle, pauseSlider]) {
+    for (const control of [handsFreeToggle, wakeToggle, autoStandbyToggle, pauseSlider]) {
       const label = control.closest('label');
       if (label) label.hidden = nativeActive;
     }
@@ -187,9 +239,10 @@
       wakeIndicator.textContent = 'Desktop microphone unavailable';
       wakeIndicator.title = status.detail || '';
       note.textContent = status.detail || 'Windows desktop voice needs attention.';
-    } else {
-      setState('idle');
+    } else if (!voiceSessionActive && !listening && !speaking && !appState.busy) {
+      settle();
     }
+    if (!nativeActive) void maybeStartAutoStandby();
     updateVoiceDiagnostics();
   }
 
@@ -510,6 +563,7 @@
   }
 
   function endVoiceConversation(stopAudio = true) {
+    autoStandbyAttempted = true; // explicit stop/navigation must not be undone by polling
     voiceSessionActive = false;
     waitingForVoiceReply = false;
     sendingVoiceTurn = false;
@@ -595,7 +649,7 @@
       return;
     }
     stopSpeech();
-    // Hands-free is opt-in and always starts with an explicit Speak/orb tap.
+    // Hands-free starts with a deliberate activation or saved standby preference.
     voiceSessionActive = handsFreeToggle.checked;
     waitingForVoiceReply = false;
     wakeConversationActive = false;
