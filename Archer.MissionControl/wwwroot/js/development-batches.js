@@ -6,7 +6,7 @@
   const plan = el('developmentPlanButton');
   const objective = el('developmentObjective');
   let busy = false, enabled = false;
-  const pilot = 'Bring KmlCsvConverter.cs in line with KmlAnalyzer.cs for legacy KML exports that reference xsi:schemaLocation without declaring the standard xsi namespace. Change only KmlCsvConverter.cs; preserve DTD prohibition, XML validation and conversion limits.';
+  const pilot = 'Adapt KmlCsvConverter.cs for legacy KML exports that reference xsi:schemaLocation without declaring the standard xsi namespace. Change only KmlCsvConverter.cs; preserve DTD prohibition, XML validation and conversion limits.';
   el('developmentPilotButton').addEventListener('click', () => { objective.value = pilot; objective.focus(); });
   function element(tag, value) {
     const node = document.createElement(tag);
