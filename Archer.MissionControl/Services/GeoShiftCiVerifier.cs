@@ -5,26 +5,26 @@ using Archer.MissionControl.Domain;
 
 namespace Archer.MissionControl.Services;
 
-public sealed class GeoShiftCiVerifier(HttpClient client)
+public sealed class ProjectCiVerifier(HttpClient client)
 {
-    private const string Api = "https://api.github.com/repos/GravyBets/GeoShift";
-    private const string Workflow = "/actions/workflows/archer-ci.yml";
+    private static string Api(ManagedProject project) => "https://api.github.com/repos/" + project.Repository;
+    private static string Workflow(ManagedProject project) => "/actions/workflows/" + project.WorkflowFile;
     public sealed record Verdict(string Status, string Detail);
 
-    public async Task<bool> ReadyAsync(CancellationToken ct)
+    public async Task<bool> ReadyAsync(ManagedProject project, CancellationToken ct)
     {
-        using var workflow = await ReadAsync(Workflow, ct);
+        using var workflow = await ReadAsync(project, Workflow(project), ct);
         return workflow.RootElement.GetProperty("state").GetString() == "active" &&
-            workflow.RootElement.GetProperty("path").GetString() == ".github/workflows/archer-ci.yml";
+            workflow.RootElement.GetProperty("path").GetString() == ".github/workflows/" + project.WorkflowFile;
     }
 
-    public async Task<Verdict> InspectAsync(CodeProposal proposal, CancellationToken ct)
+    public async Task<Verdict> InspectAsync(ManagedProject project, CodeProposal proposal, CancellationToken ct)
     {
-        if (proposal.Repository != "GravyBets/GeoShift" ||
+        if (!string.Equals(proposal.Repository, project.Repository, StringComparison.OrdinalIgnoreCase) ||
             proposal.PullRequestNumber is not > 0 ||
             !Regex.IsMatch(proposal.PublishedHeadSha ?? "", "^[a-fA-F0-9]{40}$"))
             return new("Blocked", "No immutable published PR identity.");
-        using var pr = await ReadAsync("/pulls/" + proposal.PullRequestNumber, ct);
+        using var pr = await ReadAsync(project, "/pulls/" + proposal.PullRequestNumber, ct);
         var p = pr.RootElement;
         var head = p.GetProperty("head");
         if (p.GetProperty("state").GetString() != "open" ||
@@ -34,42 +34,42 @@ public sealed class GeoShiftCiVerifier(HttpClient client)
             p.GetProperty("base").GetProperty("ref").GetString() != proposal.BaseBranch)
             return new("Blocked", "PR changed, closed, or no longer matches the recorded head.");
 
-        using var runs = await ReadAsync(Workflow + "/runs?event=pull_request&head_sha=" +
+        using var runs = await ReadAsync(project, Workflow(project) + "/runs?event=pull_request&head_sha=" +
             proposal.PublishedHeadSha + "&per_page=30", ct);
         var run = runs.RootElement.GetProperty("workflow_runs").EnumerateArray()
             .FirstOrDefault(r => r.GetProperty("head_sha").GetString() == proposal.PublishedHeadSha &&
                 r.GetProperty("head_branch").GetString() == proposal.BranchName &&
                 r.GetProperty("event").GetString() == "pull_request");
         if (run.ValueKind == JsonValueKind.Undefined || run.GetProperty("status").GetString() != "completed")
-            return new("Testing", "Waiting for the exact-head GeoShift CI run.");
+            return new("Testing", "Waiting for the exact-head project CI run.");
         var runId = run.GetProperty("id").GetInt64();
-        using var jobs = await ReadAsync("/actions/runs/" + runId + "/jobs?filter=latest&per_page=30", ct);
+        using var jobs = await ReadAsync(project, "/actions/runs/" + runId + "/jobs?filter=latest&per_page=30", ct);
         var job = jobs.RootElement.GetProperty("jobs").EnumerateArray()
-            .FirstOrDefault(j => j.GetProperty("name").GetString() == "GeoShift build and tests");
+            .FirstOrDefault(j => j.GetProperty("name").GetString() == project.VerificationJob);
         if (job.ValueKind == JsonValueKind.Undefined)
             return new("Blocked", "Expected independent verification job missing.");
         var steps = job.GetProperty("steps").EnumerateArray().ToArray();
         bool Passed(string name) => steps.Any(s => s.GetProperty("name").GetString() == name &&
             s.GetProperty("conclusion").GetString() == "success");
-        var url = "https://github.com/GravyBets/GeoShift/actions/runs/" + runId;
+        var url = "https://github.com/" + project.Repository + "/actions/runs/" + runId;
         if (run.GetProperty("conclusion").GetString() == "success" &&
             job.GetProperty("conclusion").GetString() == "success" &&
-            Passed("Build Web") && Passed("Run core regression tests"))
-            return new("Verified", "Exact-head Web build and core tests passed: " + url);
+            project.RequiredSteps.Count >= 2 && project.RequiredSteps.All(Passed))
+            return new("Verified", "Exact-head required build and test steps passed: " + url);
         var failed = steps.Where(s => s.GetProperty("conclusion").GetString() == "failure")
             .Select(s => s.GetProperty("name").GetString()).ToArray();
-        if (!failed.Any(s => s is "Build Web" or "Run core regression tests"))
+        if (!failed.Any(s => s is not null && project.RequiredSteps.Contains(s, StringComparer.Ordinal)))
             return new("Blocked", "CI did not complete successfully for an actionable code failure: " + url);
         // Only allow diagnostic codes and source positions from approved
         // files. Do not transmit arbitrary log/annotation text or secrets.
         var feedback = new List<string>();
         if (job.TryGetProperty("check_run_url", out var checkUrl) &&
             Regex.Match(checkUrl.GetString() ?? "",
-                @"^https://api\.github\.com/repos/GravyBets/GeoShift/check-runs/([0-9]+)$") is { Success: true } match)
+                "^" + Regex.Escape(Api(project)) + @"/check-runs/([0-9]+)$") is { Success: true } match)
         {
             try
             {
-                using var annotations = await ReadAsync("/check-runs/" + match.Groups[1].Value + "/annotations?per_page=30", ct);
+                using var annotations = await ReadAsync(project, "/check-runs/" + match.Groups[1].Value + "/annotations?per_page=30", ct);
                 foreach (var annotation in annotations.RootElement.EnumerateArray())
                 {
                     var path = annotation.GetProperty("path").GetString() ?? "";
@@ -88,17 +88,18 @@ public sealed class GeoShiftCiVerifier(HttpClient client)
             (feedback.Count == 0 ? "" : ". Compiler diagnostics: " + string.Join("; ", feedback)) + ". " + url);
     }
 
-    private async Task<JsonDocument> ReadAsync(string path, CancellationToken ct)
+    private async Task<JsonDocument> ReadAsync(ManagedProject project, string path, CancellationToken ct)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, Api + path);
-        request.Headers.UserAgent.ParseAdd("Archer-GeoShift-CI/1.0");
+        if (!ProjectPolicy.ValidRepository(project.Repository)) throw new InvalidOperationException("Invalid repository profile.");
+        using var request = new HttpRequestMessage(HttpMethod.Get, Api(project) + path);
+        request.Headers.UserAgent.ParseAdd("Archer-Project-CI/1.0");
         request.Headers.Accept.ParseAdd("application/vnd.github+json");
-        var token = Environment.GetEnvironmentVariable("ARCHER_GITHUB_READ_TOKEN");
+        var token = ProjectGitHubCredentials.Scoped(project.Repository, false);
         if (!string.IsNullOrWhiteSpace(token))
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         using var response = await client.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException("GeoShift CI lookup failed (HTTP " + (int)response.StatusCode + ").");
+            throw new InvalidOperationException("Project CI lookup failed (HTTP " + (int)response.StatusCode + ").");
         return JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
     }
 }
