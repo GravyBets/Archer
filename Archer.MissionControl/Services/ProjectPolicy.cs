@@ -41,13 +41,13 @@ public static class ProjectPolicy
     public static bool InSourceRoot(ManagedProject project, string path) =>
         project.SourceRoots.Any(root => path.StartsWith(root + "/", StringComparison.Ordinal));
     public static bool NewSourceAllowed(ManagedProject project, string path) =>
-        project.AllowNewSourceFiles && IsApplicationPath(path) && InSourceRoot(project, path);
+        !SelfDevelopmentPolicy.IsSelf(project.Repository) && project.AllowNewSourceFiles && IsApplicationPath(path) && InSourceRoot(project, path);
 
     // Additive regression files only. Existing checks and test harness configuration
     // remain outside the model's writable scope. Require a cumulative draft so a
     // failed regression file remains unchanged when repairing application code.
     public static bool NewRegressionAllowed(ManagedProject project, string path) =>
-        project.CumulativeWorkspaces && ValidPath(path) &&
+        !SelfDevelopmentPolicy.IsSelf(project.Repository) && project.CumulativeWorkspaces && ValidPath(path) &&
         project.RegressionTestRoots.Any(root => path.StartsWith(root + "/", StringComparison.Ordinal)) &&
         !path.Split('/').Any(p => p.Equals("fixtures", StringComparison.OrdinalIgnoreCase) ||
             p.Equals("scripts", StringComparison.OrdinalIgnoreCase) || p.Equals("tools", StringComparison.OrdinalIgnoreCase) ||
@@ -59,7 +59,7 @@ public static class ProjectPolicy
         NewSourceAllowed(project, path) || NewRegressionAllowed(project, path);
 
     public static bool Eligible(ManagedProject project, string path, long size) =>
-        size is > 0 and <= 9000 && IsApplicationPath(path) &&
+        size is > 0 and <= 9000 && IsApplicationPath(path) && SelfDevelopmentPolicy.CanEdit(project.Repository, path) &&
         project.SourceRoots.Any(root => path.StartsWith(root + "/", StringComparison.Ordinal));
 
     public static ManagedProject Register(RegisterProjectRequest input)
@@ -84,6 +84,8 @@ public static class ProjectPolicy
             steps.Distinct(StringComparer.Ordinal).Count() != steps.Count ||
             input.Priority is < 1 or > 5 || input.DailyAttemptLimit is < 1 or > 12)
             throw new ArgumentException("Invalid project profile. Specify repository, explicit application roots, workflow, job, build/test steps and limits.");
+        if (SelfDevelopmentPolicy.IsSelf(repo) && !SelfDevelopmentPolicy.ValidProfile(workflow, job, steps, roots, input.AllowNewSourceFiles, testRoots))
+            throw new ArgumentException("Archer self-development requires the protected self-project profile with existing approved presentation files and fixed CI gates.");
         return new ManagedProject
         {
             Name = name, Repository = repo, Technology = technology, SourceRoots = roots,
@@ -203,4 +205,43 @@ public static class ProjectPolicy
         var context = string.Join("\n", entries.Select(m => $"{m.Kind} [{m.CreatedAtUtc:u}]: {m.Content}"));
         return context[..Math.Min(context.Length, 5000)];
     }
+}
+
+public static class SelfDevelopmentPolicy
+{
+    public const string Repository = "GravyBets/Archer";
+    public const string Root = "Archer.MissionControl/wwwroot/js";
+    // Deliberately narrow first self-development pilot. Core permissions,
+    // auth, budget, installer, tool execution, voice capture and CI are not writable.
+    public static readonly IReadOnlyList<string> PilotPaths = Array.AsReadOnly(new[]
+    {
+        Root + "/inbox.js",
+        Root + "/developer.js"
+    });
+    public static readonly IReadOnlyList<string> RequiredSteps = Array.AsReadOnly(new[]
+    {
+        "Build",
+        "Verify development queue, repair caps, recovery and exact-head CI",
+        "Validate natural concise Archer chat and persisted conversation context"
+    });
+    public static bool IsSelf(string repository) => string.Equals(repository, Repository, StringComparison.OrdinalIgnoreCase);
+    public static bool Enabled => Environment.GetEnvironmentVariable("ARCHER_SELF_PROJECT_ENABLED") == "true";
+    public static IReadOnlyList<string> ApprovedPaths =>
+        (Environment.GetEnvironmentVariable("ARCHER_SELF_PROJECT_FILES") ?? "")
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Where(p => PilotPaths.Contains(p, StringComparer.Ordinal)).Distinct(StringComparer.Ordinal).ToArray();
+    public static bool CanEdit(string repository, string path) =>
+        !IsSelf(repository) || (Enabled && ApprovedPaths.Contains(path, StringComparer.Ordinal));
+    public static bool ValidProfile(string workflow, string job, IReadOnlyList<string> steps, IReadOnlyList<string> roots,
+        bool newFiles, IReadOnlyList<string> testRoots) =>
+        workflow == "build.yml" && job == "build" &&
+        steps.SequenceEqual(RequiredSteps, StringComparer.Ordinal) &&
+        roots.SequenceEqual(new[] { Root }, StringComparer.Ordinal) && !newFiles && testRoots.Count == 0;
+    public static bool Configured(ManagedProject project) =>
+        !IsSelf(project.Repository) || (Enabled && ApprovedPaths.Count > 0 &&
+            ValidProfile(project.WorkflowFile, project.VerificationJob, project.RequiredSteps,
+                project.SourceRoots, project.AllowNewSourceFiles, project.RegressionTestRoots));
+    public static RegisterProjectRequest Profile() => new("Archer", Repository, ".NET / JavaScript",
+        [Root], "build.yml", "build", RequiredSteps.ToList(), 4, 6,
+        AllowNewSourceFiles: false, CumulativeWorkspaces: true);
 }
