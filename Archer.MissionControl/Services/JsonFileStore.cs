@@ -66,6 +66,9 @@ public sealed class JsonFileStore
             }
             if (interrupted) mission.Status = "Paused";
         }
+        foreach (var project in state.Projects)
+            foreach (var objective in project.Objectives)
+                ProjectPolicy.RecoverDelegation(objective, DateTimeOffset.UtcNow);
         foreach (var batch in state.DevelopmentBatches)
         {
             DevelopmentBatchPolicy.Recover(batch, DateTimeOffset.UtcNow);
