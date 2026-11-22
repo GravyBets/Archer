@@ -970,6 +970,13 @@ app.MapGet("/api/companion/overview", async Task<IResult> (HttpContext context, 
     if (!CompanionBridge.Authorized(context)) return Results.StatusCode(403);
     return Results.Ok(await store.ReadAsync(CompanionBridge.Overview, ct));
 });
+app.MapPost("/api/companion/receipt", async Task<IResult> (HttpContext context, CompanionBridge.ReceiptRequest request,
+    JsonFileStore store, CancellationToken ct) =>
+{
+    if (!CompanionBridge.Authorized(context) || !context.Request.HasJsonContentType()) return Results.StatusCode(403);
+    if (request.RequestId == Guid.Empty) return Results.BadRequest();
+    return Results.Ok(await store.ReadAsync(s => CompanionBridge.Receipt(s, request.RequestId), ct));
+});
 app.MapPost("/api/companion/message", async Task<IResult> (HttpContext context, CompanionBridge.MessageRequest request,
     JsonFileStore store, ArcherAiService ai, ProjectDevelopmentWorker worker, CancellationToken ct) =>
 {
