@@ -342,9 +342,28 @@
               </div>
             </div>
           </section>
+          <section class="panel code-agent-panel" aria-labelledby="developmentBatchHeading">
+            <div class="panel-header"><div>
+              <h2 id="developmentBatchHeading">GeoShift development missions</h2>
+              <p>One objective, a reviewed task queue, independent CI and bounded repair. Draft PRs only.</p>
+            </div><span class="developer-readonly">AUTONOMY / BOUNDED</span></div>
+            <div class="coding-agent-content">
+              <label for="developmentObjective">Development objective
+                <textarea id="developmentObjective" rows="3" maxlength="1000" placeholder="Fix a specific GeoShift component or describe a small launch-readiness objective."></textarea>
+              </label>
+              <div class="coding-actions">
+                <button id="developmentPilotButton" class="button secondary" type="button">Use first pilot objective</button>
+                <button id="developmentPlanButton" class="button primary" type="button" disabled>Create task plan</button>
+                <button id="developmentRefreshButton" class="button secondary" type="button">Refresh</button>
+              </div>
+              <label><input type="checkbox" id="developmentResumeAfterRestart"> Resume safe queued work after restart within the same 24-hour authorization.</label>
+              <p id="developmentBatchStatus" role="status">Checking configuration…</p>
+              <div id="developmentBatchList" class="coding-proposal-preview"></div>
+            </div>
+          </section>
           <p class="developer-footnote">Repository browsing and previews don't consume OpenAI API credits.
             Review missions and generated code drafts incur AI API charges only when you explicitly request them.
-            Selected source excerpts are sent to OpenAI when generating a code proposal. Publishing a branch and draft PR is separately gated and requires your approval. Archer still cannot merge, deploy or execute GeoShift builds.</p>
+            Selected source excerpts are sent to OpenAI when generating a code proposal. Individual drafts require approval; development missions require batch authorization and use GeoShift GitHub CI. Archer never merges or deploys.</p>
         </section>
         <section id="operationsView" class="view hidden" aria-labelledby="operationsHeading">
           <div class="hero"><div class="eyebrow">BUSINESS OPERATIONS <span class="eyebrow-line"></span></div>
@@ -515,6 +534,7 @@
   <script src="/js/operator-context.js" defer></script>
   <script src="/js/spending.js" defer></script>
   <script src="/js/coding.js" defer></script>
+  <script src="/js/development-batches.js" defer></script>
   <script src="/js/communications.js" defer></script>
   <script src="/js/inbox.js" defer></script>
   <script src="/js/mobile-drafts.js" defer></script>
