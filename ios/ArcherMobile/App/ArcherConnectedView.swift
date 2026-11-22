@@ -10,7 +10,7 @@ struct ArcherConnectedView: View {
     @State private var message = ""
     @State private var status = "Connect to your private Archer server."
     @State private var working = false
-    @State private var queuedRequest: UUID?
+    @State private var queuedRequest: UUID? = ArcherPendingReceipt.read()
     @State private var readAloud = false
     @State private var speech = AVSpeechSynthesizer()
     @State private var selected = "Chat"
@@ -97,7 +97,9 @@ struct ArcherConnectedView: View {
         let text = message.trimmingCharacters(in:.whitespacesAndNewlines)
         if !recover {
             guard !text.isEmpty, text.count <= 3000 else { return }
-            queuedRequest=UUID(); message=""
+            let id=UUID()
+            guard ArcherPendingReceipt.save(id) else { queuedRequest=ArcherPendingReceipt.read(); status="A previous request needs checking, or secure receipt storage is unavailable."; return }
+            queuedRequest=id; message=""
         }
         guard let id=queuedRequest else { return }
         working=true; defer { working=false }
@@ -108,6 +110,7 @@ struct ArcherConnectedView: View {
             else { result=try await client.send(text,id:id,auth:auth,device:device) }
             guard auth.signedIn else { data=nil; return }
             if result.status == "Pending" { status="The earlier message is still pending. Check again; this only reads its receipt."; return }
+            guard ArcherPendingReceipt.clear() else { status="Reply received, but local receipt storage could not be cleared. Check again."; return }
             queuedRequest=nil
             status=result.status == "Completed" ? "Reply received." : "Message stopped: " + result.status + ". No automatic retry."
             data=try await client.overview(auth:auth,device:device)
