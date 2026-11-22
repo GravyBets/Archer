@@ -84,7 +84,7 @@ public static class ProjectPolicy
             steps.Distinct(StringComparer.Ordinal).Count() != steps.Count ||
             input.Priority is < 1 or > 5 || input.DailyAttemptLimit is < 1 or > 12)
             throw new ArgumentException("Invalid project profile. Specify repository, explicit application roots, workflow, job, build/test steps and limits.");
-        if (SelfDevelopmentPolicy.IsSelf(repo) && !SelfDevelopmentPolicy.ValidProfile(workflow, job, steps, roots, input.AllowNewSourceFiles, testRoots))
+        if (SelfDevelopmentPolicy.IsSelf(repo) && (!input.CumulativeWorkspaces || !SelfDevelopmentPolicy.ValidProfile(workflow, job, steps, roots, input.AllowNewSourceFiles, testRoots)))
             throw new ArgumentException("Archer self-development requires the protected self-project profile with existing approved presentation files and fixed CI gates.");
         return new ManagedProject
         {
@@ -238,7 +238,7 @@ public static class SelfDevelopmentPolicy
         steps.SequenceEqual(RequiredSteps, StringComparer.Ordinal) &&
         roots.SequenceEqual(new[] { Root }, StringComparer.Ordinal) && !newFiles && testRoots.Count == 0;
     public static bool Configured(ManagedProject project) =>
-        !IsSelf(project.Repository) || (Enabled && ApprovedPaths.Count > 0 &&
+        !IsSelf(project.Repository) || (Enabled && ApprovedPaths.Count > 0 && project.CumulativeWorkspaces &&
             ValidProfile(project.WorkflowFile, project.VerificationJob, project.RequiredSteps,
                 project.SourceRoots, project.AllowNewSourceFiles, project.RegressionTestRoots));
     public static RegisterProjectRequest Profile() => new("Archer", Repository, ".NET / JavaScript",
