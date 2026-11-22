@@ -35,7 +35,8 @@ builder.Services.AddHttpClient<TwilioGateway>(client =>
     client.Timeout = TimeSpan.FromSeconds(25));
 builder.Services.AddSingleton<CommunicationCoordinator>();
 builder.Services.AddHostedService<CommunicationWorker>();
-builder.Services.AddHttpClient("github-reader", client => client.Timeout = TimeSpan.FromSeconds(90));
+builder.Services.AddHttpClient("github-reader", client => client.Timeout = TimeSpan.FromSeconds(90))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
 builder.Services.AddSingleton<GitHubRepositoryReader>(service =>
     new GitHubRepositoryReader(service.GetRequiredService<IHttpClientFactory>().CreateClient("github-reader")));
 // Separate local-only opt-in realtime audio integration. This NEVER exposes
@@ -57,7 +58,7 @@ builder.Services.AddHttpClient<ArcherAiService>(client =>
 builder.Services.AddHttpClient<GitHubDraftPrPublisher>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(45);
-});
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
 
 builder.Services.AddHttpClient<GeoShiftCiVerifier>(client => client.Timeout = TimeSpan.FromSeconds(30))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
