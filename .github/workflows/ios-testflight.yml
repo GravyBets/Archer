@@ -1,0 +1,132 @@
+name: Archer iOS TestFlight (owner approved)
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type UPLOAD_ARCHER_TO_TESTFLIGHT to sign and upload to Apple'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: archer-owner-testflight
+  cancel-in-progress: false
+jobs:
+  owner-testflight:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirmation == 'UPLOAD_ARCHER_TO_TESTFLIGHT' }}
+    runs-on: macos-latest
+    timeout-minutes: 45
+    environment: ios-testflight
+    env:
+      IOS_NATIVE_CLIENT_ID: ${{ vars.IOS_NATIVE_CLIENT_ID }}
+      IOS_PRIVATE_HOST: ${{ vars.IOS_PRIVATE_HOST }}
+      IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+      IOS_APPSTORE_CERT_P12_BASE64: ${{ secrets.IOS_APPSTORE_CERT_P12_BASE64 }}
+      IOS_APPSTORE_CERT_PASSWORD: ${{ secrets.IOS_APPSTORE_CERT_PASSWORD }}
+      IOS_APPSTORE_PROFILE_BASE64: ${{ secrets.IOS_APPSTORE_PROFILE_BASE64 }}
+      IOS_ASC_KEY_ID: ${{ secrets.IOS_ASC_KEY_ID }}
+      IOS_ASC_ISSUER_ID: ${{ secrets.IOS_ASC_ISSUER_ID }}
+      IOS_ASC_PRIVATE_KEY_BASE64: ${{ secrets.IOS_ASC_PRIVATE_KEY_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Recheck iPhone source and release configuration
+        run: |
+          python3 tests/ValidateArcherIosAuth.py
+          python3 tools/ios_release_config.py --self-test
+          python3 tools/ios_release_config.py
+      - name: Verify Apple signing inputs exist before build
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in IOS_TEAM_ID IOS_APPSTORE_CERT_P12_BASE64 IOS_APPSTORE_CERT_PASSWORD IOS_APPSTORE_PROFILE_BASE64 IOS_ASC_KEY_ID IOS_ASC_ISSUER_ID IOS_ASC_PRIVATE_KEY_BASE64; do
+            if [[ -z "${!key}" ]]; then echo "::error::Missing required signing credential configuration."; exit 1; fi
+          done
+          [[ "$IOS_TEAM_ID" =~ ^[A-Z0-9]{10}$ ]] || { echo "::error::Invalid Apple team identifier."; exit 1; }
+          [[ "$IOS_ASC_KEY_ID" =~ ^[A-Z0-9]{10}$ ]] || { echo "::error::Invalid App Store Connect key ID."; exit 1; }
+          [[ "$IOS_ASC_ISSUER_ID" =~ ^[a-fA-F0-9-]{36}$ ]] || { echo "::error::Invalid issuer ID."; exit 1; }
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Install temporary signing identity and approved profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$IOS_APPSTORE_CERT_P12_BASE64" | base64 -D > "$RUNNER_TEMP/archer-signing.p12"
+          printf '%s' "$IOS_APPSTORE_PROFILE_BASE64" | base64 -D > "$RUNNER_TEMP/archer.mobileprovision"
+          security cms -D -i "$RUNNER_TEMP/archer.mobileprovision" > "$RUNNER_TEMP/archer-provision.plist"
+          PROFILE_TEAM="$(plutil -extract TeamIdentifier.0 raw -o - "$RUNNER_TEMP/archer-provision.plist")"
+          PROFILE_APP="$(plutil -extract Entitlements.application-identifier raw -o - "$RUNNER_TEMP/archer-provision.plist")"
+          PROFILE_DEBUG="$(plutil -extract Entitlements.get-task-allow raw -o - "$RUNNER_TEMP/archer-provision.plist")"
+          if [[ "$PROFILE_TEAM" != "$IOS_TEAM_ID" || "$PROFILE_APP" != "$IOS_TEAM_ID.com.gravybets.archer.dev" || "$PROFILE_DEBUG" != "false" ]]; then
+            echo "::error::App Store provisioning profile does not match signed Archer app."; exit 1
+          fi
+          PROFILE_UUID="$(plutil -extract UUID raw -o - "$RUNNER_TEMP/archer-provision.plist")"
+          PROFILE_NAME="$(plutil -extract Name raw -o - "$RUNNER_TEMP/archer-provision.plist")"
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$RUNNER_TEMP/archer.mobileprovision" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          KEYCHAIN="$RUNNER_TEMP/archer-release.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 32)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN"
+          security import "$RUNNER_TEMP/archer-signing.p12" -k "$KEYCHAIN" -P "$IOS_APPSTORE_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          echo "IOS_PROFILE_NAME=$PROFILE_NAME" >> "$GITHUB_ENV"
+          echo "IOS_PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
+      - name: Generate native iPhone project
+        working-directory: ios/ArcherMobile
+        run: xcodegen generate
+      - name: Archive signed release
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -project ios/ArcherMobile/ArcherMobile.xcodeproj -scheme ArcherMobile \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/ArcherMobile.xcarchive" \
+            CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$IOS_TEAM_ID" \
+            PROVISIONING_PROFILE_SPECIFIER="$IOS_PROFILE_NAME" \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" MARKETING_VERSION="0.1.0" \
+            archive
+      - name: Export signed App Store Connect IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, plistlib
+          from pathlib import Path
+          target = Path(os.environ["RUNNER_TEMP"]) / "ArcherExportOptions.plist"
+          target.write_bytes(plistlib.dumps({
+              "method": "app-store-connect",
+              "teamID": os.environ["IOS_TEAM_ID"],
+              "signingStyle": "manual",
+              "uploadSymbols": True,
+              "provisioningProfiles": {
+                  "com.gravybets.archer.dev": os.environ["IOS_PROFILE_NAME"]
+              }
+          }))
+          PY
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/ArcherMobile.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ArcherExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/ArcherExport"
+          test -f "$RUNNER_TEMP/ArcherExport/ArcherMobile.ipa"
+      - name: Upload only to owner TestFlight for review
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          printf '%s' "$IOS_ASC_PRIVATE_KEY_BASE64" | base64 -D > "$HOME/.appstoreconnect/private_keys/AuthKey_$IOS_ASC_KEY_ID.p8"
+          xcrun altool --upload-app --type ios \
+            --file "$RUNNER_TEMP/ArcherExport/ArcherMobile.ipa" \
+            --apiKey "$IOS_ASC_KEY_ID" --apiIssuer "$IOS_ASC_ISSUER_ID"
+      - name: Erase temporary signing material
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$RUNNER_TEMP/archer-signing.p12" "$RUNNER_TEMP/archer.mobileprovision" "$RUNNER_TEMP/archer-provision.plist"
+          rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_$IOS_ASC_KEY_ID.p8"
+          if [[ -n "${IOS_PROFILE_UUID:-}" ]]; then
+            rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/$IOS_PROFILE_UUID.mobileprovision"
+          fi
+          security delete-keychain "$RUNNER_TEMP/archer-release.keychain-db" 2>/dev/null || true
