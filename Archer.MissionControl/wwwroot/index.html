@@ -342,17 +342,52 @@
               </div>
             </div>
           </section>
+          <section class="panel code-agent-panel" aria-labelledby="projectRegistryHeading">
+            <div class="panel-header"><div><h2 id="projectRegistryHeading">Managed projects</h2>
+              <p>Separate project objectives, repository permissions, verification rules and memory.</p></div></div>
+            <div class="coding-agent-content">
+              <label>Active project <select id="managedProjectSelect"></select></label>
+              <p id="managedProjectStatus" role="status">Loading projects…</p>
+              <details class="coding-file-diff"><summary>Register a new project</summary>
+                <form id="projectRegistryForm">
+                  <label>Project name <input id="projectName" required maxlength="80" placeholder="My business"/></label>
+                  <label>GitHub owner/repository <input id="projectRepo" required maxlength="140" placeholder="owner/repo"/></label>
+                  <label>Technology <input id="projectTechnology" required maxlength="80" placeholder=".NET, React, Python…"/></label>
+                  <label>Editable application directories (comma separated) <input id="projectRoots" required placeholder="src, web/components"/></label>
+                  <label>CI workflow filename <input id="projectWorkflow" required placeholder="ci.yml"/></label>
+                  <label>Required CI job name <input id="projectJob" required placeholder="Build and test"/></label>
+                  <label>Required build and test step names (one per line) <textarea id="projectSteps" rows="3" required></textarea></label>
+                  <label>Priority (5 is highest) <input id="projectPriority" type="number" min="1" max="5" value="3"/></label>
+                  <label>Maximum coding attempts per rolling 24 hours <input id="projectAttemptLimit" type="number" min="1" max="12" value="6"/></label>
+                  <button id="registerProjectButton" type="submit" class="button primary">Register project</button>
+                </form>
+              </details>
+              <button id="pauseProjectButton" type="button" class="button secondary" disabled>Pause project</button>
+              <div id="projectObjectives"></div>
+              <form id="projectObjectiveForm">
+                <label>Add objective <textarea id="projectObjectiveText" required minlength="15" maxlength="1000" rows="2"></textarea></label>
+                <label>Depends on (optional; select an earlier objective) <select id="projectDependency"><option value="">None</option></select></label>
+                <button class="button secondary" type="submit">Save objective</button>
+              </form>
+              <div id="projectMemories"></div>
+              <form id="projectMemoryForm">
+                <label>Remember <select id="projectMemoryKind"><option>Owner note</option><option>Decision</option><option>Preference</option><option>Architecture</option><option>Lesson</option></select></label>
+                <label>Project memory (never enter secrets) <textarea id="projectMemoryText" required maxlength="1200" rows="2"></textarea></label>
+                <label><input id="projectMemoryShare" type="checkbox"/> Include in relevant AI requests</label>
+                <button class="button secondary" type="submit">Save memory</button>
+              </form>
+            </div>
+          </section>
           <section class="panel code-agent-panel" aria-labelledby="developmentBatchHeading">
             <div class="panel-header"><div>
-              <h2 id="developmentBatchHeading">GeoShift development missions</h2>
-              <p>One objective, a reviewed task queue, independent CI and bounded repair. Draft PRs only.</p>
+              <h2 id="developmentBatchHeading">Autonomous development missions</h2>
+              <p>Choose a registered project, plan, review once, then run with independent CI and bounded repair. Draft PRs only.</p>
             </div><span class="developer-readonly">AUTONOMY / BOUNDED</span></div>
             <div class="coding-agent-content">
               <label for="developmentObjective">Development objective
-                <textarea id="developmentObjective" rows="3" maxlength="1000" placeholder="Fix a specific GeoShift component or describe a small launch-readiness objective."></textarea>
+                <textarea id="developmentObjective" rows="3" maxlength="1000" placeholder="Describe a small implementation objective for the selected project."></textarea>
               </label>
               <div class="coding-actions">
-                <button id="developmentPilotButton" class="button secondary" type="button">Use first pilot objective</button>
                 <button id="developmentPlanButton" class="button primary" type="button" disabled>Create task plan</button>
                 <button id="developmentRefreshButton" class="button secondary" type="button">Refresh</button>
               </div>
@@ -363,7 +398,7 @@
           </section>
           <p class="developer-footnote">Repository browsing and previews don't consume OpenAI API credits.
             Review missions and generated code drafts incur AI API charges only when you explicitly request them.
-            Selected source excerpts are sent to OpenAI when generating a code proposal. Individual drafts require approval; development missions require batch authorization and use GeoShift GitHub CI. Archer never merges or deploys.</p>
+            Selected source excerpts are sent to OpenAI when generating a code proposal. Individual drafts require approval; development missions require project and batch authorization and use registered GitHub CI. Archer never merges or deploys.</p>
         </section>
         <section id="operationsView" class="view hidden" aria-labelledby="operationsHeading">
           <div class="hero"><div class="eyebrow">BUSINESS OPERATIONS <span class="eyebrow-line"></span></div>
