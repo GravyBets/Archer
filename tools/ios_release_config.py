@@ -25,7 +25,7 @@ def validate_client(value: str) -> str:
 
 
 def validate_host(value: str) -> str:
-    if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,165}\\.ts\\.net", value):
+    if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,165}\.ts\.net", value):
         raise ValueError("Private HTTPS host must be an exact lower-case tailnet name.")
     if ".." in value or value.startswith("-") or value.startswith("127."):
         raise ValueError("Invalid private HTTPS host.")
