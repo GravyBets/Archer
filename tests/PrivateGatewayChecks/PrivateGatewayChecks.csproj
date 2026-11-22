@@ -3,6 +3,7 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <Compile Include="../../Archer.PrivateGateway/DeviceProof.cs" Link="DeviceProof.cs"/>
+    <Compile Include="../../Archer.PrivateGateway/GatewayScopes.cs" Link="GatewayScopes.cs"/>
     <Compile Include="../../Archer.PrivateGateway/PrivateSettings.cs" Link="PrivateSettings.cs"/>
     <Compile Include="../../Archer.RemoteGateway/Auth0OwnerSignInSettings.cs" Link="Auth0OwnerSignInSettings.cs"/>
     <Compile Include="../../Archer.RemoteGateway/Auth0OwnerClaimPolicy.cs" Link="Auth0OwnerClaimPolicy.cs"/>
