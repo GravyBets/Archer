@@ -1338,7 +1338,13 @@ static void Log(ArcherState state, Guid? missionId, string message, string level
 
 static bool LocalDevelopmentRequest(HttpContext context)
 {
-    if (!context.Request.HasJsonContentType()) return false;
+    if (!context.Request.HasJsonContentType() ||
+        context.Connection.RemoteIpAddress is not { } peer ||
+        !System.Net.IPAddress.IsLoopback(peer)) return false;
+    // Never treat forwarded network requests or host headers as authority
+    // for mutating owner-only developer operations.
+    if (context.Request.Headers.ContainsKey("Forwarded") ||
+        context.Request.Headers.ContainsKey("X-Forwarded-For")) return false;
     var origin = context.Request.Headers.Origin.ToString();
     return origin.Length == 0 || origin == "http://127.0.0.1:5087" || origin == "http://localhost:5087";
 }
