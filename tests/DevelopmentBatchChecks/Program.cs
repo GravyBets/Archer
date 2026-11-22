@@ -430,7 +430,33 @@ Check(!ConversationAssignments.Assign(conversationState, "work on Other: impleme
 Check(!ConversationAssignments.Assign(conversationState, "work on Personal app: implement another improvement", _ => false, now).Accepted,
     "conversation does not bypass project gate");
 Check(!ConversationAssignments.LooksLikeAssignment("Can you explain how to work on Personal app?"), "discussion is not execution");
+Check(ConversationAssignments.Parse("Archer, I want you to work on Personal app and improve the settings menu.", [talkProject])?.Objective == "improve the settings menu.", "natural explicit owner direction is parsed");
+Check(ConversationAssignments.Parse("Hey Archer, fix Personal app's confusing empty-state screen.", [talkProject])?.Objective == "Fix confusing empty-state screen.", "spoken possessive wording retains required project scope");
+Check(ConversationAssignments.Parse("Can you work on an app sometime?", [talkProject]) is null, "ambiguous work request does not authorize paid coding");
 Check(ConversationAssignments.Status(conversationState).Contains("queued"), "status uses actual persisted assignment data");
+
+var researchState = new ArcherState();
+var research = ConversationResearch.Queue(researchState, "Archer, research competing geographic data conversion services.", now);
+Check(research.Accepted && researchState.Missions.Count == 1 &&
+    researchState.Missions[0].AutoRunEnabled && researchState.Missions[0].AutoRunTasksRemaining == 1 &&
+    researchState.Missions[0].Tasks.Single().Kind == "research", "direct research queues one bounded, non-mutating worker task");
+Check(!ConversationResearch.Queue(researchState, "Archer, research competing geographic data conversion services.", now).Accepted &&
+    researchState.Missions.Count == 1, "repeat transcript never duplicates paid research");
+Check(!ConversationResearch.LooksLikeResearch("Tell me how research works"), "discussion does not execute research");
+Check(!ConversationResearch.Queue(researchState, "Archer, research x", now).Accepted,
+    "vague or ambiguous research does not execute");
+Check(ConversationAssignments.Status(researchState).Contains("competing geographic data"), "work status also reports real research assignments");
+
+researchState.Missions[0].Artifacts.Add(new MissionArtifact { Title = "Findings", Content = new string('x', 6200) });
+var phoneResearch = System.Text.Json.JsonSerializer.Serialize(CompanionBridge.Overview(researchState));
+Check(phoneResearch.Contains("findings") && phoneResearch.Contains(new string('x', 6000)) &&
+    !phoneResearch.Contains(new string('x', 6001)), "owner phone receives bounded actual research findings");
+
+for (var i = 0; i < 3; i++)
+    Check(ConversationResearch.Queue(researchState, "Research source comparisons for area " + i, now).Accepted, "bounded research quota " + i);
+Check(!ConversationResearch.Queue(researchState, "Research another provider with a new objective", now).Accepted,
+    "rolling four-research allowance refuses fifth attempt");
+
 
 var phoneState = new ArcherState();
 var phoneRequest = new CompanionBridge.MessageRequest(Guid.NewGuid(), "Hello Archer");

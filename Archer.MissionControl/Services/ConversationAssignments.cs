@@ -8,7 +8,7 @@ namespace Archer.MissionControl.Services;
 public static class ConversationAssignments
 {
     private static readonly Regex Prefix = new(
-        @"^(?:(?:hey\s+)?archer[,!:]?\s+)?(?:please\s+)?(?:work on|assign work to|develop)\s+",
+        @"^(?:(?:hey\s+)?archer[,!:]?\s+)?(?:(?:please|i\s+want\s+you\s+to|go\s+ahead\s+and|start|can\s+you)\s+)*(?<action>work\s+on|assign\s+work\s+to|develop|fix|improve|update|build)\s+",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
     public sealed record Command(string Project, string Objective);
     public sealed record Result(string Answer, Guid? ObjectiveId = null, bool Accepted = false);
@@ -27,8 +27,14 @@ public static class ConversationAssignments
             // A named project and a distinct requested result are mandatory.
             var delimiter = Regex.Match(tail, @"^(?:\s*[:;,–—]\s*|\s+(?:and|to)\s+)",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-            if (!delimiter.Success) continue;
-            return new(name, tail[delimiter.Length..].Trim());
+            if (delimiter.Success)
+                return new(name, tail[delimiter.Length..].Trim());
+            var possessive = Regex.Match(tail, @"^['’]s\s+(?<detail>.+)$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+            var verb = prefix.Groups["action"].Value.ToLowerInvariant();
+            if (possessive.Success && (verb is "fix" or "improve" or "update" or "build" or "develop"))
+                return new(name, char.ToUpperInvariant(verb[0]) + verb[1..] + " " +
+                    possessive.Groups["detail"].Value.Trim());
         }
         return null;
     }
@@ -86,8 +92,9 @@ public static class ConversationAssignments
             lines.Add(p.Name + ": " + PlainStatus(o, state.DevelopmentBatches.Where(b => b.ProjectId == p.Id && b.ObjectiveId == o.Id)) +
                 " — " + o.Description);
         }
-        return lines.Count == 0 ? "I don't have any recorded development assignments yet." :
-            "Here's my current development work:\n" + string.Join("\n", lines);
+        lines.AddRange(ConversationResearch.Status(state));
+        return lines.Count == 0 ? "I don't have any research or development assignments yet." :
+            "Here's my current work:\n" + string.Join("\n", lines);
     }
 
     public static string PlainStatus(ProjectObjective o, IEnumerable<DevelopmentBatch> related)

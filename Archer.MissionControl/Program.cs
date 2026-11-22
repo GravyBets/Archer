@@ -932,13 +932,16 @@ app.MapPost("/api/chat", async Task<IResult> (HttpContext context, ChatRequest r
     try
     {
         if (request.DirectOwnerInput && LocalDevelopmentRequest(context) &&
-            (ConversationAssignments.LooksLikeAssignment(message) || ConversationAssignments.IsStatusRequest(message)))
+            (ConversationAssignments.LooksLikeAssignment(message) || ConversationAssignments.IsStatusRequest(message) ||
+             ConversationResearch.LooksLikeResearch(message)))
         {
             var localAnswer = await store.UpdateAsync(state =>
             {
                 var result = ConversationAssignments.IsStatusRequest(message)
                     ? ConversationAssignments.Status(state)
-                    : ConversationAssignments.Assign(state, message, worker.CanArm, DateTimeOffset.UtcNow).Answer;
+                    : ConversationResearch.LooksLikeResearch(message)
+                        ? ConversationResearch.Queue(state, message, DateTimeOffset.UtcNow).Answer
+                        : ConversationAssignments.Assign(state, message, worker.CanArm, DateTimeOffset.UtcNow).Answer;
                 state.Conversation.Add(new ConversationEntry { Role = "user", Content = message });
                 state.Conversation.Add(new ConversationEntry { Role = "assistant", Content = result });
                 if (state.Conversation.Count > 100) state.Conversation.RemoveRange(0, state.Conversation.Count - 100);
@@ -991,13 +994,16 @@ app.MapPost("/api/companion/message", async Task<IResult> (HttpContext context, 
     {
         // Phone input is authorized by a separately authenticated, enrolled
         // owner gateway. Only the same explicit assignment parser may write.
-        if (ConversationAssignments.LooksLikeAssignment(message) || ConversationAssignments.IsStatusRequest(message))
+        if (ConversationAssignments.LooksLikeAssignment(message) || ConversationAssignments.IsStatusRequest(message) ||
+            ConversationResearch.LooksLikeResearch(message))
         {
             var result = await store.UpdateAsync(s =>
             {
                 var answer = ConversationAssignments.IsStatusRequest(message)
                     ? ConversationAssignments.Status(s)
-                    : ConversationAssignments.Assign(s, message, worker.CanArm, DateTimeOffset.UtcNow).Answer;
+                    : ConversationResearch.LooksLikeResearch(message)
+                        ? ConversationResearch.Queue(s, message, DateTimeOffset.UtcNow).Answer
+                        : ConversationAssignments.Assign(s, message, worker.CanArm, DateTimeOffset.UtcNow).Answer;
                 return CompanionBridge.Complete(s, request, answer);
             }, CancellationToken.None);
             return Results.Ok(result);
