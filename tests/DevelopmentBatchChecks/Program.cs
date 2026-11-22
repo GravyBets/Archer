@@ -246,6 +246,72 @@ var excerpts = ProjectRepositoryContext.Excerpts(new GitHubRepositoryReader.Sour
 Check(excerpts.Contains("export class MapState") && excerpts.Contains("[excerpt truncated]") &&
     !excerpts.Contains("src/private.ts") && excerpts.Length < 3000, "source context is bounded, actual and skips truncated blobs");
 
+var sandboxImage = "sha256:" + new string('a',64);
+var sandboxName = "archer-verify-" + new string('a',32);
+var sandboxArgs = SandboxPolicy.CreateArguments(sandboxImage, sandboxName);
+Check(sandboxArgs.Contains("--network=none") && sandboxArgs.Contains("--pull=never") &&
+    sandboxArgs.Contains("--cap-drop=ALL") && sandboxArgs.Contains("--read-only") &&
+    sandboxArgs.Contains("--user=65532:65532") && sandboxArgs.Contains("--timeout=480") &&
+    sandboxArgs.Contains("--env-host=false") && !sandboxArgs.Any(a => a.StartsWith("--volume") || a.StartsWith("--mount")),
+    "sandbox launch has fixed resource, identity and network limits and no host binds");
+try { SandboxPolicy.CreateArguments("latest", sandboxName); throw new Exception("Mutable image accepted"); }
+catch (ArgumentException) { Check(true, "mutable and model-selected image names refused"); }
+Environment.SetEnvironmentVariable("OPENAI_API_KEY", "synthetic-secret-not-for-child");
+Environment.SetEnvironmentVariable("CONTAINER_HOST", "unix:///tmp/unsafe.sock");
+var startInfo = SandboxPolicy.ProcessInfo(sandboxArgs);
+Check(startInfo.FileName == "/usr/bin/podman" && !startInfo.UseShellExecute &&
+    !startInfo.Environment.ContainsKey("OPENAI_API_KEY") && !startInfo.Environment.ContainsKey("CONTAINER_HOST"),
+    "container launcher does not inherit API keys or remote socket configuration");
+string Inspection(bool privileged = false, bool bind = false, string network = "none", bool readOnly = true) =>
+    System.Text.Json.JsonSerializer.Serialize(new[] { new {
+        Name = sandboxName, Image = sandboxImage[7..], Path = "/usr/local/bin/archer-verify",
+        EffectiveCaps = Array.Empty<string>(), BoundingCaps = Array.Empty<string>(),
+        Config = new { User = "65532:65532" },
+        HostConfig = new { NetworkMode = network, Privileged = privileged, ReadonlyRootfs = readOnly,
+            Memory = 1536L * 1024 * 1024, PidsLimit = 128, PidMode = "private", IpcMode = "private",
+            SecurityOpt = new[] { "no-new-privileges" }, Binds = Array.Empty<string>() },
+        Mounts = bind ? new[] { new { Type = "bind", Destination = "/host" } } :
+            new[] { new { Type = "tmpfs", Destination = "/work" }, new { Type = "tmpfs", Destination = "/tmp" } }
+    } });
+Check(SandboxPolicy.InspectSafe(Inspection(), sandboxName, sandboxImage), "expected inspected container policy accepted");
+Check(!SandboxPolicy.InspectSafe(Inspection(privileged: true), sandboxName, sandboxImage) &&
+    !SandboxPolicy.InspectSafe(Inspection(bind: true), sandboxName, sandboxImage) &&
+    !SandboxPolicy.InspectSafe(Inspection(network: "host"), sandboxName, sandboxImage) &&
+    !SandboxPolicy.InspectSafe(Inspection(readOnly: false), sandboxName, sandboxImage) &&
+    !SandboxPolicy.InspectSafe("[]", sandboxName, sandboxImage),
+    "privileged, mounted, network-enabled, mutable, or incomplete inspect results refused");
+var safeDiagnostic = SandboxPolicy.Evidence(new string('a',40), sandboxImage, 10, "fake-key-do-not-store CS1002 RZ10001");
+Check(safeDiagnostic.Status == "Failed" && safeDiagnostic.Detail.Contains("CS1002") &&
+    !safeDiagnostic.Detail.Contains("fake-key-do-not-store"), "diagnostics persist compiler codes only");
+Check(SandboxPolicy.Evidence(new string('a',40), sandboxImage, 137, "secret").Status == "Blocked" &&
+    SandboxPolicy.Evidence(new string('a',40), sandboxImage, 0, "").Status == "Passed", "only known runner outcomes classified");
+Check(SandboxArchiveReader.AllowedRedirect(new Uri("https://codeload.github.com/owner/future/legacy.tar.gz/abc?token=opaque"), other.Repository) &&
+    !SandboxArchiveReader.AllowedRedirect(new Uri("https://evil.example/owner/future/abc"), other.Repository) &&
+    !SandboxArchiveReader.AllowedRedirect(new Uri("https://codeload.github.com/owner/other/abc"), other.Repository),
+    "archive redirects restricted to exact repository on expected GitHub CDN");
+var archiveHandler = new FakeSandboxArchive(other.Repository);
+using var archiveHttp = new HttpClient(archiveHandler);
+var archiveReader = new SandboxArchiveReader(archiveHttp);
+var archiveBytes = await archiveReader.DownloadAsync(other, new string('a',40), default);
+Check(archiveBytes.Length == 3 && archiveHandler.Requests == 2, "bounded archive received without sending scoped token to codeload");
+archiveHandler.Oversized = true;
+try { await archiveReader.DownloadAsync(other, new string('a',40), default); throw new Exception("Oversized archive accepted"); }
+catch (InvalidOperationException) { Check(true, "oversized compressed archive rejected"); }
+archiveHandler.Oversized = false;
+
+if (Environment.GetEnvironmentVariable("ARCHER_SANDBOX_SMOKE_IMAGE") is { Length: > 0 } smokeImage)
+{
+    Environment.SetEnvironmentVariable("ARCHER_SANDBOX_ENABLED", "true");
+    Environment.SetEnvironmentVariable(prefix + "_SANDBOX_IMAGE", smokeImage);
+    other.RequireSandbox = true;
+    var runner = new ProjectSandboxRunner(archiveReader);
+    var smokeEvidence = await runner.VerifyAsync(other, new CodeProposal { Repository = other.Repository,
+        PublishedHeadSha = new string('a',40) }, default);
+    Check(smokeEvidence.Status == "Passed", "actual rootless Podman fixture: " + smokeEvidence.Detail);
+}
+Environment.SetEnvironmentVariable("OPENAI_API_KEY", null);
+Environment.SetEnvironmentVariable("CONTAINER_HOST", null);
+
 sealed class FakeGitHub : HttpMessageHandler
 {
     public string Mode = "success";
@@ -358,5 +424,30 @@ sealed class FakeWorkspaceGitHub(string repository) : HttpMessageHandler
         }
         return new HttpResponseMessage(HttpStatusCode.OK) {
             Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json") };
+    }
+}
+
+sealed class FakeSandboxArchive(string repository) : HttpMessageHandler
+{
+    public int Requests;
+    public bool Oversized;
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+    {
+        Requests++;
+        var url = request.RequestUri!;
+        if (url.Host == "api.github.com")
+        {
+            if (request.Headers.Authorization?.Parameter != "synthetic-reader" ||
+                !url.AbsolutePath.StartsWith("/repos/" + repository + "/tarball/"))
+                throw new Exception("Invalid source authorization");
+            var response = new HttpResponseMessage(HttpStatusCode.Found);
+            response.Headers.Location = new Uri("https://codeload.github.com/" + repository + "/legacy.tar.gz/abc");
+            return Task.FromResult(response);
+        }
+        if (url.Host != "codeload.github.com" || request.Headers.Authorization is not null)
+            throw new Exception("Scope credential leaked across redirect");
+        var content = new ByteArrayContent(new byte[] { 0x1f, 0x8b, 0x00 });
+        if (Oversized) content.Headers.ContentLength = SandboxPolicy.MaximumArchiveBytes + 1L;
+        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
     }
 }
