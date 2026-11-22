@@ -111,6 +111,8 @@ assert "directOwnerInput=$true" in NATIVE_VOICE, "Native wake-session must route
 SERVER = (ROOT.parent / "Program.cs").read_text(encoding="utf-8")
 CHAT = SERVER.split('app.MapPost("/api/chat"', 1)[1].split("// Dedicated local companion bridge.", 1)[0]
 assert CHAT.index("ConversationAssignments.LooksLikeAssignment") < CHAT.index("if (!ai.IsConfigured) return MissingApiKey();"), "Local commands must not require a chat API key"
+assert "!System.Net.IPAddress.IsLoopback(peer)" in SERVER, "Owner actions must only originate from a loopback peer"
+assert 'context.Request.Headers.ContainsKey("X-Forwarded-For")' in SERVER, "Forwarded requests must not bypass local owner scope"
 
 assert "/js/archer-home.js?v=20261120-wakefix2" in page.scripts
 assert "no-store, max-age=0" in (ROOT.parent / "Program.cs").read_text(encoding="utf-8")
