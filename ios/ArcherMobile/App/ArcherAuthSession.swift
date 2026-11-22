@@ -55,6 +55,13 @@ final class ArcherAuthSession: ObservableObject {
         }
     }
 
+    // Used only by the fixed HTTPS private gateway client. Never return tokens to UI.
+    func gatewayAccessToken() async throws -> String {
+        guard signedIn else { throw URLError(.userAuthenticationRequired) }
+        let current = try await credentials.credentials(minTTL: 60)
+        return current.accessToken
+    }
+
     func refreshSession() async {
         guard !busy, signedIn else { return }
         busy = true
