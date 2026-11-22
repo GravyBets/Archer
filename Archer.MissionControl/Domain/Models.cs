@@ -163,6 +163,9 @@ public sealed class CodeProposal
     public string BaseBranch { get; set; } = "";
     public string? BaseTreeSha { get; set; }
     public bool WorkspaceDraft { get; set; }
+    public string? WorkspaceParentSha { get; set; }
+    public string? WorkspaceBranch { get; set; }
+    public int? WorkspacePullRequestNumber { get; set; }
     public string Title { get; set; } = "";
     public string Request { get; set; } = "";
     public string Summary { get; set; } = "";
@@ -233,6 +236,11 @@ public sealed class DevelopmentBatch
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid ProjectId { get; set; }
     public Guid? ObjectiveId { get; set; }
+    public bool Cumulative { get; set; }
+    public string? WorkspaceBranch { get; set; }
+    public string? WorkspaceHeadSha { get; set; }
+    public int? WorkspacePullRequestNumber { get; set; }
+    public string? WorkspaceBaseBranch { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
     public string Objective { get; set; } = "";
     public bool Armed { get; set; }
@@ -273,6 +281,7 @@ public sealed class ManagedProject
     public int DailyAttemptLimit { get; set; } = 6;
     public bool Paused { get; set; }
     public bool AllowNewSourceFiles { get; set; }
+    public bool CumulativeWorkspaces { get; set; }
     public List<ProjectObjective> Objectives { get; set; } = [];
     public List<ProjectMemoryEntry> Memory { get; set; } = [];
 }
@@ -299,7 +308,7 @@ public sealed class ProjectMemoryEntry
 }
 public sealed record RegisterProjectRequest(string? Name, string? Repository, string? Technology,
     List<string>? SourceRoots, string? WorkflowFile, string? VerificationJob, List<string>? RequiredSteps,
-    int Priority = 3, int DailyAttemptLimit = 6, bool AllowNewSourceFiles = false);
+    int Priority = 3, int DailyAttemptLimit = 6, bool AllowNewSourceFiles = false, bool CumulativeWorkspaces = false);
 public sealed record ProjectPauseRequest(bool Paused);
 public sealed record ProjectObjectiveRequest(string? Description, List<Guid>? DependsOn);
 public sealed record ProjectMemoryRequest(string? Kind, string? Content, bool ShareWithAi);
