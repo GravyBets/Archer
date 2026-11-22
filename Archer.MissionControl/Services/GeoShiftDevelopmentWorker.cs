@@ -21,17 +21,8 @@ public sealed class ProjectDevelopmentWorker(
         if (eligible.Length == 0) throw new InvalidOperationException("No eligible source files.");
         var plan = await ai.PlanDevelopmentAsync(project, objective, eligible.Select(f => f.Path).ToArray(), ct);
         var batch = new DevelopmentBatch { Objective = objective, ProjectId = project.Id, ObjectiveId = objectiveId };
-        var selected = new HashSet<string>(StringComparer.Ordinal);
         foreach (var step in plan.Tasks)
-        {
-            var instruction = step.Title + ": " + step.Description;
-            var paths = eligible.Where(f => instruction.Contains(Path.GetFileName(f.Path),
-                StringComparison.OrdinalIgnoreCase)).Select(f => f.Path).ToList();
-            if (paths.Count == 0) throw new InvalidOperationException("The plan did not name an eligible source file.");
-            if (paths.Count is < 1 or > 2 || paths.Any(p => !selected.Add(p)))
-                throw new InvalidOperationException("The plan contains overlapping or ambiguous source changes. Narrow the objective.");
-            batch.Tasks.Add(new DevelopmentTask { Instruction = instruction, Paths = paths });
-        }
+            batch.Tasks.Add(new DevelopmentTask { Instruction = step.Title + ": " + step.Description, Paths = step.Paths });
         return batch;
     }
 
