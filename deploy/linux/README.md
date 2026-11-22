@@ -24,3 +24,15 @@ If the phone is lost, stop the gateway, revoke the Auth0 session/device, remove 
 Set up restic on the host and an owner-controlled encrypted off-host repository, with root-only backup.env and separate recovery password. Initialize and test an actual repository before enabling the optional archer-backup timer. The timer takes a per-file backup of current atomic state; for a consistent release migration/restore, deliberately stop Archer after confirming no paid work is in flight and create a verified offline backup. Verify a restore into a private separate directory before switching. Never restore over the sole live copy. Preserve version and config backups securely and independently of the state backup; the timer excludes secrets. Keep current and prior reviewed software artifacts. Stop services before rollback, verify compatible state and restart core before gateway.
 
 Check service logs, memory/disk, backup status, provider bill and spend safeguards regularly. A rootless sandbox for untrusted generated code requires a separate disposable runner VM; do not enable it on this core/gateway host. This candidate does not yet implement HA, multi-node persistence, automatic certificate/credential recovery, remote push, a real physical-device acceptance test or independent production security review.
+
+## Read-only preflight before accepting production data
+
+After provisioning (and again after every server migration), run the included Go/No-Go check **on the server**, as root. It never starts services, exposes tokens or changes firewall configuration.
+
+```bash
+sudo bash deploy/linux/preflight.sh --prepared
+# After core and private gateway are running:
+sudo bash deploy/linux/preflight.sh --live
+```
+
+A successful preflight means only the configured runtime, service accounts, file permissions, paired bridge key, private binding and local health checks passed. **It is not a security audit, a verified public-internet firewall posture, proof of working Auth0/device pairing, or a successful offsite disaster recovery test.** Confirm no public port exposure, the owner's private network ACL, TLS, and an independently restored backup manually. Stop and correct any failure before processing live Archer business or private data.
