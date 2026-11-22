@@ -348,6 +348,11 @@
             <div class="coding-agent-content">
               <label>Active project <select id="managedProjectSelect"></select></label>
               <p id="managedProjectStatus" role="status">Loading projects…</p>
+              <details class="coding-file-diff"><summary>Archer self-development</summary>
+                <div id="selfDevelopmentAudit" role="status">Loading self-development readiness…</div>
+                <button id="registerSelfProjectButton" type="button" class="button secondary">Register protected Archer project</button>
+                <div id="selfDevelopmentCandidate" role="status"></div>
+              </details>
               <details class="coding-file-diff"><summary>Register a new project</summary>
                 <form id="projectRegistryForm">
                   <label>Project name <input id="projectName" required maxlength="80" placeholder="My business"/></label>
