@@ -31,7 +31,7 @@ public sealed class ProjectDevelopmentWorker(
         return batch;
     }
 
-    public bool CanArm(ManagedProject project) => Enabled && !project.Paused && ai.IsConfigured && SandboxPolicy.Configured(project) &&
+    public bool CanArm(ManagedProject project) => Enabled && !project.Paused && ai.IsConfigured && SandboxPolicy.Configured(project) && SelfDevelopmentPolicy.Configured(project) &&
         publisher.CanPublishRepository(project.Repository) && ProjectGitHubCredentials.IsConfigured(project.Repository) &&
         (Environment.GetEnvironmentVariable("ARCHER_GITHUB_WRITE_REPOS") ?? "")
             .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
@@ -302,6 +302,7 @@ public sealed class ProjectDevelopmentWorker(
                     b.WorkspaceHeadSha = proposal.PublishedHeadSha;
                     b.WorkspacePullRequestNumber = proposal.PullRequestNumber;
                     b.WorkspaceBaseBranch = proposal.BaseBranch;
+                    b.WorkspaceOriginalBaseCommitSha ??= proposal.OriginalBaseCommitSha;
                 }
                 t.SubmittedAtUtc = DateTimeOffset.UtcNow;
                 t.Sandbox = null;
