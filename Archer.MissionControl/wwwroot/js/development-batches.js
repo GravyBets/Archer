@@ -23,9 +23,9 @@
   function link(url, label, repository) {
     try {
       const u = new URL(url);
+      const path = '/' + repository + '/pull/';
       if (u.origin !== 'https://github.com' || u.username || u.password ||
-          !u.pathname.startsWith('/' + repository + '/pull/') ||
-          !/^\d+$/.test(u.pathname.split('/').pop()) || u.search || u.hash) return null;
+          !u.pathname.startsWith(path) || !/^\d+$/.test(u.pathname.slice(path.length)) || u.search || u.hash) return null;
       const a = element('a', label); a.href = u.href; a.target = '_blank'; a.rel = 'noopener noreferrer';
       return a;
     } catch { return null; }
@@ -38,7 +38,7 @@
       notice(result.message || 'Saved.');
       onSuccess(result);
     } catch (error) { notice(error.message, true); }
-    finally { busy = false; await refresh(); }
+    finally { busy = false; lastSnapshot = ''; await refresh(); }
   }
   // Keep results across polling and bind them to the exact draft head.
   const reviews = new Map();
@@ -46,7 +46,8 @@
     const d = document.createElement('details'); d.className = 'dev-disclosure';
     d.append(element('summary', label)); return d;
   }
-  function phase(batch) {
+  function phase(batch, objective = null) {
+    if (batch.continuous && objective && ['Planning', 'Reassessment queued', 'Batch created'].includes(objective.planningState) && !batch.armed && batch.tasks.length && batch.tasks.every(t => t.status === 'Verified')) return 'Planning';
     if (batch.tasks.length && batch.tasks.every(t => t.status === 'Verified')) return 'Ready for review';
     if (batch.tasks.some(t => t.status === 'Blocked')) return 'Needs attention';
     if (batch.tasks.some(t => t.status === 'Testing')) return 'Checking the work';
@@ -123,7 +124,7 @@
     }));
   }
   function batchCard(p, b, o, historical = false) {
-    const label = phase(b);
+    const label = phase(b, o);
     const card = element('article', ''); card.className = 'dev-assignment-card';
     card.append(chip(label), element('h3', b.objective));
     const done = b.tasks.filter(t => t.status === 'Verified').length;
@@ -136,6 +137,7 @@
       'Needs attention': 'Archer stopped safely. See the reason below before retrying.',
       'Checking the work': 'Archer has prepared changes and is checking the result.',
       'Working': 'Archer is preparing the changes.',
+      'Planning': 'Archer is deciding what to do next.',
       'Queued': 'Archer will pick up this assignment automatically.',
       'Paused': 'Work is paused or the authorization has expired.',
       'Needs approval': 'The plan is ready. Approve it to let Archer begin.'
@@ -194,6 +196,7 @@
     el('assignObjectiveButton').disabled = !p?.enabled || busy;
     el('saveObjectiveOnly').disabled = !p || busy;
     el('developmentContinuous').disabled = !p?.cumulativeWorkspaces;
+    if (!p?.cumulativeWorkspaces) el('developmentContinuous').checked = false;
     el('pauseProjectButton').disabled = !p || busy;
     el('pauseProjectButton').textContent = p?.paused ? 'Resume project' : 'Pause project';
     el('managedProjectStatus').textContent = p ? (p.paused ? 'Paused' : p.enabled ? 'Ready to work' : 'Setup needed') : 'Choose or register a project';
@@ -206,6 +209,7 @@
     dependency.replaceChildren(option('', 'None'));
     if (!p) { list.append(element('p', 'No project selected. Open Project settings to add one.')); return; }
     const projectBatches = batches.filter(b => b.projectId === p.id);
+    const verifiedDescriptions = new Set(projectBatches.filter(b => phase(b) === 'Ready for review' && !b.armed).map(b => b.objective.trim()));
     const cards = [];
     let accepted = 0, pending = 0, working = 0, review = 0, attention = 0;
     function placeBatch(b, o, past) {
@@ -225,7 +229,7 @@
       if (o.acceptedAtUtc) accepted++;
       if (related.length) {
         const currentBatch = related.find(b => b.armed) || related[0];
-        placeBatch(currentBatch, o, !!o.acceptedAtUtc);
+        placeBatch(currentBatch, o, !!o.acceptedAtUtc || (phase(currentBatch, o) === 'Needs attention' && verifiedDescriptions.has(o.description.trim())));
         for (const b of related.filter(b => b !== currentBatch)) placeBatch(b, o, true);
       } else {
         const label = !ready && !o.acceptedAtUtc ? 'Waiting on dependency' : objectivePhase(o);
@@ -241,6 +245,7 @@
         }, !p.enabled));
         if (o.acceptedAtUtc) history.append(card);
         else if (label === 'Saved' || label === 'Waiting on dependency') objectives.append(card);
+        else if (label === 'Needs attention' && verifiedDescriptions.has(o.description.trim())) { attention--; history.append(card); }
         else cards.push(card);
       }
       if (ready && !alreadyPlanned && !delegated && !o.continuous) {
