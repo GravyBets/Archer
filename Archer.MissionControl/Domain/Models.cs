@@ -163,6 +163,9 @@ public sealed class CodeProposal
     public string BaseBranch { get; set; } = "";
     public string? BaseTreeSha { get; set; }
     public bool WorkspaceDraft { get; set; }
+    public string? WorkspaceParentSha { get; set; }
+    public string? WorkspaceBranch { get; set; }
+    public int? WorkspacePullRequestNumber { get; set; }
     public string Title { get; set; } = "";
     public string Request { get; set; } = "";
     public string Summary { get; set; } = "";
@@ -180,6 +183,7 @@ public sealed class CodeProposalFile
     public string Path { get; set; } = "";
     public string ExpectedBlobSha { get; set; } = "";
     public bool IsNew { get; set; }
+    public bool IsRegressionTest { get; set; }
     public string OriginalContent { get; set; } = "";
     public string ProposedContent { get; set; } = "";
 }
@@ -233,6 +237,11 @@ public sealed class DevelopmentBatch
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid ProjectId { get; set; }
     public Guid? ObjectiveId { get; set; }
+    public bool Cumulative { get; set; }
+    public string? WorkspaceBranch { get; set; }
+    public string? WorkspaceHeadSha { get; set; }
+    public int? WorkspacePullRequestNumber { get; set; }
+    public string? WorkspaceBaseBranch { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
     public string Objective { get; set; } = "";
     public bool Armed { get; set; }
@@ -255,6 +264,7 @@ public sealed class DevelopmentTask
     public DateTimeOffset? SubmittedAtUtc { get; set; }
     public CodeProposal? Proposal { get; set; }
     public List<string> PriorPullRequests { get; set; } = [];
+    public List<string> PriorHeadShas { get; set; } = [];
 }
 public sealed record DevelopmentPlanRequest(string? Objective, bool Confirm, Guid ProjectId = default, Guid? ObjectiveId = null);
 public sealed record DevelopmentArmRequest(bool Confirm, bool ResumeAfterRestart = false);
@@ -273,6 +283,8 @@ public sealed class ManagedProject
     public int DailyAttemptLimit { get; set; } = 6;
     public bool Paused { get; set; }
     public bool AllowNewSourceFiles { get; set; }
+    public bool CumulativeWorkspaces { get; set; }
+    public List<string> RegressionTestRoots { get; set; } = [];
     public List<ProjectObjective> Objectives { get; set; } = [];
     public List<ProjectMemoryEntry> Memory { get; set; } = [];
 }
@@ -299,7 +311,7 @@ public sealed class ProjectMemoryEntry
 }
 public sealed record RegisterProjectRequest(string? Name, string? Repository, string? Technology,
     List<string>? SourceRoots, string? WorkflowFile, string? VerificationJob, List<string>? RequiredSteps,
-    int Priority = 3, int DailyAttemptLimit = 6, bool AllowNewSourceFiles = false);
+    int Priority = 3, int DailyAttemptLimit = 6, bool AllowNewSourceFiles = false, bool CumulativeWorkspaces = false, List<string>? RegressionTestRoots = null);
 public sealed record ProjectPauseRequest(bool Paused);
 public sealed record ProjectObjectiveRequest(string? Description, List<Guid>? DependsOn);
 public sealed record ProjectMemoryRequest(string? Kind, string? Content, bool ShareWithAi);
