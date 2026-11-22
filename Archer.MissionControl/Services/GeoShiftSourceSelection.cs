@@ -17,18 +17,21 @@ public static class GeoShiftSourceSelection
         Regex.Matches(s, @"[A-Z]+(?=[A-Z][a-z]|\b)|[A-Z]?[a-z]+|[0-9]+")
             .Select(m => m.Value.ToLowerInvariant()).ToArray();
 
+    public static bool IsEligible(GitHubRepositoryReader.ReviewableFile f) =>
+        f.Size is > 0 and <= 9000 &&
+        (f.Path.StartsWith("GeoShift.Core/", StringComparison.Ordinal) ||
+         f.Path.StartsWith("GeoShift.Web/", StringComparison.Ordinal)) &&
+        (f.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
+         f.Path.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)) &&
+        !f.Path.Split('/').Any(p => p is "." or "..") &&
+        !f.Path.EndsWith("/Program.cs", StringComparison.OrdinalIgnoreCase);
+
     public static IReadOnlyList<string> Select(
         IEnumerable<GitHubRepositoryReader.ReviewableFile> files, string instruction)
     {
         var terms = Words(instruction).Where(w => w.Length >= 3 && !StopWords.Contains(w))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var ranked = files.Where(f => f.Size is > 0 and <= 9000 &&
-                (f.Path.StartsWith("GeoShift.Core/", StringComparison.Ordinal) ||
-                 f.Path.StartsWith("GeoShift.Web/", StringComparison.Ordinal)) &&
-                (f.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
-                 f.Path.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)) &&
-                !f.Path.Split('/').Any(p => p is "." or "..") &&
-                !f.Path.EndsWith("/Program.cs", StringComparison.OrdinalIgnoreCase))
+        var ranked = files.Where(IsEligible)
             .Select(f => new
             {
                 f.Path,
