@@ -127,6 +127,8 @@ public sealed class GitHubDraftPrPublisher(HttpClient client)
             uri.Host != "github.com" || uri.Scheme != "https")
             throw new InvalidOperationException("GitHub returned an unexpected pull request URL.");
 
+        proposal.PublishedHeadSha = pull.RootElement.GetProperty("head").GetProperty("sha").GetString();
+        proposal.PullRequestNumber = pull.RootElement.GetProperty("number").GetInt32();
         return (url, branch);
     }
 
