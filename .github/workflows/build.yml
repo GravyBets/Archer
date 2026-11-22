@@ -129,6 +129,8 @@ jobs:
           node --check Archer.MissionControl/wwwroot/js/mobile-sessions.js
       - name: Validate UI element wiring
         run: python3 tests/ValidateUi.py
+      - name: Validate owner-only TestFlight release contract
+        run: python3 tests/ValidateIosDistribution.py
       - name: Smoke test local configuration and usage endpoints
         shell: bash
         run: |
