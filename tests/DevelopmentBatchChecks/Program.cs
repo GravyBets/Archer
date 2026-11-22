@@ -135,6 +135,52 @@ proposal.Repository = other.Repository;
 Check(await verifier.ReadyAsync(other, default), "second repository workflow recognized");
 Check((await verifier.InspectAsync(other, proposal, default)).Status == "Verified", "second repository build and test profile verified");
 
+var workspacePlan = new ProjectPlanDraft { Summary = "Related source refactor", Tasks = [
+    new ProjectPlanTaskDraft { Title = "Map", Description = "Improve view state", Paths = ["src/components/Map.tsx"], NewPaths = ["src/components/MapState.ts"], ContextPaths = ["src/components/Legend.tsx"] }
+] };
+bool Refused(Action action)
+{
+    try { action(); return false; }
+    catch (InvalidOperationException) { return true; }
+}
+var eligibleWorkspace = new[] { "src/components/Map.tsx", "src/components/Legend.tsx" };
+Check(Refused(() => ProjectPolicy.ValidatePlan(workspacePlan, eligibleWorkspace, other)), "new files require separate project authorization");
+other.AllowNewSourceFiles = true;
+ProjectPolicy.ValidatePlan(workspacePlan, eligibleWorkspace, other);
+Check(Refused(() => ProjectPolicy.ValidatePlan(workspacePlan, eligibleWorkspace, other, ["src/components/mapstate.ts"])), "case-insensitive new path collision refused");
+workspacePlan.Tasks[0].ContextPaths = ["src/components/Map.tsx"];
+Check(Refused(() => ProjectPolicy.ValidatePlan(workspacePlan, eligibleWorkspace, other)), "editable and read-only paths cannot overlap");
+workspacePlan.Tasks[0].ContextPaths = ["src/components/Legend.tsx"];
+workspacePlan.Tasks.Add(new ProjectPlanTaskDraft { Title = "Legend", Description = "Modify legend", Paths = ["src/components/Legend.tsx"] });
+Check(Refused(() => ProjectPolicy.ValidatePlan(workspacePlan, eligibleWorkspace, other)), "independent tasks cannot depend on another task's edits");
+workspacePlan.Tasks.RemoveAt(1);
+var prefix = ProjectGitHubCredentials.Prefix(other.Repository);
+Environment.SetEnvironmentVariable(prefix + "_READ_TOKEN", "synthetic-reader");
+Environment.SetEnvironmentVariable(prefix + "_WRITE_TOKEN", "synthetic-writer");
+Environment.SetEnvironmentVariable("ARCHER_CODING_ENABLED", "true");
+Environment.SetEnvironmentVariable("ARCHER_GITHUB_WRITE_REPOS", other.Repository);
+var fakePublisher = new FakeWorkspaceGitHub(other.Repository);
+using var publisherHttp = new HttpClient(fakePublisher);
+var publisher = new GitHubDraftPrPublisher(publisherHttp);
+var workspace = new CodeProposal { Repository = other.Repository, BaseBranch = "master",
+    BaseTreeSha = new string('b', 40), WorkspaceDraft = true, Title = "Map workspace",
+    Files = [
+        new CodeProposalFile { Path = "src/components/Map.tsx", ExpectedBlobSha = new string('c',40), ProposedContent = "export const Map = 1;" },
+        new CodeProposalFile { Path = "src/components/MapState.ts", IsNew = true, ProposedContent = "export const state = 1;" }
+    ] };
+var resultWorkspace = await publisher.PublishWorkspaceAsync(other, workspace, default);
+Check(resultWorkspace.Url == "https://github.com/owner/future/pull/9" &&
+    workspace.PublishedHeadSha == new string('e',40), "atomic workspace publication records exact commit");
+Check(fakePublisher.Writes.SequenceEqual(new[] { "/git/trees", "/git/commits", "/git/refs", "/pulls" }), "branch exists only after all edits represented in a single commit");
+fakePublisher.Writes.Clear();
+workspace.BaseTreeSha = new string('f',40);
+try { await publisher.PublishWorkspaceAsync(other, workspace, default); throw new Exception("Stale tree accepted"); }
+catch (InvalidOperationException) { Check(fakePublisher.Writes.Count == 0, "stale source tree never writes"); }
+workspace.BaseTreeSha = new string('b',40);
+workspace.Files[1].Path = "src/components/map.tsx";
+try { await publisher.PublishWorkspaceAsync(other, workspace, default); throw new Exception("Case collision accepted"); }
+catch (InvalidOperationException) { Check(fakePublisher.Writes.Count == 0, "case collision never writes"); }
+
 sealed class FakeGitHub : HttpMessageHandler
 {
     public string Mode = "success";
@@ -169,5 +215,66 @@ sealed class FakeGitHub : HttpMessageHandler
         var json = System.Text.Json.JsonSerializer.Serialize(payload);
         return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) {
             Content = new StringContent(json, Encoding.UTF8, "application/json") });
+    }
+}
+
+sealed class FakeWorkspaceGitHub(string repository) : HttpMessageHandler
+{
+    public List<string> Writes { get; } = [];
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+    {
+        if (request.Headers.Authorization?.Parameter != "synthetic-writer")
+            throw new Exception("Wrong scoped credential");
+        var prefix = "/repos/" + repository;
+        var absolute = request.RequestUri!.AbsolutePath;
+        if (!absolute.StartsWith(prefix + "/", StringComparison.Ordinal)) throw new Exception("Wrong workspace repository");
+        var path = absolute[prefix.Length..];
+        object payload;
+        string h(char c) => new string(c, 40);
+        if (request.Method == HttpMethod.Get)
+        {
+            if (path == "/git/ref/heads/master") payload = new { @object = new { sha = h('a') } };
+            else if (path == "/git/commits/" + h('a')) payload = new { tree = new { sha = h('b') } };
+            else if (path == "/git/trees/" + h('b')) payload = new { truncated = false, tree = new[] {
+                new { path = "src", mode = "040000", type = "tree", sha = h('f') },
+                new { path = "src/components", mode = "040000", type = "tree", sha = h('f') },
+                new { path = "src/components/Map.tsx", mode = "100644", type = "blob", sha = h('c') }
+            } };
+            else throw new Exception("Unexpected read " + path);
+        }
+        else
+        {
+            if (request.Method != HttpMethod.Post) throw new Exception("Unsafe write " + request.Method);
+            Writes.Add(path);
+            using var body = System.Text.Json.JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct));
+            var root = body.RootElement;
+            if (path == "/git/trees")
+            {
+                if (root.GetProperty("base_tree").GetString() != h('b') || root.GetProperty("tree").GetArrayLength() != 2)
+                    throw new Exception("Tree not atomic");
+                payload = new { sha = h('d') };
+            }
+            else if (path == "/git/commits")
+            {
+                if (root.GetProperty("tree").GetString() != h('d') || root.GetProperty("parents")[0].GetString() != h('a'))
+                    throw new Exception("Wrong commit ancestry");
+                payload = new { sha = h('e') };
+            }
+            else if (path == "/git/refs")
+            {
+                if (!(root.GetProperty("ref").GetString() ?? "").StartsWith("refs/heads/archer/draft-") ||
+                    root.GetProperty("sha").GetString() != h('e')) throw new Exception("Unsafe branch");
+                payload = new { };
+            }
+            else if (path == "/pulls")
+            {
+                if (!root.GetProperty("draft").GetBoolean() || root.GetProperty("base").GetString() != "master")
+                    throw new Exception("Not a draft");
+                payload = new { number = 9, html_url = "https://github.com/" + repository + "/pull/9", head = new { sha = h('e') } };
+            }
+            else throw new Exception("Unexpected write " + path);
+        }
+        return new HttpResponseMessage(HttpStatusCode.OK) {
+            Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json") };
     }
 }
