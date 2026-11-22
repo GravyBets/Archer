@@ -167,6 +167,8 @@ public sealed class CodeProposal
     public string Status { get; set; } = "Draft";
     public string? PullRequestUrl { get; set; }
     public string? BranchName { get; set; }
+    public string? PublishedHeadSha { get; set; }
+    public int? PullRequestNumber { get; set; }
     public List<CodeProposalFile> Files { get; set; } = [];
 }
 
