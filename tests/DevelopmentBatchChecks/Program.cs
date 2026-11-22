@@ -191,12 +191,13 @@ workspacePlan.Tasks.Reverse();
 
 fakePublisher.Writes.Clear();
 fakePublisher.CumulativeBranch = resultWorkspace.Branch;
-workspace.Files[1].Path = "src/components/MapState.ts";
+workspace.Files = [new CodeProposalFile { Path = "src/components/MapState.ts", ExpectedBlobSha = new string('2',40), ProposedContent = "export const state = 2;" }];
+workspace.BaseTreeSha = new string('d',40);
 workspace.WorkspaceBranch = resultWorkspace.Branch;
-workspace.WorkspaceParentSha = new string('a', 40);
+workspace.WorkspaceParentSha = new string('e', 40);
 workspace.WorkspacePullRequestNumber = 9;
 var nextWorkspace = await publisher.PublishWorkspaceAsync(other, workspace, default);
-Check(nextWorkspace.Url == resultWorkspace.Url && nextWorkspace.Branch == resultWorkspace.Branch,
+Check(nextWorkspace.Url == resultWorkspace.Url && nextWorkspace.Branch == resultWorkspace.Branch && workspace.PublishedHeadSha == new string('4',40),
     "continuation retains the same draft PR");
 Check(fakePublisher.Writes.SequenceEqual(new[] { "/git/trees", "/git/commits", "/git/refs/heads/" + resultWorkspace.Branch }),
     "continuation commits once, fast-forwards once, never creates another PR");
@@ -300,8 +301,16 @@ sealed class FakeWorkspaceGitHub(string repository) : HttpMessageHandler
         string h(char c) => new string(c, 40);
         if (request.Method == HttpMethod.Get)
         {
-            if (path == "/git/ref/heads/master" || path == "/git/ref/heads/" + CumulativeBranch) payload = new { @object = new { sha = h('a') } };
-            else if (path == "/pulls/9") payload = new { state = "open", draft = DraftOpen, head = new { @ref = CumulativeBranch, sha = ExternalChange ? h('f') : h('a'), repo = new { full_name = repository } }, @base = new { @ref = "master" } };
+            if (path == "/git/ref/heads/master") payload = new { @object = new { sha = h('a') } };
+            else if (path == "/git/ref/heads/" + CumulativeBranch) payload = new { @object = new { sha = h('e') } };
+            else if (path == "/pulls/9") payload = new { state = "open", draft = DraftOpen, head = new { @ref = CumulativeBranch, sha = ExternalChange ? h('f') : h('e'), repo = new { full_name = repository } }, @base = new { @ref = "master" } };
+            else if (path == "/git/commits/" + h('e')) payload = new { tree = new { sha = h('d') } };
+            else if (path == "/git/trees/" + h('d')) payload = new { truncated = false, tree = new[] {
+                new { path = "src", mode = "040000", type = "tree", sha = h('f') },
+                new { path = "src/components", mode = "040000", type = "tree", sha = h('f') },
+                new { path = "src/components/Map.tsx", mode = "100644", type = "blob", sha = h('1') },
+                new { path = "src/components/MapState.ts", mode = "100644", type = "blob", sha = h('2') }
+            } };
             else if (path == "/git/commits/" + h('a')) payload = new { tree = new { sha = h('b') } };
             else if (path == "/git/trees/" + h('b')) payload = new { truncated = false, tree = new[] {
                 new { path = "src", mode = "040000", type = "tree", sha = h('f') },
@@ -318,15 +327,15 @@ sealed class FakeWorkspaceGitHub(string repository) : HttpMessageHandler
             var root = body.RootElement;
             if (path == "/git/trees")
             {
-                if (root.GetProperty("base_tree").GetString() != h('b') || root.GetProperty("tree").GetArrayLength() != 2)
+                if (root.GetProperty("base_tree").GetString() != h(CumulativeBranch is null ? 'b' : 'd') || root.GetProperty("tree").GetArrayLength() != (CumulativeBranch is null ? 2 : 1))
                     throw new Exception("Tree not atomic");
-                payload = new { sha = h('d') };
+                payload = new { sha = h(CumulativeBranch is null ? 'd' : '3') };
             }
             else if (path == "/git/commits")
             {
-                if (root.GetProperty("tree").GetString() != h('d') || root.GetProperty("parents")[0].GetString() != h('a'))
+                if (root.GetProperty("tree").GetString() != h(CumulativeBranch is null ? 'd' : '3') || root.GetProperty("parents")[0].GetString() != h(CumulativeBranch is null ? 'a' : 'e'))
                     throw new Exception("Wrong commit ancestry");
-                payload = new { sha = h('e') };
+                payload = new { sha = h(CumulativeBranch is null ? 'e' : '4') };
             }
             else if (path == "/git/refs")
             {
@@ -336,8 +345,8 @@ sealed class FakeWorkspaceGitHub(string repository) : HttpMessageHandler
             }
             else if (path == "/git/refs/heads/" + CumulativeBranch)
             {
-                if (root.GetProperty("force").GetBoolean() || root.GetProperty("sha").GetString() != h('e')) throw new Exception("Not a safe fast-forward");
-                payload = new { @object = new { sha = h('e') } };
+                if (root.GetProperty("force").GetBoolean() || root.GetProperty("sha").GetString() != h('4')) throw new Exception("Not a safe fast-forward");
+                payload = new { @object = new { sha = h('4') } };
             }
             else if (path == "/pulls")
             {
