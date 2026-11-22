@@ -229,6 +229,7 @@ public sealed class DevelopmentBatch
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Objective { get; set; } = "";
     public bool Armed { get; set; }
+    public bool ResumeAfterRestart { get; set; }
     public DateTimeOffset? ExpiresAtUtc { get; set; }
     public int AttemptsRemaining { get; set; }
     public List<DevelopmentTask> Tasks { get; set; } = [];
@@ -246,4 +247,4 @@ public sealed class DevelopmentTask
     public List<string> PriorPullRequests { get; set; } = [];
 }
 public sealed record DevelopmentPlanRequest(string? Objective, bool Confirm);
-public sealed record DevelopmentArmRequest(bool Confirm);
+public sealed record DevelopmentArmRequest(bool Confirm, bool ResumeAfterRestart = false);
