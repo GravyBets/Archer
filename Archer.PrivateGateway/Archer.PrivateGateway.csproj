@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.14" />
+    <Compile Include="../Archer.RemoteGateway/Auth0OwnerSignInSettings.cs" Link="Auth0OwnerSignInSettings.cs" />
+    <Compile Include="../Archer.RemoteGateway/Auth0OwnerClaimPolicy.cs" Link="Auth0OwnerClaimPolicy.cs" />
+  </ItemGroup>
+</Project>

@@ -77,3 +77,7 @@ The Linux build runs `python3 tests/ValidateArcherIosAuth.py` to validate source
 
 Auth0 official SDK docs: https://github.com/auth0/Auth0.swift
 Native Swift/iOS setup: https://auth0.com/docs/quickstart/native/ios-swift
+
+## Private-server companion candidate (Batch Two)
+
+The signed-in view now includes chat, work and inbox overview connected through the separate private gateway. Configure Gateway.plist with your exact private tailnet HTTPS hostname at build time; the checked-in placeholder does not permit networking. Approve the full public Secure Enclave key fingerprint in the private gateway environment. Auth0 login alone is insufficient. Requests use one-time proof over the method, route and exact JSON body. The client rejects redirects and keeps bearer credentials out of logs. Phone and desktop share the core conversation. The phone can send an explicit registered-project assignment through the same bounded command path and displays real task states. Interrupted requests use a durable receipt lookup; no automatic resend. Optional spoken replies require a suitable enhanced British male iOS voice. This is not background wake-word or realtime iPhone voice. APNs, Apple signing, real device verification and owner deployment remain outstanding. See ../../deploy/linux/README.md for private staging. The earlier milestones above describe historical local-only builds; the separate older RemoteGateway remains unchanged.

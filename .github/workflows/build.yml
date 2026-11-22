@@ -28,6 +28,11 @@ jobs:
         run: dotnet restore Archer.MobileGateway/Archer.MobileGateway.csproj
       - name: Build standalone mobile gateway
         run: dotnet build Archer.MobileGateway/Archer.MobileGateway.csproj --configuration Release --no-restore
+      - name: Build and exercise private companion gateway
+        run: |
+          dotnet build Archer.PrivateGateway/Archer.PrivateGateway.csproj -c Release
+          dotnet run --project tests/PrivateGatewayChecks/PrivateGatewayChecks.csproj -c Release
+          bash -n deploy/linux/publish.sh
       - name: Build isolated remote gateway contract skeleton
         run: dotnet build Archer.RemoteGateway/Archer.RemoteGateway.csproj --configuration Release
       - name: Check fail-closed HTTPS ingress preflight

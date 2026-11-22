@@ -1,0 +1,29 @@
+[Unit]
+Description=Archer authenticated private companion gateway
+After=network-online.target archer-core.service
+Wants=network-online.target archer-core.service
+[Service]
+Type=simple
+User=archergateway
+Group=archergateway
+WorkingDirectory=/opt/archer/gateway
+EnvironmentFile=/etc/archer/gateway.env
+Environment=ASPNETCORE_ENVIRONMENT=Production
+ExecStart=/usr/bin/dotnet /opt/archer/gateway/Archer.PrivateGateway.dll
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=45
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+MemoryMax=512M
+TasksMax=100
+[Install]
+WantedBy=multi-user.target

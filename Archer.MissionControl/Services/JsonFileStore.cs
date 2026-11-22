@@ -48,6 +48,7 @@ public sealed class JsonFileStore
 
     public Task RecoverInterruptedTasksAsync() => UpdateAsync(state =>
     {
+        foreach (var receipt in state.CompanionReceipts.Where(x => x.Status == "Pending")) receipt.Status = "Interrupted";
         // Expired context must never survive an Archer restart.
         if (state.Presence is { } presence && presence.ExpiresAtUtc <= DateTimeOffset.UtcNow)
             state.Presence = null;

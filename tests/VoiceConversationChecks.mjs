@@ -19,7 +19,7 @@ function elt(id) {
       classList:{add(){},remove(){},toggle(){}},
       addEventListener(type,handler) { handlers.set(type,handler); },
       dispatch(type,event={}) {handlers.get(type)?.({target:obj,...event}); },
-      setAttribute(){}, focus(){}, replaceChildren(){obj.options=[];},
+      closest(){return null;}, setAttribute(){}, focus(){}, replaceChildren(){obj.options=[];},
       appendChild(child){obj.options.push(child);},
       requestSubmit() {throw Error('Unexpected form');}
     };
@@ -86,6 +86,7 @@ const browser={
   SpeechRecognition:Recognition,
   SpeechSynthesisUtterance:FakeUtterance,
   speechSynthesis,
+  confirm:()=>true,
   localStorage:{
     getItem:k=>store.has(k)?store.get(k):null,
     setItem:(k,v)=>store.set(k,String(v))
@@ -436,4 +437,25 @@ check('voice diagnostics reveal no tokens or captured speech',()=>{
   assert.equal(elt('voiceCopyDiagnostics').disabled,false);
 });
 
+check('explicit standby opt-in starts wake-only listening and never submits background words',()=>{
+  elt('chatText').value='';
+  elt('voiceAutoStandbyToggle').checked=true;
+  elt('voiceAutoStandbyToggle').dispatch('change');
+  assert.equal(store.get('archer.voice.autoStandby'),'yes');
+  assert.equal(rec.active,true);
+  assert.equal(elt('voiceWakeIndicator').textContent,'Standby · say “Hey Archer”');
+  const count=requests.length;
+  rec.push('ordinary background conversation');
+  advance(5000);
+  assert.equal(requests.length,count);
+  presence.setDesktopVoiceStatus({running:false,status:'stopped'});
+  assert.equal(rec.active,true);
+  assert.equal(elt('presenceStatus').textContent,'Listening');
+  elt('voiceEndConversation').dispatch('click');
+  const starts=rec.starts;
+  presence.setDesktopVoiceStatus({running:false,status:'stopped'});
+  advance(5000);
+  assert.equal(rec.starts,starts);
+  assert.equal(rec.active,false);
+});
 console.log('PASS:',cases,'voice quality guard, preview, private diagnostics, wake-once, 2-minute standby, privacy and failures');

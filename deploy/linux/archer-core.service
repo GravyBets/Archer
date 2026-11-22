@@ -1,0 +1,31 @@
+[Unit]
+Description=Archer private operator core (loopback)
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=simple
+User=archer
+Group=archer
+WorkingDirectory=/opt/archer/core
+EnvironmentFile=/etc/archer/core.env
+Environment=ARCHER_DATA_DIR=/var/lib/archer/core
+Environment=ASPNETCORE_ENVIRONMENT=Production
+ExecStart=/usr/bin/dotnet /opt/archer/core/Archer.MissionControl.dll
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=45
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+ReadWritePaths=/var/lib/archer/core
+MemoryMax=2G
+TasksMax=200
+[Install]
+WantedBy=multi-user.target
