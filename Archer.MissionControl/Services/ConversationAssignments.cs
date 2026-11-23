@@ -10,14 +10,39 @@ public static class ConversationAssignments
     private static readonly Regex Prefix = new(
         @"^(?:(?:hey\s+)?archer[,!:]?\s+)?(?:(?:please|i\s+want\s+you\s+to|go\s+ahead\s+and|start|can\s+you)\s+)*(?<action>work\s+on|assign\s+work\s+to|develop|fix|improve|update|build)\s+",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+    // Explicit spoken requests to edit Archer's own home screen, not a general
+    // "can you code?" question. Owner-only routes still check the registered
+    // protected self-project, credentials, limits, and review policy.
+    private static readonly Regex SelfLandingDirective = new(
+        @"^(?:(?:hey\s+)?archer[,!:]?\s+)?(?:(?:please|can\s+you|could\s+you|i\s+want\s+you\s+to)\s+)?(?:adjust|change|fix|update|redesign|rearrange|modify)\s+(?:(?:your(?:\s+own)?|archer['’]s|the)\s+)?(?:landing\s+page|home\s+page|home\s+screen)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+    private static readonly Regex SelfOrbDirective = new(
+        @"^(?:(?:hey\s+)?archer[,!:]?\s+)?(?:(?:please|can\s+you|could\s+you|i\s+want\s+you\s+to)\s+)?(?:put|move|center|centre|rearrange)\s+(?:the\s+)?orb\b.*\b(?:chat|conversation)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+    private static bool LooksLikeSelfUiRequest(string text) =>
+        SelfLandingDirective.IsMatch(text) || SelfOrbDirective.IsMatch(text);
+
     public sealed record Command(string Project, string Objective);
     public sealed record Result(string Answer, Guid? ObjectiveId = null, bool Accepted = false);
 
-    public static bool LooksLikeAssignment(string text) => Prefix.IsMatch(text.Trim());
+    public static bool LooksLikeAssignment(string text) =>
+        Prefix.IsMatch(text.Trim()) || LooksLikeSelfUiRequest(text.Trim());
 
     public static Command? Parse(string text, IEnumerable<ManagedProject> projects)
     {
-        var prefix = Prefix.Match(text.Trim());
+        var request = text.Trim();
+        if (LooksLikeSelfUiRequest(request))
+        {
+            var selfProjects = projects.Where(p =>
+                p.Name.Equals("Archer", StringComparison.OrdinalIgnoreCase) &&
+                SelfDevelopmentPolicy.IsSelf(p.Repository)).ToArray();
+            // Do not silently route a voice command to a similarly named or
+            // unregistered repository, and never grant self-code permissions.
+            if (selfProjects.Length != 1) return null;
+            return new(selfProjects[0].Name,
+                "Update Archer's landing page in response to this owner request: " + request);
+        }
+        var prefix = Prefix.Match(request);
         if (!prefix.Success) return null;
         var remainder = text.Trim()[prefix.Length..];
         foreach (var name in projects.Select(p => p.Name).OrderByDescending(n => n.Length))
