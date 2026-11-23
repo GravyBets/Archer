@@ -70,6 +70,23 @@
                 <span id="homeDevelopmentDetail">Tell Archer what to work on in a registered project.</span>
               </div>
               <span class="archer-work-status" id="homeDevelopmentStatus">IDLE</span>
+              <div id="homeDevelopmentProgress" class="archer-work-progress" hidden aria-label="Development task verification progress">
+                <div class="archer-work-track"><div id="homeDevelopmentBar" class="archer-work-bar"></div></div>
+                <span id="homeDevelopmentCount" class="archer-work-count"></span>
+              </div>
+              <div id="homeDevelopmentSetup" class="archer-work-setup" hidden>
+                <span id="homeDevelopmentSetupText"></span>
+              </div>
+              <a id="homeDevelopmentReview" class="archer-work-review" href="#" target="_blank" rel="noopener noreferrer" hidden>Review verified draft PR</a>
+            </div>
+            <div id="homeMissionPulse" class="archer-work-pulse archer-mission-pulse" role="status" aria-live="polite" hidden>
+              <span class="archer-work-kicker">MISSION</span>
+              <div class="archer-work-copy"><strong id="homeMissionLabel"></strong><span>Authorized mission execution</span></div>
+              <span class="archer-work-status" id="homeMissionStatus"></span>
+              <div id="homeMissionProgress" class="archer-work-progress" role="status" aria-label="Mission task progress">
+                <div class="archer-work-track"><div id="homeMissionBar" class="archer-work-bar"></div></div>
+                <span id="homeMissionCount" class="archer-work-count"></span>
+              </div>
             </div>
             <div id="chatMessages" class="chat-messages" aria-live="off"></div>
             <form id="chatForm" class="chat-composer">
