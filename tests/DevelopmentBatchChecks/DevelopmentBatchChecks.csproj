@@ -22,6 +22,7 @@
     <Compile Include="../../Archer.MissionControl/Services/ContinuousObjectivePolicy.cs" Link="ContinuousObjectivePolicy.cs" />
     <Compile Include="../../Archer.MissionControl/Services/SelfDevelopmentReview.cs" Link="SelfDevelopmentReview.cs" />
     <Compile Include="../../Archer.MissionControl/Services/ConversationAssignments.cs" Link="ConversationAssignments.cs" />
-    <Compile Include="../../Archer.MissionControl/Services/ConversationResearch.cs" Link="ConversationResearch.cs" />\n    <Compile Include="../../Archer.MissionControl/Services/ConversationResearchResults.cs" Link="ConversationResearchResults.cs" />
+    <Compile Include="../../Archer.MissionControl/Services/ConversationResearch.cs" Link="ConversationResearch.cs" />
+    <Compile Include="../../Archer.MissionControl/Services/ConversationResearchResults.cs" Link="ConversationResearchResults.cs" />
   </ItemGroup>
 </Project>
