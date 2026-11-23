@@ -477,8 +477,29 @@ Check(ConversationResearchResults.IsRequest(spokenQuestion),
     "GeoShift customer research status is recognized as a saved-results request");
 var spokenReply = ConversationResearchResults.Answer(findingsState, spokenQuestion, voiceMode: true);
 Check(spokenReply.Contains("Utility mapping teams") && spokenReply.Contains("GIS consultants") &&
-    spokenReply.Contains("example.org/a") && spokenReply.Contains("https://example.org/b"),
-    "voice status reads the real saved report, not just a completed task count");
+    !spokenReply.Contains("https://") && spokenReply.Length < 420,
+    "voice reads a short source-grounded takeaway without spelling out URLs");
+var structuredResearch = "# GeoShift customer research\n\n" +
+    "## Recommendation: target small broadband mapping consultants first\n\n" +
+    "GeoShift's best initial target is **small consulting firms** preparing KML/KMZ files for broadband providers.\n\n" +
+    "This is a hypothesis to test—not a verified customer segment.\n\n" +
+    "## Evidence and potential customers\n\nSupporting details.";
+completedResearch.Artifacts[0].Content = structuredResearch;
+var voiceTakeaway = ConversationResearchResults.Answer(findingsState, spokenQuestion, voiceMode: true);
+Check(voiceTakeaway.Contains("small consulting firms") && voiceTakeaway.Contains("hypothesis") &&
+    !voiceTakeaway.Contains("##") && !voiceTakeaway.Contains("**") &&
+    !voiceTakeaway.Contains("Evidence and potential customers") && voiceTakeaway.Length < 450,
+    "voice summarizes recommendation and uncertainty without reading markdown headings");
+var writtenResearch = ConversationResearchResults.Answer(findingsState, spokenQuestion);
+Check(writtenResearch.Contains("## Recommendation:") && writtenResearch.Contains("## Evidence") &&
+    writtenResearch.Contains("**small consulting firms**"),
+    "written response retains the detailed saved report");
+var spokenDetail = ConversationResearchResults.Answer(findingsState,
+    "Archer, give me the full research report for GeoShift", voiceMode: true);
+Check(spokenDetail.Contains("Evidence and potential customers") && !spokenDetail.Contains("##") &&
+    !spokenDetail.Contains("**"),
+    "explicit detailed spoken request includes more research without markdown markers");
+completedResearch.Artifacts[0].Content = genuineReport;
 Check(ConversationResearchResults.IsRequest("What did you find?") &&
     ConversationResearchResults.Answer(findingsState, "What did you find?").Contains("Utility mapping teams"),
     "natural immediate follow-up reads sole completed research report");

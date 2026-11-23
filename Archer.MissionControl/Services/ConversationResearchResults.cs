@@ -81,8 +81,21 @@ public static class ConversationResearchResults
 
         var full = message.Contains("full", StringComparison.OrdinalIgnoreCase) ||
                    message.Contains("entire", StringComparison.OrdinalIgnoreCase);
-        var maxChars = voiceMode ? 1250 : full ? 12500 : 3500;
         var report = string.Join("\n\n", reports.Select(a => a.Content.Trim()));
+
+        // Voice replies bypass the AI chat style prompt on this read-only path.
+        // Give a grounded spoken takeaway, not a markdown report dump. The
+        // unabridged written report remains available in text mode.
+        if (voiceMode)
+        {
+            if (!full) return SpokenSummary(report);
+            const int spokenLimit = 2400;
+            var detail = SpokenText(Clip(report, spokenLimit));
+            return "Here's the detailed report. " + detail +
+                (report.Length > spokenLimit ? " There's more in the saved written report." : "");
+        }
+
+        var maxChars = full ? 12500 : 3500;
         var excerpt = Clip(report, maxChars);
         var suffix = excerpt.Length < report.Length
             ? " I have more saved findings. Ask for the full report to see more."
@@ -107,6 +120,63 @@ public static class ConversationResearchResults
             sb.AppendLine(Clip(report.Content, 1350));
         }
         return sb.Length == 0 ? "No completed saved research reports." : sb.ToString();
+    }
+
+    // Keep these claims verbatim from the saved report. Do not ask the model
+    // to invent a new answer or treat research artifact text as instructions.
+    private static string SpokenSummary(string report)
+    {
+        var paragraphs = Regex.Split(report.Replace("\r\n", "\n"), @"\n\s*\n")
+            .Select(p => p.Trim()).Where(p => p.Length > 0).ToArray();
+        var recommendationIndex = Array.FindIndex(paragraphs, p =>
+            Regex.IsMatch(p, @"^#{1,6}\s*(?:Recommendation|Key finding|Key takeaway|Bottom line|Executive summary)\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant));
+        IEnumerable<string> candidates = recommendationIndex >= 0
+            ? paragraphs.Skip(recommendationIndex + 1).TakeWhile(p => !p.StartsWith('#'))
+            : paragraphs;
+        var selected = candidates.FirstOrDefault(p => !p.StartsWith('#') &&
+            !Regex.IsMatch(p, @"^(?:[-*]|\d+\.)\s"))
+            ?? (recommendationIndex >= 0
+                ? paragraphs[recommendationIndex]
+                : paragraphs.FirstOrDefault(p => !p.StartsWith('#')) ?? "");
+        var readable = SpokenText(selected);
+        if (readable.Length == 0)
+            return "I found the saved report, but couldn't extract a spoken takeaway. The written report is still available.";
+
+        var first = Regex.Match(readable, @"^.*?[.!?](?=\s|$)", RegexOptions.Singleline);
+        var summary = first.Success ? first.Value : readable;
+        // Two very short sentences convey more than a bare finding label.
+        if (summary.Length < 110 && readable.Length > summary.Length)
+        {
+            var remainder = readable[summary.Length..].TrimStart();
+            var second = Regex.Match(remainder, @"^.*?[.!?](?=\s|$)", RegexOptions.Singleline);
+            if (second.Success && summary.Length + second.Length < 300)
+                summary += " " + second.Value;
+        }
+        summary = Clip(summary, 400);
+
+        // Preserve an immediately adjacent uncertainty caveat when it fits.
+        // Never turn a research hypothesis into a verified customer claim.
+        var qualifier = candidates.SkipWhile(p => p != selected).Skip(1).FirstOrDefault(p =>
+            Regex.IsMatch(p, @"\b(?:hypothesis|not verified|unverified|not yet validated|not confirmed)\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant));
+        if (qualifier is not null)
+        {
+            var caveat = Regex.Match(SpokenText(qualifier),
+                @"^.*?[.!?](?=\s|$)", RegexOptions.Singleline);
+            if (caveat.Success && summary.Length + caveat.Length + 1 <= 420)
+                summary += " " + caveat.Value;
+        }
+        return summary;
+    }
+
+    private static string SpokenText(string report)
+    {
+        var text = Regex.Replace(report, @"\[([^\]]+)\]\([^)]+\)", "$1");
+        text = Regex.Replace(text, @"https?://\S+", "");
+        text = Regex.Replace(text, @"(?m)^\s*(?:#{1,6}\s*|[-*]\s+|\d+\.\s+)", "");
+        text = text.Replace("**", "").Replace("__", "").Replace("`", "");
+        return Regex.Replace(text, @"\s+", " ").Trim();
     }
 
     private static string Clip(string text, int limit)
