@@ -653,3 +653,43 @@
     align-self:start;
   }
 }
+
+
+/* Owner-facing, read-only progress hint for conversation-assigned coding.
+   This is deliberately not a control that can authorize or execute work. */
+.archer-home .archer-work-pulse{
+  display:flex;align-items:center;gap:13px;min-height:62px;
+  padding:10px 19px;background:#0c1b28;border-bottom:1px solid #233749;
+  overflow:hidden;
+}
+.archer-home .archer-work-kicker{
+  flex:0 0 auto;color:#7894a5;font-size:9px;font-weight:800;letter-spacing:1.3px;
+}
+.archer-home .archer-work-copy{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
+.archer-home .archer-work-copy strong{
+  font-size:12px;font-weight:690;color:#d3e5ee;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.archer-home .archer-work-copy span{
+  font-size:11px;color:#829cae;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.archer-home .archer-work-status{
+  flex:0 0 auto;max-width:175px;font-size:10px;font-weight:700;
+  border:1px solid #345167;border-radius:7px;padding:5px 8px;
+  color:#a9c3d0;background:#162838;white-space:nowrap;
+}
+.archer-home .archer-work-pulse[data-tone="active"] .archer-work-status,
+.archer-home .archer-work-pulse[data-tone="ready"] .archer-work-status{
+  color:#97e3d2;border-color:#317267;background:#12362f;
+}
+.archer-home .archer-work-pulse[data-tone="alert"] .archer-work-status{
+  color:#f3bf91;border-color:#855b3d;background:#38291e;
+}
+.archer-home .archer-work-pulse[data-tone="queued"] .archer-work-status{
+  color:#bdd6ee;border-color:#48667d;background:#1b3246;
+}
+@media(max-width:650px){
+  .archer-home .archer-work-pulse{flex-wrap:wrap;gap:5px 9px;padding:10px 13px}
+  .archer-home .archer-work-kicker{width:100%}
+  .archer-home .archer-work-copy{flex-basis:150px}
+  .archer-home .archer-work-status{font-size:9px;max-width:150px}
+}

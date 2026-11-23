@@ -102,12 +102,75 @@ function renderUsage(usage, routing) {
     (unpriced ? unpriced + ' unpriced request(s) excluded from estimates. ' : '') +
     'Special pricing and charges without usage data may not appear.';
 }
+// Deterministic read-only owner summary; never mistake a queued draft for
+// merged code, or claim an AI worker is running unless task state shows it.
+function latestDevelopmentPulse(data) {
+  const projects = Array.isArray(data?.projects) ? data.projects : [];
+  const batches = Array.isArray(data?.developmentBatches) ? data.developmentBatches : [];
+  const entries = projects.flatMap(project =>
+    (Array.isArray(project.objectives) ? project.objectives : []).map(objective => {
+      const related = batches.filter(b => b.projectId === project.id && b.objectiveId === objective.id);
+      const batch = related.at(-1);
+      const states = (Array.isArray(batch?.tasks) ? batch.tasks : []).map(t => t.status);
+      let status = 'Saved, not started', tone = 'idle';
+      if (objective.acceptedAtUtc) { status = 'Accepted'; tone = 'done'; }
+      else if (states.includes('Blocked') || objective.planningState === 'Blocked') {
+        status = 'Needs attention'; tone = 'alert';
+      } else if (states.includes('Testing')) {
+        status = 'Checking code'; tone = 'active';
+      } else if (states.some(s => s === 'Editing' || s === 'Publishing')) {
+        status = 'Writing code'; tone = 'active';
+      } else if (states.length && states.every(s => s === 'Verified')) {
+        status = 'Draft ready for review'; tone = 'ready';
+      } else if (batch?.armed) {
+        status = 'Queued for coding'; tone = 'queued';
+      } else if (batch) {
+        status = 'Awaiting authorization'; tone = 'queued';
+      } else if (objective.planningState === 'Planning') {
+        status = 'Planning'; tone = 'active';
+      } else if (objective.planningState === 'Delegated') {
+        status = 'Queued for planning'; tone = 'queued';
+      }
+      if (project.paused && tone !== 'done' && tone !== 'ready') {
+        status = 'Project paused'; tone = 'idle';
+      }
+      return {
+        project: String(project.name || 'Project'),
+        description: String(objective.description || ''),
+        status, tone, accepted: Boolean(objective.acceptedAtUtc),
+        created: Date.parse(objective.createdAtUtc || '') || 0
+      };
+    }));
+  // Show the latest open assignment. If everything is accepted, retain the
+  // most recent completed item rather than falsely claiming there is work.
+  entries.sort((a,b) => Number(a.accepted) - Number(b.accepted) || b.created - a.created);
+  return entries[0] || null;
+}
+function developmentNeedsRefresh(data) {
+  const projects = Array.isArray(data?.projects) ? data.projects : [];
+  const batches = Array.isArray(data?.developmentBatches) ? data.developmentBatches : [];
+  return projects.some(p => (p.objectives || []).some(o =>
+    !o.acceptedAtUtc && ['Delegated','Planning','Reassessment queued'].includes(o.planningState))) ||
+    batches.some(b => b.armed || (b.tasks || []).some(t =>
+      ['Editing','Publishing','Testing','Repair queued'].includes(t.status)));
+}
+function renderDevelopmentPulse(data) {
+  const pulse = latestDevelopmentPulse(data);
+  const root = $('homeDevelopmentPulse');
+  root.dataset.tone = pulse?.tone || 'idle';
+  $('homeDevelopmentLabel').textContent = pulse?.project || 'No development assignments';
+  $('homeDevelopmentDetail').textContent = pulse?.description ||
+    'Tell Archer what to work on in a registered project.';
+  $('homeDevelopmentStatus').textContent = pulse?.status || 'IDLE';
+}
+
 function render() {
   const { missions, activity, conversation } = appState.data;
   // Server-persisted presentation choice works for browser and Windows
   // voice requests alike. No page reload or Developer interaction.
   $('archerView').dataset.layout = appState.data.homeLayout === 'split'
     ? 'split' : 'centered';
+  renderDevelopmentPulse(appState.data);
   $('statMissions').textContent = missions.length;
   $('statCompleted').textContent = missions.reduce((n, m) => n + m.tasks.filter(t => t.status === 'Completed').length, 0);
   $('statActive').textContent = missions.filter(m => ['Ready','Paused','Running'].includes(m.status)).length;
@@ -331,6 +394,13 @@ refresh().catch(error => {
 // with user operations. Completed reports can still be read while updating.
 window.setInterval(() => {
   if (appState.busy) return;
+  if (document.hidden) return;
   const running = appState.data.missions.some(m => m.autoRunEnabled || m.status === 'Running');
-  if (running) refresh().catch(error => console.warn('Archer refresh failed:', error.message));
+  if (running) {
+    refresh().catch(error => console.warn('Archer refresh failed:', error.message));
+  } else if (developmentNeedsRefresh(appState.data)) {
+    // Read-only status polling; no AI request, GitHub write, or approval.
+    api('/api/state').then(data => { appState.data = data; render(); })
+      .catch(error => console.warn('Development pulse refresh failed:', error.message));
+  }
 }, 5000);

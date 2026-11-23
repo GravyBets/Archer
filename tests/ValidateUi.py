@@ -53,6 +53,7 @@ assert 'data-state="idle"' in HTML
 required = {
     "archerPresence", "orbButton", "orbParticleField", "presenceStatus", "presenceActiveMissions",
     "presenceTasksToday", "presenceAttentionCount", "chatMessages", "chatForm",
+    "homeDevelopmentPulse", "homeDevelopmentLabel", "homeDevelopmentDetail", "homeDevelopmentStatus",
     "chatText", "voiceInputButton", "voiceReadToggle", "voiceReplayButton", "voiceTestButton", "voiceCopyDiagnostics", "voiceDiagnosticStatus",
     "realtimeVoiceStart", "realtimeVoiceEnd", "realtimeVoiceStatus",
     "voiceStopButton", "voiceSupportNote", "voiceChoiceSelect", "voiceRateSlider", "voiceRateValue",
@@ -255,6 +256,11 @@ assert 'Refresh-QuietSeconds' in NATIVE_VOICE
 assert 'Get-Event -SourceIdentifier' in NATIVE_VOICE
 assert 'class="archer-home-primary"' in HTML
 assert 'class="archer-presence-column"' in HTML
+assert HTML.index('id="homeDevelopmentPulse"') < HTML.index('id="chatMessages"'), "Coding pulse belongs directly above conversation history"
+assert 'renderDevelopmentPulse(appState.data)' in JS, "Home must render persisted coding progress"
+assert "developmentNeedsRefresh(appState.data)" in JS, "Active coding assignments should auto-refresh from read-only state"
+assert "api('/api/state').then(data => { appState.data = data; render(); })" in JS, "Live coding progress must not invoke an AI model or mutate work"
+
 # Orb and chat stay vertically ordered in one centered column on desktop.
 assert "grid-template-columns:minmax(0,1fr);" in CSS.split("/* v1.17", 1)[1].split(".archer-home-primary .archer-presence-column", 1)[0]
 assert HTML.index('class="archer-presence-column"') < HTML.index('class="panel archer-conversation"')

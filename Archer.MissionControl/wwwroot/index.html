@@ -63,6 +63,14 @@
             </div>
           <section class="panel archer-conversation" aria-label="Conversation with Archer">
             <div class="conversation-title"><div><h2>Conversation</h2><p>Talk, assign work, or pick up the thread.</p></div><span class="conversation-mode" id="conversationMode">TEXT READY</span></div>
+            <div id="homeDevelopmentPulse" class="archer-work-pulse" data-tone="idle" role="status" aria-live="polite" aria-label="Most recent coding assignment">
+              <span class="archer-work-kicker">DEVELOPMENT</span>
+              <div class="archer-work-copy">
+                <strong id="homeDevelopmentLabel">No development assignments</strong>
+                <span id="homeDevelopmentDetail">Tell Archer what to work on in a registered project.</span>
+              </div>
+              <span class="archer-work-status" id="homeDevelopmentStatus">IDLE</span>
+            </div>
             <div id="chatMessages" class="chat-messages" aria-live="off"></div>
             <form id="chatForm" class="chat-composer">
               <textarea id="chatText" rows="2" maxlength="3000" placeholder="Ask Archer something or give him a direction…" aria-label="Message to Archer"></textarea>
