@@ -479,11 +479,11 @@ var spokenReply = ConversationResearchResults.Answer(findingsState, spokenQuesti
 Check(spokenReply.Contains("Utility mapping teams") && spokenReply.Contains("GIS consultants") &&
     !spokenReply.Contains("https://") && spokenReply.Length < 420,
     "voice reads a short source-grounded takeaway without spelling out URLs");
-var structuredResearch = "# GeoShift customer research\\n\\n" +
-    "## Recommendation: target small broadband mapping consultants first\\n\\n" +
-    "GeoShift's best initial target is **small consulting firms** preparing KML/KMZ files for broadband providers.\\n\\n" +
-    "This is a hypothesis to test—not a verified customer segment.\\n\\n" +
-    "## Evidence and potential customers\\n\\nSupporting details.";
+var structuredResearch = "# GeoShift customer research\n\n" +
+    "## Recommendation: target small broadband mapping consultants first\n\n" +
+    "GeoShift's best initial target is **small consulting firms** preparing KML/KMZ files for broadband providers.\n\n" +
+    "This is a hypothesis to test—not a verified customer segment.\n\n" +
+    "## Evidence and potential customers\n\nSupporting details.";
 completedResearch.Artifacts[0].Content = structuredResearch;
 var voiceTakeaway = ConversationResearchResults.Answer(findingsState, spokenQuestion, voiceMode: true);
 Check(voiceTakeaway.Contains("small consulting firms") && voiceTakeaway.Contains("hypothesis") &&
