@@ -435,6 +435,73 @@ Check(ConversationAssignments.Parse("Hey Archer, fix Personal app's confusing em
 Check(ConversationAssignments.Parse("Can you work on an app sometime?", [talkProject]) is null, "ambiguous work request does not authorize paid coding");
 Check(ConversationAssignments.Status(conversationState).Contains("queued"), "status uses actual persisted assignment data");
 
+// A real owner spoke "Geo Shift" to the landing-page microphone. GeoShift
+// exists in GitHub but had not been registered in Archer's local state.
+var geoshiftRequest = "work on Geo Shift and improve the duplicate review workflow so skipped records are preserved correctly";
+Check(ConversationAssignments.LooksLikeAssignment(geoshiftRequest),
+    "spoken Geo Shift work request is recognized as a development command");
+Check(GeoShiftConversationSetup.IsRegistrationRequest("Archer, register Geo Shift") &&
+    !GeoShiftConversationSetup.IsRegistrationRequest("Can you explain how to register GeoShift?"),
+    "explicit owner registration, not questions, changes the project registry");
+var geoProfile = ProjectPolicy.Register(GeoShiftConversationSetup.Profile());
+Check(geoProfile.Repository == "GravyBets/GeoShift" && geoProfile.WorkflowFile == "archer-ci.yml" &&
+    geoProfile.VerificationJob == "GeoShift build and tests" &&
+    geoProfile.RequiredSteps.SequenceEqual(new[] { "Build Web", "Run core regression tests" }) &&
+    !geoProfile.AllowNewSourceFiles && geoProfile.CumulativeWorkspaces,
+    "onboarding profile is pinned to the real branch-independent GeoShift CI gates");
+Check(ConversationAssignments.Parse(geoshiftRequest, [geoProfile]) is { Project: "GeoShift" } parsedGeo &&
+    parsedGeo.Objective.StartsWith("improve the duplicate review workflow"),
+    "spoken Geo Shift is mapped to the canonical registered project and keeps the objective");
+Check(ConversationAssignments.Parse(
+    "work on GeoShifter and improve the duplicate review workflow", [geoProfile]) is null,
+    "unrelated lookalike project names cannot authorize GeoShift work");
+
+var newGeoState = new ArcherState();
+var geoSetup = ConversationAssignments.Assign(newGeoState, geoshiftRequest, _ => false, now);
+Check(!geoSetup.Accepted && newGeoState.Projects.Count == 1 &&
+    GeoShiftConversationSetup.IsGeoShift(newGeoState.Projects[0]) &&
+    newGeoState.Projects[0].Objectives.Count == 1,
+    "missing GeoShift is registered once and requested objective is saved without billing");
+var savedGeo = newGeoState.Projects[0].Objectives[0];
+Check(savedGeo.PlanningState == "Not delegated" && savedGeo.DelegatedUntilUtc is null &&
+    !savedGeo.PlanningAttempted && newGeoState.DevelopmentBatches.Count == 0 &&
+    geoSetup.Answer.Contains("No coding has started"),
+    "first voice onboarding cannot arm, plan or misrepresent coding");
+var beforeDuplicate = newGeoState.Projects[0].Id;
+var notReady = ConversationAssignments.Assign(newGeoState, geoshiftRequest, _ => false, now);
+Check(!notReady.Accepted && newGeoState.Projects.Count == 1 &&
+    newGeoState.Projects[0].Id == beforeDuplicate &&
+    newGeoState.Projects[0].Objectives.Count == 1 &&
+    savedGeo.PlanningState == "Not delegated",
+    "replayed owner voice cannot bypass missing credentials or duplicate projects");
+var geoAuthorized = ConversationAssignments.Assign(newGeoState, geoshiftRequest, _ => true, now);
+Check(geoAuthorized.Accepted && savedGeo.PlanningState == "Delegated" &&
+    savedGeo.DelegatedUntilUtc == now.AddHours(24) &&
+    newGeoState.Projects[0].Objectives.Count == 1,
+    "after independent setup, a second explicit owner command delegates the saved objective");
+Check(!ConversationAssignments.Assign(newGeoState, geoshiftRequest, _ => true, now).Accepted &&
+    newGeoState.Projects[0].Objectives.Count == 1,
+    "successful delegation is idempotent across speech transcript replays");
+
+var registerOnly = new ArcherState();
+var registeredGeo = ConversationAssignments.Assign(registerOnly, "Hey Archer, register GeoShift", _ => true, now);
+Check(!registeredGeo.Accepted && registerOnly.Projects.Count == 1 &&
+    registerOnly.Projects[0].Objectives.Count == 0 &&
+    registeredGeo.Answer.Contains("No coding has started"),
+    "explicit voice registration does not create an unwanted or paid development task");
+Check(registerOnly.Projects[0].Repository == "GravyBets/GeoShift" &&
+    !ConversationAssignments.Assign(registerOnly, "register Geo Shift", _ => true, now).Accepted &&
+    registerOnly.Projects.Count == 1,
+    "a second registration command cannot duplicate the project");
+var occupiedRegistry = new ArcherState();
+occupiedRegistry.Projects.Add(ProjectPolicy.Register(new("GeoShift", "other/GeoShift", ".NET",
+    ["src"], "ci.yml", "build", ["Build", "Test"])));
+Check(!ConversationAssignments.Assign(occupiedRegistry, geoshiftRequest, _ => true, now).Accepted &&
+    occupiedRegistry.Projects.Count == 1,
+    "a conflicting project name cannot silently be taken over");
+
+
+
 var spokenLayoutRequest = "can you adjust your own landing page I don't like the way the Archer landing page is looking can you put the orb back Center and then the chat box underneath the orb";
 Check(ConversationHomeLayout.Requested(spokenLayoutRequest) == ConversationHomeLayout.Centered,
     "natural owner request recognizes the centered orb with chat underneath");
