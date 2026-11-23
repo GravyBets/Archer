@@ -214,7 +214,9 @@ function latestDevelopmentPulse(data) {
     }));
   // Show the latest open assignment. If everything is accepted, retain the
   // most recent completed item rather than falsely claiming there is work.
-  entries.sort((a,b) => Number(a.accepted) - Number(b.accepted) || b.created - a.created);
+  // Actual in-flight development outranks newer but inactive requests.
+  entries.sort((a,b) => Number(b.tone === 'active') - Number(a.tone === 'active') ||
+    Number(a.accepted) - Number(b.accepted) || b.created - a.created);
   return entries[0] || null;
 }
 function developmentNeedsRefresh(data) {
@@ -245,8 +247,8 @@ function renderDevelopmentPulse(data) {
   const readiness = appState.projectReadiness.find(p => p.repository === pulse?.repository);
   const guidance = $('homeDevelopmentSetup');
   const missing = Array.isArray(readiness?.setup?.missing) ? readiness.setup.missing : [];
-  const needsSetup = Boolean(readiness && !readiness.enabled && missing.length &&
-    pulse?.status === 'Saved, not started');
+  const needsSetup = Boolean(readiness && !readiness.enabled && missing.length && pulse &&
+    pulse.tone !== 'active' && pulse.tone !== 'ready' && pulse.tone !== 'done');
   guidance.hidden = !needsSetup;
   if (needsSetup) {
     $('homeDevelopmentSetupText').textContent = 'Not running: ' + missing.slice(0, 2).join(' · ') +
