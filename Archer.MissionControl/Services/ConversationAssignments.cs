@@ -69,7 +69,9 @@ public static class ConversationAssignments
     {
         var command = Parse(input, state.Projects);
         if (command is null)
-            return new("Tell me which registered project and what result you want. For example, Work on Archer and improve the inbox.");
+            return LooksLikeSelfUiRequest(input.Trim())
+                ? new("Archer's protected self-development project isn't registered. I can't queue that edit until it's configured and authorized.")
+                : new("Tell me which registered project and what result you want. For example, Work on Archer and improve the inbox.");
         if (command.Objective.Length is < 15 or > 1000 || command.Objective.Any(char.IsControl))
             return new("Please describe one concrete result in 15 to 1,000 characters.");
         var matches = state.Projects.Where(p => string.Equals(p.Name, command.Project, StringComparison.OrdinalIgnoreCase)).ToArray();
