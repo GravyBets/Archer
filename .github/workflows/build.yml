@@ -111,6 +111,10 @@ jobs:
       - name: Check private owner state migration without touching data
         shell: pwsh
         run: ./tests/Test-ArcherStateMigration.ps1
+      - name: Verify bounded owner conversation archive review without private data
+        run: |
+          dotnet run --project tests/StateMergeChecks/StateMergeChecks.csproj --configuration Release
+          dotnet build Archer.StateMerge/Archer.StateMerge.csproj --configuration Release
       - name: Verify Windows package automation trusts only green main CI
         run: python3 tests/ValidateInstallerWorkflow.py
       - name: Check dashboard and presence JavaScript
