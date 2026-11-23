@@ -255,6 +255,11 @@ assert 'Refresh-QuietSeconds' in NATIVE_VOICE
 assert 'Get-Event -SourceIdentifier' in NATIVE_VOICE
 assert 'class="archer-home-primary"' in HTML
 assert 'class="archer-presence-column"' in HTML
+# Orb and chat stay vertically ordered in one centered column on desktop.
+assert "grid-template-columns:minmax(0,1fr);" in CSS.split("/* v1.17", 1)[1].split(".archer-home-primary .archer-presence-column", 1)[0]
+assert HTML.index('class="archer-presence-column"') < HTML.index('class="panel archer-conversation"')
+assert "max-width:1120px;" in CSS.split("/* v1.17", 1)[1]
+
 assert 'id="voicePauseValue"' in HTML
 assert 'id="voiceEndConversation"' in HTML
 assert "voiceSessionActive = handsFreeToggle.checked" in HOME_JS
