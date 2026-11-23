@@ -324,3 +324,45 @@ public static class GeoShiftConversationSetup
             : "GeoShift is registered, and I've saved that coding request. No coding has started. Configure scoped GitHub access and repository allowlists, then repeat the request to authorize a reviewable draft.");
     }
 }
+
+
+/// <summary>
+/// Owner-facing, read-only development setup checklist. Never includes token
+/// contents or grants authorization. Independent CI is checked by the worker
+/// before any paid planning, not inferred from these local settings.
+/// </summary>
+public static class ProjectSetupReadiness
+{
+    public sealed record Snapshot(bool Ready, string[] Missing);
+
+    private static bool InList(string variable, string repository) =>
+        (Environment.GetEnvironmentVariable(variable) ?? "")
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Contains(repository, StringComparer.OrdinalIgnoreCase);
+
+    public static Snapshot Evaluate(ManagedProject project, bool aiConfigured)
+    {
+        var missing = new List<string>();
+        if (project.Paused)
+            missing.Add("Project is paused");
+        if (!string.Equals(Environment.GetEnvironmentVariable("ARCHER_PROJECT_AUTONOMY_ENABLED"),
+            "true", StringComparison.OrdinalIgnoreCase))
+            missing.Add("Enable project autonomy");
+        if (!aiConfigured)
+            missing.Add("Configure the AI API key");
+        if (!string.Equals(Environment.GetEnvironmentVariable("ARCHER_CODING_ENABLED"),
+            "true", StringComparison.OrdinalIgnoreCase))
+            missing.Add("Enable coding");
+        if (!ProjectGitHubCredentials.IsConfigured(project.Repository))
+            missing.Add("Configure scoped GitHub read and write access");
+        if (!InList("ARCHER_GITHUB_ALLOWLIST", project.Repository))
+            missing.Add("Add repository to GitHub read allowlist");
+        if (!InList("ARCHER_GITHUB_WRITE_REPOS", project.Repository))
+            missing.Add("Add repository to GitHub write allowlist");
+        if (!SandboxPolicy.Configured(project))
+            missing.Add("Configure the required isolated sandbox");
+        if (!SelfDevelopmentPolicy.Configured(project))
+            missing.Add("Enable approved Archer self-development paths");
+        return new(missing.Count == 0, missing.ToArray());
+    }
+}

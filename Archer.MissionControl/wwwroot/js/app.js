@@ -1,7 +1,7 @@
 'use strict';
 
 const $ = (id) => document.getElementById(id);
-const appState = { data: { missions: [], activity: [], conversation: [] }, selectedMissionId: null, busy: false, configured: false };
+const appState = { data: { missions: [], activity: [], conversation: [] }, projectReadiness: [], selectedMissionId: null, busy: false, configured: false };
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -39,7 +39,8 @@ async function api(route, options = {}) {
   return body;
 }
 async function refresh() {
-  const [data, config, usage] = await Promise.all([api('/api/state'), api('/api/config'), api('/api/usage')]);
+  const [data, config, usage, projectReadiness] = await Promise.all([api('/api/state'), api('/api/config'), api('/api/usage'), api('/api/projects')]);
+  appState.projectReadiness = Array.isArray(projectReadiness) ? projectReadiness : [];
   appState.data = data;
   appState.configured = config.configured;
   $('statApi').textContent = config.configured ? 'KEY SET' : 'NO KEY';
@@ -104,6 +105,71 @@ function renderUsage(usage, routing) {
 }
 // Deterministic read-only owner summary; never mistake a queued draft for
 // merged code, or claim an AI worker is running unless task state shows it.
+// Repository links must come from an expected PR in the registered project.
+// Never render a user-supplied URL without checking origin, path and PR number.
+function trustedReviewUrl(repository, batch) {
+  if (!/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9_.-]{1,100}$/.test(String(repository || '')))
+    return null;
+  const number = Number(batch?.workspacePullRequestNumber);
+  const lastProposal = (batch?.tasks || []).map(t => t.proposal).filter(Boolean).at(-1);
+  const raw = lastProposal?.pullRequestUrl;
+  if (typeof raw === 'string') {
+    const match = raw.match(/^https:\/\/github\.com\/([A-Za-z0-9-]{1,39})\/([A-Za-z0-9_.-]{1,100})\/pull\/([1-9][0-9]*)$/);
+    if (match && (match[1] + '/' + match[2]).toLowerCase() === repository.toLowerCase())
+      return raw;
+  }
+  if (Number.isSafeInteger(number) && number > 0)
+    return 'https://github.com/' + repository + '/pull/' + number;
+  return null;
+}
+function paintWorkProgress(prefix, completed, total, active, planning = false, unit = 'verified') {
+  const root = $(prefix + 'Progress');
+  const bar = $(prefix + 'Bar');
+  const count = $(prefix + 'Count');
+  const hasTasks = Number.isInteger(total) && total > 0;
+  const progressVisible = Boolean(active || planning || hasTasks);
+  root.hidden = !progressVisible;
+  root.dataset.mode = hasTasks ? 'determinate' : (active || planning ? 'indeterminate' : 'idle');
+  const done = hasTasks ? Math.max(0, Math.min(total, completed || 0)) : 0;
+  bar.style.width = hasTasks ? Math.round(done * 100 / total) + '%' : '0%';
+  count.textContent = hasTasks ? done + ' of ' + total + ' tasks ' + unit : (active || planning ? 'Work in progress · tasks not yet known' : '');
+  // Only expose a numeric meter when actual task counts are available.
+  if (hasTasks) {
+    root.setAttribute('role', 'progressbar');
+    root.setAttribute('aria-valuemin', '0');
+    root.setAttribute('aria-valuemax', String(total));
+    root.setAttribute('aria-valuenow', String(done));
+    root.setAttribute('aria-valuetext', count.textContent);
+  } else {
+    root.setAttribute('role', 'status');
+    root.removeAttribute('aria-valuenow');
+    root.removeAttribute('aria-valuemax');
+    root.removeAttribute('aria-valuemin');
+    root.removeAttribute('aria-valuetext');
+  }
+}
+function activeMissionProgress(missions) {
+  return (Array.isArray(missions) ? missions : []).filter(m =>
+    m.status === 'Running' || m.autoRunEnabled ||
+    (m.tasks || []).some(t => t.status === 'Running')).sort((a,b) =>
+      (Date.parse(b.updatedAtUtc || '') || 0) - (Date.parse(a.updatedAtUtc || '') || 0))[0] || null;
+}
+function renderMissionProgress(missions) {
+  const mission = activeMissionProgress(missions);
+  const root = $('homeMissionPulse');
+  root.hidden = !mission;
+  if (!mission) return;
+  $('homeMissionLabel').textContent = mission.title || 'Active mission';
+  $('homeMissionStatus').textContent = mission.status === 'Running' ? 'WORKING' : 'AUTO-RUN ON';
+  const tasks = Array.isArray(mission.tasks) ? mission.tasks : [];
+  const completed = tasks.filter(t => t.status === 'Completed').length;
+  const total = tasks.length;
+  paintWorkProgress('homeMission', completed, total, true, false, 'complete');
+  $('homeMissionCount').textContent = total
+    ? completed + ' of ' + total + ' mission steps complete'
+    : 'Planning mission · steps not yet known';
+}
+
 function latestDevelopmentPulse(data) {
   const projects = Array.isArray(data?.projects) ? data.projects : [];
   const batches = Array.isArray(data?.developmentBatches) ? data.developmentBatches : [];
@@ -138,12 +204,19 @@ function latestDevelopmentPulse(data) {
         project: String(project.name || 'Project'),
         description: String(objective.description || ''),
         status, tone, accepted: Boolean(objective.acceptedAtUtc),
-        created: Date.parse(objective.createdAtUtc || '') || 0
+        created: Date.parse(objective.createdAtUtc || '') || 0,
+        batch, repository: String(project.repository || ''),
+        completed: states.filter(s => s === 'Verified').length, total: states.length,
+        planning: objective.planningState === 'Planning',
+        reviewUrl: states.length && states.every(s => s === 'Verified')
+          ? trustedReviewUrl(project.repository, batch) : null
       };
     }));
   // Show the latest open assignment. If everything is accepted, retain the
   // most recent completed item rather than falsely claiming there is work.
-  entries.sort((a,b) => Number(a.accepted) - Number(b.accepted) || b.created - a.created);
+  // Actual in-flight development outranks newer but inactive requests.
+  entries.sort((a,b) => Number(b.tone === 'active') - Number(a.tone === 'active') ||
+    Number(a.accepted) - Number(b.accepted) || b.created - a.created);
   return entries[0] || null;
 }
 function developmentNeedsRefresh(data) {
@@ -162,6 +235,25 @@ function renderDevelopmentPulse(data) {
   $('homeDevelopmentDetail').textContent = pulse?.description ||
     'Tell Archer what to work on in a registered project.';
   $('homeDevelopmentStatus').textContent = pulse?.status || 'IDLE';
+  const active = pulse?.tone === 'active';
+  paintWorkProgress('homeDevelopment', pulse?.completed || 0, pulse?.total || 0,
+    active, Boolean(pulse?.planning));
+  const progress = $('homeDevelopmentProgress');
+  progress.hidden = !pulse || (!active && pulse.tone !== 'ready' && !(pulse.total > 0));
+  const review = $('homeDevelopmentReview');
+  review.hidden = !(pulse?.tone === 'ready' && pulse.reviewUrl);
+  if (!review.hidden) review.href = pulse.reviewUrl;
+  else review.removeAttribute('href');
+  const readiness = appState.projectReadiness.find(p => p.repository === pulse?.repository);
+  const guidance = $('homeDevelopmentSetup');
+  const missing = Array.isArray(readiness?.setup?.missing) ? readiness.setup.missing : [];
+  const needsSetup = Boolean(readiness && !readiness.enabled && missing.length && pulse &&
+    pulse.tone !== 'active' && pulse.tone !== 'ready' && pulse.tone !== 'done');
+  guidance.hidden = !needsSetup;
+  if (needsSetup) {
+    $('homeDevelopmentSetupText').textContent = 'Not running: ' + missing.slice(0, 2).join(' · ') +
+      (missing.length > 2 ? ' · ' + (missing.length - 2) + ' more checks' : '');
+  }
 }
 
 function render() {
@@ -171,6 +263,7 @@ function render() {
   $('archerView').dataset.layout = appState.data.homeLayout === 'split'
     ? 'split' : 'centered';
   renderDevelopmentPulse(appState.data);
+  renderMissionProgress(missions);
   $('statMissions').textContent = missions.length;
   $('statCompleted').textContent = missions.reduce((n, m) => n + m.tasks.filter(t => t.status === 'Completed').length, 0);
   $('statActive').textContent = missions.filter(m => ['Ready','Paused','Running'].includes(m.status)).length;
@@ -395,7 +488,7 @@ refresh().catch(error => {
 window.setInterval(() => {
   if (appState.busy) return;
   if (document.hidden) return;
-  const running = appState.data.missions.some(m => m.autoRunEnabled || m.status === 'Running');
+  const running = Boolean(activeMissionProgress(appState.data.missions));
   if (running) {
     refresh().catch(error => console.warn('Archer refresh failed:', error.message));
   } else if (developmentNeedsRefresh(appState.data)) {

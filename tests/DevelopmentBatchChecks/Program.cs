@@ -49,6 +49,19 @@ var fake = new FakeGitHub();
 using var http = new HttpClient(fake);
 var verifier = new ProjectCiVerifier(http);
 var geo = ProjectPolicy.Register(new("GeoShift", "GravyBets/GeoShift", ".NET", ["GeoShift.Core"], "archer-ci.yml", "GeoShift build and tests", ["Build Web", "Run core regression tests"]));
+var readiness = ProjectSetupReadiness.Evaluate(geo, aiConfigured: false);
+Check(!readiness.Ready &&
+    readiness.Missing.Contains("Configure the AI API key") &&
+    readiness.Missing.Contains("Configure scoped GitHub read and write access"),
+    "owner setup diagnostics identify missing independent prerequisites but never authorize work");
+Check(!string.Join(" ", readiness.Missing).Contains("_TOKEN") &&
+    !string.Join(" ", readiness.Missing).Contains("ghp_") &&
+    !string.Join(" ", readiness.Missing).Contains("github_pat_"),
+    "owner status never prints access token names or secret values");
+geo.Paused = true;
+Check(ProjectSetupReadiness.Evaluate(geo, aiConfigured: false).Missing.Contains("Project is paused"),
+    "a paused project is visibly stopped, not presented as working");
+geo.Paused = false;
 var other = ProjectPolicy.Register(new("Future app", "owner/future", "TypeScript", ["src"], "quality.yml", "Quality", ["Compile", "Test"], 5, 2));
 var proposal = new CodeProposal { Repository = "GravyBets/GeoShift", BaseBranch = "master",
     BranchName = "archer/draft-example", PublishedHeadSha = new string('a',40), PullRequestNumber = 7 };
