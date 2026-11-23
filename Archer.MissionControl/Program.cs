@@ -1036,6 +1036,7 @@ app.MapPost("/api/companion/message", async Task<IResult> (HttpContext context, 
         // Phone input is authorized by a separately authenticated, enrolled
         // owner gateway. Only the same explicit assignment parser may write.
         var homeLayoutHandled = ConversationHomeLayout.IsLocallyHandled(message);
+        var operatorHandled = ConversationOperatorControls.IsRequest(message);
         if (homeLayoutHandled || operatorHandled || ConversationAssignments.LooksLikeAssignment(message) ||
             ConversationAssignments.IsStatusRequest(message) ||
             ConversationResearch.LooksLikeResearch(message) || ConversationResearchResults.IsRequest(message))
