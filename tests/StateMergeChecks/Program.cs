@@ -36,6 +36,42 @@ Check(result.ProposedState["projects"]!.ToJsonString() == visual["projects"]!.To
       result.ProposedState["unknownFutureFeature"]!.ToJsonString() == visual["unknownFutureFeature"]!.ToJsonString(),
     "preserves authoritative project permissions, coding state and future fields");
 Check(visual.ToJsonString() == original && installed.ToJsonString() == installedOriginal, "never mutates input snapshots");
+
+var legacyInstalled = (JsonObject)installed.DeepClone();
+legacyInstalled.Remove("projects");
+legacyInstalled.Remove("developmentBatches");
+var legacyResult = StateMerger.Analyze(original, legacyInstalled.ToJsonString());
+Check(legacyResult.InstalledMessages == 78 && legacyResult.NewMessages == 78 &&
+    legacyResult.FullConversationArchive.Count == 104,
+    "older installed Archer without project/batch fields retains all conversation history");
+Check(legacyResult.ProposedState["projects"]!.ToJsonString() == visual["projects"]!.ToJsonString() &&
+    legacyResult.ProposedState["developmentBatches"]!.ToJsonString() == visual["developmentBatches"]!.ToJsonString(),
+    "legacy secondary data cannot overwrite authoritative development records");
+var malformedLegacy = (JsonObject)legacyInstalled.DeepClone();
+malformedLegacy["projects"] = "not-an-array";
+try
+{
+    StateMerger.Analyze(original, malformedLegacy.ToJsonString());
+    throw new Exception("Malformed legacy project field was accepted");
+}
+catch (InvalidDataException) { Check(true, "rejects present malformed legacy project metadata"); }
+var missingVisualMetadata = (JsonObject)visual.DeepClone();
+missingVisualMetadata.Remove("developmentBatches");
+try
+{
+    StateMerger.Analyze(missingVisualMetadata.ToJsonString(), legacyInstalled.ToJsonString());
+    throw new Exception("Missing primary development records were accepted");
+}
+catch (InvalidDataException) { Check(true, "requires Visual Studio's authoritative project and batch arrays"); }
+var missingLegacyChat = (JsonObject)legacyInstalled.DeepClone();
+missingLegacyChat.Remove("conversation");
+try
+{
+    StateMerger.Analyze(original, missingLegacyChat.ToJsonString());
+    throw new Exception("Missing legacy conversations were treated as empty");
+}
+catch (InvalidDataException) { Check(true, "refuses missing conversation history instead of silently losing it"); }
+
 var archive = (JsonArray)result.FullConversationArchive;
 Check(archive[0]!["content"]!.GetValue<string>() == "secret installed 0" &&
       archive.Last()!["content"]!.GetValue<string>() == "secret dev 25", "restores chronological order");
