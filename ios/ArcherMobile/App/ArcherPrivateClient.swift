@@ -3,13 +3,36 @@ import CryptoKit
 
 struct ArcherOverview: Decodable {
     struct Message: Decodable, Identifiable { let id: UUID; let role: String; let content: String }
-    struct Assignment: Decodable, Identifiable { let id: UUID; let project: String; let title: String; let status: String }
+    struct Assignment: Decodable, Identifiable {
+        let id: UUID
+        let project: String
+        let title: String
+        let status: String
+        // Optional for compatibility with previously deployed private
+        // gateways. An unknown total must not be rendered as 0% progress.
+        let verifiedTasks: Int?
+        let totalTasks: Int?
+        let reviewUrl: String?
+
+        var recordedReviewURL: URL? {
+            guard status == "ready for review", let reviewUrl,
+                  let url = URL(string: reviewUrl),
+                  let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                  parts.scheme == "https", parts.host == "github.com",
+                  parts.user == nil, parts.password == nil,
+                  parts.port == nil, parts.query == nil, parts.fragment == nil,
+                  parts.path.range(of: #"^/[A-Za-z0-9-]{1,39}/[A-Za-z0-9_.-]{1,100}/pull/[1-9][0-9]*$"#,
+                                   options: .regularExpression) != nil else { return nil }
+            return url
+        }
+    }
     struct Alert: Decodable, Identifiable { let id: UUID; let title: String; let summary: String; let priority: String }
     let conversation: [Message]
     struct Research: Decodable, Identifiable { let id: UUID; let title: String; let status: String; let findings: String? }
     let research: [Research]
     let assignments: [Assignment]
     let alerts: [Alert]
+    let overnightSummary: String?
 }
 struct ArcherMessageResult: Decodable { let status: String; let answer: String? }
 
