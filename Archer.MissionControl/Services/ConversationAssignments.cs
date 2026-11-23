@@ -133,33 +133,85 @@ public static class ConversationHomeLayout
     public const string Centered = "centered";
     public const string Split = "split";
 
+    // A small set of non-privileged, reversible presentation controls.
+    // Do not treat general questions or arbitrary speech as code commands.
     private static readonly Regex Directive = new(
-        @"^(?:(?:hey\s+)?archer[,!:]?\s+)?(?:(?:please|can\s+you|could\s+you|i\s+want\s+you\s+to|go\s+ahead\s+and)\s+)?(?:put|move|center|centre|adjust|change|rearrange|redesign|set|switch|fix|update)\b",
+        @"^(?:(?:hey\s+)?archer[,!:]?\s+)?(?:(?:(?:yeah|yes|yep|definitely|right|sure)[,!\s]+){1,4})?(?:(?:please|can\s+you|could\s+you|i\s+want\s+you\s+to|go\s+ahead\s+and)\s+)?(?:put|move|center|centre|adjust|change|rearrange|redesign|set|switch|fix|update)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
 
     private static readonly Regex Orb = new(@"\borb\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+    private static readonly Regex MisheardOrb = new(@"\bword\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
     private static readonly Regex Chat = new(@"\b(?:chat|conversation)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-    private static readonly Regex Center = new(@"\b(?:center|centre|middle)\b",
+    private static readonly Regex Center = new(@"\b(?:center(?:ed)?|centre(?:d)?|middle)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
     private static readonly Regex Under = new(@"\b(?:under|underneath|below|beneath)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
     private static readonly Regex Beside = new(@"\b(?:beside|alongside|side[\s-]+by[\s-]+side|next\s+to|two[\s-]+columns)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+    private static readonly Regex StatusQuestion = new(
+        @"^(?:(?:hey\s+)?archer[,!:]?\s+)?(?:where\s+is|is|are|did|have|what(?:'s|\s+is)|can\s+you\s+(?:actually|really)|why\s+(?:can't|cant))\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+    private static readonly Regex Thanks = new(
+        @"^(?:(?:oh|ah|well|yeah|yes|finally|jesus|christ|is|for)\s+){0,5}(?:thanks|thank\s+you|cheers)[!. ]*$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
 
     public static string? Requested(string? message)
     {
         if (string.IsNullOrWhiteSpace(message)) return null;
         var text = message.Trim();
-        if (text.Length > 1000 || !Directive.IsMatch(text) ||
-            !Orb.IsMatch(text) || !Chat.IsMatch(text))
-            return null;
+        if (text.Length > 1000 || !Directive.IsMatch(text) || !Chat.IsMatch(text)) return null;
+
+        // Windows dictation sometimes transcribes "orb" as "word".
+        // Only accept that variant with a clear center + below request,
+        // never as a free-form or ambiguous change instruction.
+        var hasOrb = Orb.IsMatch(text);
+        var hasMisheardOrb = !hasOrb && MisheardOrb.IsMatch(text);
+        if (!hasOrb && !hasMisheardOrb) return null;
         if (Center.IsMatch(text) && Under.IsMatch(text) && !Beside.IsMatch(text))
             return Centered;
-        if (Beside.IsMatch(text) && !Under.IsMatch(text))
+        if (hasOrb && Beside.IsMatch(text) && !Under.IsMatch(text))
             return Split;
         return null;
+    }
+
+    public static bool IsStatusQuestion(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return false;
+        var text = message.Trim();
+        return text.Length <= 220 && StatusQuestion.IsMatch(text) &&
+            (Orb.IsMatch(text) || (text.Contains("layout", StringComparison.OrdinalIgnoreCase) ||
+                                    text.Contains("landing page", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    public static bool IsAcknowledgement(string? message) =>
+        !string.IsNullOrWhiteSpace(message) && message.Length <= 100 && Thanks.IsMatch(message.Trim());
+
+    public static bool IsLocallyHandled(string? message) =>
+        Requested(message) is not null || IsStatusQuestion(message) || IsAcknowledgement(message);
+
+    public static string Answer(ArcherState state, string message)
+    {
+        var requested = Requested(message);
+        if (requested is not null) return Apply(state, requested);
+        if (IsStatusQuestion(message))
+            return state.HomeLayout == Split
+                ? "The orb is beside the chat right now. That's the saved layout."
+                : "The orb is centered, and the chat is underneath it. That's the saved layout.";
+        if (IsAcknowledgement(message))
+        {
+            var recent = state.Conversation.LastOrDefault(e => e.Role == "assistant")?.Content ?? "";
+            var justChangedLayout = recent is "Done. I've centered the orb and moved the chat underneath it." or
+                "Done. I've put the orb beside the chat." or
+                "The orb is already centered, with the chat underneath." or
+                "The orb and chat are already side by side.";
+            return justChangedLayout
+                ? "You're welcome. Finally, the furniture's where it belongs."
+                : "You're welcome.";
+        }
+        return "I didn't change the layout. Tell me where you'd like the orb and chat.";
     }
 
     public static string Apply(ArcherState state, string layout)

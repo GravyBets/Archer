@@ -962,16 +962,16 @@ app.MapPost("/api/chat", async Task<IResult> (HttpContext context, ChatRequest r
     if (message.Length is < 1 or > 3000) return Results.BadRequest(new { error = "Message must be 1–3000 characters." });
     try
     {
-        var requestedHomeLayout = ConversationHomeLayout.Requested(message);
+        var homeLayoutHandled = ConversationHomeLayout.IsLocallyHandled(message);
         if (request.DirectOwnerInput && LocalDevelopmentRequest(context) &&
-            (requestedHomeLayout is not null || ConversationAssignments.LooksLikeAssignment(message) ||
+            (homeLayoutHandled || ConversationAssignments.LooksLikeAssignment(message) ||
              ConversationAssignments.IsStatusRequest(message) ||
              ConversationResearch.LooksLikeResearch(message) || ConversationResearchResults.IsRequest(message)))
         {
             var localAnswer = await store.UpdateAsync(state =>
             {
-                var result = requestedHomeLayout is not null
-                    ? ConversationHomeLayout.Apply(state, requestedHomeLayout)
+                var result = homeLayoutHandled
+                    ? ConversationHomeLayout.Answer(state, message)
                     : ConversationResearchResults.IsRequest(message)
                     ? ConversationResearchResults.Answer(state, message, request.VoiceMode)
                     : ConversationAssignments.IsStatusRequest(message)
@@ -1032,15 +1032,15 @@ app.MapPost("/api/companion/message", async Task<IResult> (HttpContext context, 
     {
         // Phone input is authorized by a separately authenticated, enrolled
         // owner gateway. Only the same explicit assignment parser may write.
-        var requestedHomeLayout = ConversationHomeLayout.Requested(message);
-        if (requestedHomeLayout is not null || ConversationAssignments.LooksLikeAssignment(message) ||
+        var homeLayoutHandled = ConversationHomeLayout.IsLocallyHandled(message);
+        if (homeLayoutHandled || ConversationAssignments.LooksLikeAssignment(message) ||
             ConversationAssignments.IsStatusRequest(message) ||
             ConversationResearch.LooksLikeResearch(message) || ConversationResearchResults.IsRequest(message))
         {
             var result = await store.UpdateAsync(s =>
             {
-                var answer = requestedHomeLayout is not null
-                    ? ConversationHomeLayout.Apply(s, requestedHomeLayout)
+                var answer = homeLayoutHandled
+                    ? ConversationHomeLayout.Answer(s, message)
                     : ConversationResearchResults.IsRequest(message)
                     ? ConversationResearchResults.Answer(s, message, request.VoiceMode)
                     : ConversationAssignments.IsStatusRequest(message)

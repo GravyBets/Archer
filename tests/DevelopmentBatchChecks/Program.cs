@@ -467,6 +467,44 @@ Check(ConversationHomeLayout.Apply(layoutState, "unsupported").Contains("Nothing
 Check(ConversationAssignments.Parse("Archer work on Archer and improve a registered pilot inbox feature.", [selfProfile]) is { Project: "Archer" },
     "explicit protected self-code assignments still use the guarded development route");
 
+// The exact owner voice transcript revealed two failures: "orb" became
+// "word", then an AI follow-up contradicted a genuinely saved change.
+var transcribedWord = "put the word back in the center and the chat underneath it";
+Check(ConversationHomeLayout.Requested(transcribedWord) == ConversationHomeLayout.Centered,
+    "Windows speech 'word' mishearing is accepted only with explicit center and chat-below intent");
+Check(ConversationHomeLayout.Requested("put the word beside the chat") is null &&
+    ConversationHomeLayout.Requested("move the word to the center") is null,
+    "misheard word alone cannot trigger an ambiguous or split layout change");
+var transcribedConfirmation = "yeah yeah definitely put the orb centered with the chat underneath yeah";
+Check(ConversationHomeLayout.Requested(transcribedConfirmation) == ConversationHomeLayout.Centered,
+    "voice confirmation with filler words and 'centered' is handled locally");
+Check(ConversationHomeLayout.Requested("put the orb back in the center in the chat underneath it") == ConversationHomeLayout.Centered,
+    "conversational center and under request tolerates 'in the chat' speech recognition");
+layoutState.HomeLayout = ConversationHomeLayout.Split;
+var healedReply = ConversationHomeLayout.Answer(layoutState, transcribedWord);
+Check(healedReply.StartsWith("Done.") && layoutState.HomeLayout == ConversationHomeLayout.Centered,
+    "recognized transcription applies persisted layout and can truthfully confirm success");
+var repeatReply = ConversationHomeLayout.Answer(layoutState, transcribedConfirmation);
+Check(repeatReply.Contains("already") && layoutState.HomeLayout == ConversationHomeLayout.Centered,
+    "explicit repeated confirmation reads current layout, without claiming it cannot change");
+Check(ConversationHomeLayout.IsLocallyHandled("is the orb centered") &&
+    ConversationHomeLayout.Answer(layoutState, "is the orb centered").Contains("saved layout"),
+    "layout status questions use authoritative persisted state, without an AI denial");
+Check(ConversationHomeLayout.IsLocallyHandled("is Christ thanks") &&
+    ConversationHomeLayout.Answer(layoutState, "is Christ thanks").Contains("welcome") &&
+    layoutState.HomeLayout == ConversationHomeLayout.Centered,
+    "speech-transcribed thanks is acknowledged rather than retracting a real change");
+Check(!ConversationHomeLayout.IsLocallyHandled("can you explain how to move the orb beside the chat") &&
+    !ConversationHomeLayout.IsLocallyHandled("put the chart below the text"),
+    "non-command discussion and unrelated content cannot change layout");
+Check(ConversationHomeLayout.Answer(layoutState, "can you move the orb beside the chat").Contains("Done.") &&
+    layoutState.HomeLayout == ConversationHomeLayout.Split,
+    "next request can intentionally switch layout and confirms actual state");
+Check(System.Text.Json.JsonSerializer.Deserialize<ArcherState>(
+    System.Text.Json.JsonSerializer.Serialize(layoutState))?.HomeLayout == ConversationHomeLayout.Split,
+    "confirmed voice layout state survives save and reload");
+
+
 var researchState = new ArcherState();
 var research = ConversationResearch.Queue(researchState, "Archer, research competing geographic data conversion services.", now);
 Check(research.Accepted && researchState.Missions.Count == 1 &&
