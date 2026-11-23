@@ -541,9 +541,9 @@ Check(overnight.Contains("last 12 hours") &&
 // The private iPhone overview is one authenticated read-only snapshot.
 // Show real task counts and only a numeric PR under the *same* repo after
 // every recorded coding task verifies. It cannot authorize acceptance.
-var phoneState = new ArcherState();
+var phoneOverviewState = new ArcherState();
 var phoneProject = ProjectPolicy.Register(GeoShiftConversationSetup.Profile());
-phoneState.Projects.Add(phoneProject);
+phoneOverviewState.Projects.Add(phoneProject);
 var phoneObjective = new ProjectObjective { Description = "Review duplicate preservation",
     PlanningState = "Batch created" };
 phoneProject.Objectives.Add(phoneObjective);
@@ -553,9 +553,9 @@ var phoneBatch = new DevelopmentBatch
     Armed = false, WorkspacePullRequestNumber = 42,
     Tasks = [new DevelopmentTask { Status = "Verified" }, new DevelopmentTask { Status = "Verified" }]
 };
-phoneState.DevelopmentBatches.Add(phoneBatch);
+phoneOverviewState.DevelopmentBatches.Add(phoneBatch);
 var phoneSnapshot = System.Text.Json.JsonSerializer.SerializeToElement(
-    CompanionBridge.Overview(phoneState), new System.Text.Json.JsonSerializerOptions(
+    CompanionBridge.Overview(phoneOverviewState), new System.Text.Json.JsonSerializerOptions(
         System.Text.Json.JsonSerializerDefaults.Web));
 var phoneRow = phoneSnapshot.GetProperty("assignments")[0];
 Check(phoneRow.GetProperty("project").GetString() == "GeoShift" &&
@@ -568,7 +568,7 @@ Check(phoneSnapshot.GetProperty("overnightSummary").GetString()?.Contains("last 
     "iPhone owner overview includes a factual, read-only overnight summary");
 phoneBatch.Tasks[1].Status = "Testing";
 phoneRow = System.Text.Json.JsonSerializer.SerializeToElement(
-    CompanionBridge.Overview(phoneState), new System.Text.Json.JsonSerializerOptions(
+    CompanionBridge.Overview(phoneOverviewState), new System.Text.Json.JsonSerializerOptions(
         System.Text.Json.JsonSerializerDefaults.Web)).GetProperty("assignments")[0];
 Check(phoneRow.GetProperty("verifiedTasks").GetInt32() == 1 &&
     phoneRow.GetProperty("totalTasks").GetInt32() == 2 &&
