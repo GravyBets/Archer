@@ -44,7 +44,9 @@ $script:mutexHeld = $false
 $script:pauseItem = $null
 $script:engineRunning = $false
 $script:eventRegistration = $null
-$script:quietSeconds = 2.0
+$script:quietSeconds = 1.5
+$script:preferenceFile = Join-Path $DataDir 'desktop-voice-preferences.json'
+$script:lastPreferenceRead = [DateTime]::MinValue
 $script:idleSeconds = 120.0
 $script:base = 'http://127.0.0.1:5087'
 
@@ -74,6 +76,25 @@ function Refresh-Heartbeat {
   if (([DateTime]::UtcNow - $script:lastHeartbeat).TotalSeconds -ge 2) {
     Write-VoiceStatus $script:state $script:detail
   }
+}
+
+function Refresh-QuietSeconds {
+  # Preferences live in Archer's local Data folder, never in the speech log.
+  # Poll at most twice per second; malformed/partial files keep the last good value.
+  if (([DateTime]::UtcNow - $script:lastPreferenceRead).TotalMilliseconds -lt 500) { return }
+  $script:lastPreferenceRead = [DateTime]::UtcNow
+  try {
+    if (-not (Test-Path -LiteralPath $script:preferenceFile)) { return }
+    $file = Get-Item -LiteralPath $script:preferenceFile
+    if ($file.Length -gt 2048) { return }
+    $settings = Get-Content -LiteralPath $script:preferenceFile -Raw | ConvertFrom-Json
+    $value = [double]$settings.pauseSeconds
+    if (-not [double]::IsNaN($value) -and -not [double]::IsInfinity($value) -and
+        $value -ge 0.5 -and $value -le 30.0 -and
+        ($value * 2) -eq [Math]::Round($value * 2)) {
+      $script:quietSeconds = $value
+    }
+  } catch { } # Never stop recognition because a preference was edited.
 }
 
 function Listen-For-Wake {
@@ -233,6 +254,7 @@ try {
   $script:eventRegistration = Register-ObjectEvent -InputObject $script:recognizer -EventName SpeechRecognized -SourceIdentifier 'ArcherDesktopVoiceRecognized'
   $script:recognizer.RecognizeAsync([System.Speech.Recognition.RecognizeMode]::Multiple)
   $script:engineRunning = $true
+  Refresh-QuietSeconds
   Listen-For-Wake
   $script:lastHealth = [DateTime]::UtcNow
 
@@ -245,8 +267,10 @@ try {
       break
     }
     [System.Windows.Forms.Application]::DoEvents()
-    $event = Wait-Event -SourceIdentifier 'ArcherDesktopVoiceRecognized' -Timeout 1
-    if ($null -ne $event) {
+    # Sub-second polling is necessary for genuine 0.5-second steps.
+    # Wait-Event -Timeout accepts whole seconds and would add ~1 second.
+    $events = @(Get-Event -SourceIdentifier 'ArcherDesktopVoiceRecognized' -ErrorAction SilentlyContinue)
+    foreach ($event in $events) {
       Remove-Event -EventIdentifier $event.EventIdentifier -ErrorAction SilentlyContinue
       if (-not $script:paused -and $null -ne $event.SourceEventArgs -and
           $null -ne $event.SourceEventArgs.Result) {
@@ -265,10 +289,11 @@ try {
           }
           $script:lastSpeech = [DateTime]::UtcNow
           $script:lastActivity = $script:lastSpeech
-          Write-VoiceStatus 'awake' 'Heard your speech. Waiting two seconds for a possible continuation.'
+          Write-VoiceStatus 'awake' ("Heard your speech. Waiting $($script:quietSeconds) seconds for a possible continuation.")
         }
       }
     }
+    Refresh-QuietSeconds
     if ($script:paused) {
       if ($script:state -ne 'paused') {
         $script:wakeGrammar.Enabled = $false
@@ -297,6 +322,8 @@ try {
       Check-Local-Server
     }
     Refresh-Heartbeat
+    # Short sleep keeps the tray responsive without busy-spinning.
+    Start-Sleep -Milliseconds 90
   }
 } catch {
   Write-VoiceStatus 'error' ('Windows microphone listener failed: ' + $_.Exception.Message)

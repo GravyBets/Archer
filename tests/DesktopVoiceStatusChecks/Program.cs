@@ -13,6 +13,27 @@ var root = Path.Combine(Path.GetTempPath(), "archer-desktop-voice-test-" +
 Directory.CreateDirectory(root);
 try
 {
+    Check(ArcherDesktopVoicePreferences.Read(root) == 1.5,
+        "fresh Windows voice defaults to a 1.5-second pause");
+    foreach (var delay in new[] { 0.5, 1.5, 2.0, 18.5, 30.0 })
+    {
+        Check(ArcherDesktopVoicePreferences.Valid(delay),
+            "half-second pause step accepted: " + delay);
+        ArcherDesktopVoicePreferences.Write(root, delay);
+        Check(ArcherDesktopVoicePreferences.Read(root) == delay,
+            "Windows voice pause persists across reloads: " + delay);
+    }
+    foreach (var invalid in new[] { 0.0, 0.25, 1.25, 30.5, double.NaN, double.PositiveInfinity })
+        Check(!ArcherDesktopVoicePreferences.Valid(invalid),
+            "invalid voice pause rejected: " + invalid);
+    var refused = false;
+    try { ArcherDesktopVoicePreferences.Write(root, 1.25); }
+    catch (ArgumentException) { refused = true; }
+    Check(refused && ArcherDesktopVoicePreferences.Read(root) == 30.0,
+        "invalid half step cannot modify saved preference");
+    File.WriteAllText(Path.Combine(root, ArcherDesktopVoicePreferences.FileName), "bad json");
+    Check(ArcherDesktopVoicePreferences.Read(root) == 1.5,
+        "corrupt native voice preference safely returns to default");
     var path = Path.Combine(root, "desktop-voice-status.json");
     Check(!ArcherDesktopVoiceStatus.Read(root).Running,
         "no native companion process means no implied active microphone");

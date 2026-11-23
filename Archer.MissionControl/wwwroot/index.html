@@ -31,10 +31,12 @@
       <div class="workspace">
         <div id="notice" class="notice hidden" role="alert"></div>
         <section id="archerView" class="view archer-home" aria-labelledby="archerTitle">
+          <div class="archer-home-primary">
+            <div class="archer-presence-column">
           <div class="archer-intro">
             <div class="eyebrow">YOUR PERSONAL OPERATOR <span class="eyebrow-line"></span></div>
             <h1 id="archerTitle">Archer<span class="accent">.</span></h1>
-            <p>Talk naturally. Your missions and conversations stay close.</p>
+            <p>One conversation. Real work. The occasional raised eyebrow.</p>
           </div>
           <div class="presence-stage" id="archerPresence" data-state="idle" aria-label="Archer presence indicator">
             <div class="presence-backlight"></div>
@@ -58,8 +60,9 @@
             <button type="button" class="presence-metric" data-go-view="missions"><span class="metric-caption">TASKS TODAY</span><strong id="presenceTasksToday">0</strong><small>Completed locally</small></button>
             <button type="button" class="presence-metric" data-go-view="attention"><span class="metric-caption">NEEDS ATTENTION</span><strong id="presenceAttentionCount">0</strong><small>Failed mission tasks</small></button>
           </div>
+            </div>
           <section class="panel archer-conversation" aria-label="Conversation with Archer">
-            <div class="conversation-title"><div><h2>Conversation</h2><p>Tell Archer what to work on, ask for research, or get an update—by voice or text.</p></div><span class="conversation-mode" id="conversationMode">TEXT READY</span></div>
+            <div class="conversation-title"><div><h2>Conversation</h2><p>Talk, assign work, or pick up the thread.</p></div><span class="conversation-mode" id="conversationMode">TEXT READY</span></div>
             <div id="chatMessages" class="chat-messages" aria-live="off"></div>
             <form id="chatForm" class="chat-composer">
               <textarea id="chatText" rows="2" maxlength="3000" placeholder="Ask Archer something or give him a direction…" aria-label="Message to Archer"></textarea>
@@ -74,8 +77,8 @@
               <label class="voice-toggle"><input type="checkbox" id="voiceAutoStandbyToggle" /> Listen for Hey Archer when opened</label>
               <span id="voiceWakeIndicator" class="voice-wake-indicator" role="status" aria-live="polite">Voice off</span>
               <label class="voice-rate-control" for="voicePauseSlider">Wait after I pause
-                <input id="voicePauseSlider" type="range" min="2" max="30" step="1" value="7" aria-label="Seconds of silence before Archer replies" />
-                <output id="voicePauseValue" for="voicePauseSlider" aria-live="off">7 sec</output>
+                <input id="voicePauseSlider" type="range" min="0.5" max="30" step="0.5" value="1.5" aria-label="Seconds of silence before Archer replies" />
+                <output id="voicePauseValue" for="voicePauseSlider" aria-live="off">1.5 sec</output>
               </label>
               <button type="button" class="voice-stop" id="voiceEndConversation" data-allow-busy="true" disabled>End conversation</button>
               <details class="archer-voice-more">
@@ -115,6 +118,7 @@
               </details>
             </div>
           </section>
+          </div>
           <details class="archer-extra-tools">
             <summary>Optional tools <span>Mobile drafts · Your context</span></summary>
             <div class="archer-extra-content">
@@ -573,7 +577,7 @@
   <dialog id="missionDialog" class="modal"><form id="missionForm" method="dialog"><div class="modal-head"><div class="eyebrow">NEW OBJECTIVE</div><h2>Assign a mission</h2><p>Tell Archer what success looks like.</p></div><label for="missionTitle">Mission name</label><input id="missionTitle" maxlength="100" required minlength="3" placeholder="Build $1,000/month in recurring revenue" /><label for="missionObjective">Objective</label><textarea id="missionObjective" maxlength="3000" minlength="10" required rows="5" placeholder="Research, compare, and validate business opportunities that could generate recurring revenue. Prioritize real customer demand and practical execution."></textarea><div class="modal-actions"><button type="button" class="button secondary" id="cancelMission">Cancel</button><button class="button primary" type="submit">Create Mission</button></div></form></dialog>
   <script src="/js/mission-voice.js" defer></script>
   <script src="/js/app.js" defer></script>
-  <script src="/js/archer-home.js?v=20261120-wakefix2" defer></script>
+  <script src="/js/archer-home.js?v=20261122-half-second-pause1" defer></script>
    <script src="/js/desktop-voice.js?v=20261120-native1" defer></script>
   <script src="/js/realtime-voice.js" defer></script>
   <script src="/js/orb-field.js" defer></script>
