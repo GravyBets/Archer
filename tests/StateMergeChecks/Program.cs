@@ -43,7 +43,7 @@ var overlapping = State(second.Take(10).Concat(first.Take(3)));
 var dedup = StateMerger.Analyze(original, overlapping.ToJsonString());
 Check(dedup.DuplicateMessages == 3 && dedup.NewMessages == 10 && dedup.FullConversationArchive.Count == 36,
     "deduplicates stable conversation IDs, never by matching text");
-var conflicting = State(new[] { Message(first[0]["id"]!.GetValue<Guid>(), "altered message", 301) });
+var conflicting = State(new[] { Message(Guid.Parse(first[0]["id"]!.GetValue<string>()), "altered message", 301) });
 try
 {
     StateMerger.Analyze(original, conflicting.ToJsonString());
