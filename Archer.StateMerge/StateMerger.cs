@@ -19,8 +19,8 @@ public static class StateMerger
 
     public static Outcome Analyze(string visualJson, string installedJson)
     {
-        var visual = ParseState(visualJson, "Visual Studio");
-        var installed = ParseState(installedJson, "Installed Archer");
+        var visual = ParseState(visualJson, "Visual Studio", requireDevelopmentMetadata: true);
+        var installed = ParseState(installedJson, "Installed Archer", requireDevelopmentMetadata: false);
         var visualMessages = ReadConversation(visual, "Visual Studio");
         var installedMessages = ReadConversation(installed, "Installed Archer");
         var merged = new Dictionary<Guid, Entry>();
@@ -60,14 +60,26 @@ public static class StateMerger
             ((JsonArray)visual["developmentBatches"]!).Count);
     }
 
-    private static JsonObject ParseState(string json, string label)
+    private static JsonObject ParseState(string json, string label, bool requireDevelopmentMetadata)
     {
         if (json.Length > 100_000_000) throw new InvalidDataException("State is too large to review safely.");
         var root = JsonNode.Parse(json) as JsonObject ??
             throw new InvalidDataException(label + " state must be an object.");
-        foreach (var key in new[] { "missions", "conversation", "projects", "developmentBatches" })
+
+        // Every version needs real mission and conversation arrays. Never
+        // interpret a missing or malformed conversation as empty history.
+        foreach (var key in new[] { "missions", "conversation" })
             if (root[key] is not JsonArray)
-                throw new InvalidDataException(label + " is missing a required state array.");
+                throw new InvalidDataException(label + " has a missing or invalid " + key + " array.");
+
+        // Pre-project installed Archer versions never serialized these newer
+        // properties. They are optional ONLY on the older, secondary source.
+        // A present field of the wrong type is still a hard error, and the
+        // authoritative Visual Studio copy must retain both valid arrays.
+        foreach (var key in new[] { "projects", "developmentBatches" })
+            if ((requireDevelopmentMetadata || root.ContainsKey(key)) && root[key] is not JsonArray)
+                throw new InvalidDataException(label + " has a missing or invalid " + key + " array.");
+
         return root;
     }
 
