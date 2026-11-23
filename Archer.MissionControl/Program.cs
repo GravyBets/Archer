@@ -1072,12 +1072,13 @@ app.MapPost("/api/companion/message", async Task<IResult> (HttpContext context, 
 });
 
 // Owner-local project management and development mission control.
-app.MapGet("/api/projects", async (JsonFileStore store, ProjectDevelopmentWorker worker, CancellationToken ct) =>
+app.MapGet("/api/projects", async (JsonFileStore store, ProjectDevelopmentWorker worker, ArcherAiService ai, CancellationToken ct) =>
     Results.Ok(await store.ReadAsync(s => s.Projects.Select(p => new
     {
         p.Id, p.Name, p.Repository, p.Technology, p.SourceRoots, p.WorkflowFile, p.VerificationJob,
         p.RequiredSteps, p.Priority, p.DailyAttemptLimit, p.Paused, p.AllowNewSourceFiles, p.CumulativeWorkspaces, p.RegressionTestRoots, p.RequireSandbox, selfProject = SelfDevelopmentPolicy.IsSelf(p.Repository), sandboxConfigured = SandboxPolicy.Configured(p), p.Objectives, p.Memory,
-        enabled = worker.CanArm(p), credentialPrefix = ProjectGitHubCredentials.Prefix(p.Repository),
+        enabled = worker.CanArm(p), setup = ProjectSetupReadiness.Evaluate(p, ai.IsConfigured),
+        credentialPrefix = ProjectGitHubCredentials.Prefix(p.Repository),
         attemptsToday = ProjectPolicy.AttemptsToday(s, p.Id, DateTimeOffset.UtcNow)
     }).ToArray(), ct)));
 
