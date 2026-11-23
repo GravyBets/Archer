@@ -122,7 +122,7 @@ function trustedReviewUrl(repository, batch) {
     return 'https://github.com/' + repository + '/pull/' + number;
   return null;
 }
-function paintWorkProgress(prefix, completed, total, active, planning = false) {
+function paintWorkProgress(prefix, completed, total, active, planning = false, unit = 'verified') {
   const root = $(prefix + 'Progress');
   const bar = $(prefix + 'Bar');
   const count = $(prefix + 'Count');
@@ -132,7 +132,7 @@ function paintWorkProgress(prefix, completed, total, active, planning = false) {
   root.dataset.mode = hasTasks ? 'determinate' : (active || planning ? 'indeterminate' : 'idle');
   const done = hasTasks ? Math.max(0, Math.min(total, completed || 0)) : 0;
   bar.style.width = hasTasks ? Math.round(done * 100 / total) + '%' : '0%';
-  count.textContent = hasTasks ? done + ' of ' + total + ' tasks verified' : (active || planning ? 'Work in progress · tasks not yet known' : '');
+  count.textContent = hasTasks ? done + ' of ' + total + ' tasks ' + unit : (active || planning ? 'Work in progress · tasks not yet known' : '');
   // Only expose a numeric meter when actual task counts are available.
   if (hasTasks) {
     root.setAttribute('role', 'progressbar');
@@ -164,7 +164,7 @@ function renderMissionProgress(missions) {
   const tasks = Array.isArray(mission.tasks) ? mission.tasks : [];
   const completed = tasks.filter(t => t.status === 'Completed').length;
   const total = tasks.length;
-  paintWorkProgress('homeMission', completed, total, true);
+  paintWorkProgress('homeMission', completed, total, true, false, 'complete');
   $('homeMissionCount').textContent = total
     ? completed + ' of ' + total + ' mission steps complete'
     : 'Planning mission · steps not yet known';
