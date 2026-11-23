@@ -458,6 +458,62 @@ Check(!ConversationResearch.Queue(researchState, "Research another provider with
     "rolling four-research allowance refuses fifth attempt");
 
 
+
+var findingsState = new ArcherState();
+var authorizedGeoShift = ConversationResearch.Queue(findingsState,
+    "Archer research potential customers for geo shift and recommend which group we should target first", now);
+Check(authorizedGeoShift.Accepted, "research reminder fixture queued");
+var completedResearch = findingsState.Missions.Single();
+completedResearch.Status = "Completed";
+completedResearch.Tasks.Single().Status = "Completed";
+var genuineReport = "Utility mapping teams rely on KML/KMZ exports. Compare GIS consultants and telecom field engineers. " +
+    "Source notes: https://example.org/a https://example.org/b. Prioritize validation interviews, not unsupported customer counts.";
+completedResearch.Artifacts.Add(new MissionArtifact
+{
+    TaskId = completedResearch.Tasks.Single().Id, Title = "GeoShift customer research", Content = genuineReport
+});
+var spokenQuestion = "Archer, what's the status of that GeoShift customer research?";
+Check(ConversationResearchResults.IsRequest(spokenQuestion),
+    "GeoShift customer research status is recognized as a saved-results request");
+var spokenReply = ConversationResearchResults.Answer(findingsState, spokenQuestion, voiceMode: true);
+Check(spokenReply.Contains("Utility mapping teams") && spokenReply.Contains("GIS consultants") &&
+    spokenReply.Contains("example.org/a") && spokenReply.Contains("https://example.org/b"),
+    "voice status reads the real saved report, not just a completed task count");
+Check(ConversationResearchResults.IsRequest("What did you find?") &&
+    ConversationResearchResults.Answer(findingsState, "What did you find?").Contains("Utility mapping teams"),
+    "natural immediate follow-up reads sole completed research report");
+Check(ConversationResearchResults.RecentContext(findingsState).Contains("GIS consultants"),
+    "organic follow-up chat receives bounded report excerpts");
+Check(!ConversationResearchResults.IsRequest("Research potential customers for GeoShift") &&
+    !ConversationResearchResults.IsRequest("What's the best way to build a research process?"),
+    "new research orders and ordinary discussion are never mistaken for report retrieval");
+var reportState = new ArcherState();
+var queued = ConversationResearch.Queue(reportState,
+    "Archer research customer service opportunities in the energy industry", now);
+Check(queued.Accepted &&
+    ConversationResearchResults.Answer(reportState, "What did you find?").Contains("ready"),
+    "queued work does not claim a completed report");
+reportState.Missions.Single().Status = "Completed";
+Check(ConversationResearchResults.Answer(reportState, "What did you find?").Contains("no matching saved report"),
+    "completed status without a persisted artifact does not fabricate findings");
+var unrelated = ConversationResearch.Queue(findingsState,
+    "Archer research automobile service subscription pricing for local shops", now);
+Check(unrelated.Accepted, "second research objective recorded for ambiguity tests");
+Check(ConversationResearchResults.Answer(findingsState, "What did you find?").Contains("Which topic"),
+    "ambiguous follow-up refuses to select an unrelated report");
+Check(ConversationResearchResults.Answer(findingsState, spokenQuestion).Contains("Utility mapping teams"),
+    "explicit GeoShift topic still selects the correct research with multiple missions");
+Check(ConversationResearchResults.Answer(findingsState, "What's the status of that automobile research?").Contains("ready"),
+    "explicit automobile topic selects its own uncompleted research");
+Check(ConversationResearchResults.Answer(findingsState, "What's the status of that robotics research?").Contains("couldn't find"),
+    "unknown research does not invent findings or queue new work");
+var longReport = new string('R', 10000);
+completedResearch.Artifacts[0].Content = longReport;
+Check(ConversationResearchResults.Answer(findingsState, spokenQuestion, voiceMode: true).Length < 1700 &&
+    ConversationResearchResults.RecentContext(findingsState).Length < 2000,
+    "voice output and AI context have strict report-size budgets");
+completedResearch.Artifacts[0].Content = genuineReport;
+
 var phoneState = new ArcherState();
 var phoneRequest = new CompanionBridge.MessageRequest(Guid.NewGuid(), "Hello Archer");
 Check(CompanionBridge.Reserve(phoneState, phoneRequest, now).Begin, "phone request reserved before model call");

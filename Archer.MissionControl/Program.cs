@@ -932,11 +932,13 @@ app.MapPost("/api/chat", async Task<IResult> (HttpContext context, ChatRequest r
     {
         if (request.DirectOwnerInput && LocalDevelopmentRequest(context) &&
             (ConversationAssignments.LooksLikeAssignment(message) || ConversationAssignments.IsStatusRequest(message) ||
-             ConversationResearch.LooksLikeResearch(message)))
+             ConversationResearch.LooksLikeResearch(message) || ConversationResearchResults.IsRequest(message)))
         {
             var localAnswer = await store.UpdateAsync(state =>
             {
-                var result = ConversationAssignments.IsStatusRequest(message)
+                var result = ConversationResearchResults.IsRequest(message)
+                    ? ConversationResearchResults.Answer(state, message, request.VoiceMode)
+                    : ConversationAssignments.IsStatusRequest(message)
                     ? ConversationAssignments.Status(state)
                     : ConversationResearch.LooksLikeResearch(message)
                         ? ConversationResearch.Queue(state, message, DateTimeOffset.UtcNow).Answer
@@ -995,11 +997,13 @@ app.MapPost("/api/companion/message", async Task<IResult> (HttpContext context, 
         // Phone input is authorized by a separately authenticated, enrolled
         // owner gateway. Only the same explicit assignment parser may write.
         if (ConversationAssignments.LooksLikeAssignment(message) || ConversationAssignments.IsStatusRequest(message) ||
-            ConversationResearch.LooksLikeResearch(message))
+            ConversationResearch.LooksLikeResearch(message) || ConversationResearchResults.IsRequest(message))
         {
             var result = await store.UpdateAsync(s =>
             {
-                var answer = ConversationAssignments.IsStatusRequest(message)
+                var answer = ConversationResearchResults.IsRequest(message)
+                    ? ConversationResearchResults.Answer(s, message, request.VoiceMode)
+                    : ConversationAssignments.IsStatusRequest(message)
                     ? ConversationAssignments.Status(s)
                     : ConversationResearch.LooksLikeResearch(message)
                         ? ConversationResearch.Queue(s, message, DateTimeOffset.UtcNow).Answer
