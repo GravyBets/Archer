@@ -5,6 +5,8 @@ public sealed class ArcherState
     public List<Mission> Missions { get; set; } = [];
     public List<ActivityEntry> Activity { get; set; } = [];
     public List<ConversationEntry> Conversation { get; set; } = [];
+    // Owner-chosen, reversible home presentation. No code or microphone permissions.
+    public string HomeLayout { get; set; } = "centered";
     public List<CompanionReceipt> CompanionReceipts { get; set; } = [];
     // A single, optional presence snapshot; no location/activity history.
     public OwnerPresence? Presence { get; set; }

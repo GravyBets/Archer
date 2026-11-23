@@ -120,3 +120,60 @@ public static class ConversationAssignments
         };
     }
 }
+
+
+/// <summary>
+/// Bounded owner-requested presentation preferences. Changing the arrangement
+/// of the orb and conversation does not edit source code or grant code access.
+/// Commands must specify both widgets and a clear relationship; discussion
+/// and capability questions cannot modify the page.
+/// </summary>
+public static class ConversationHomeLayout
+{
+    public const string Centered = "centered";
+    public const string Split = "split";
+
+    private static readonly Regex Directive = new(
+        @"^(?:(?:hey\s+)?archer[,!:]?\s+)?(?:(?:please|can\s+you|could\s+you|i\s+want\s+you\s+to|go\s+ahead\s+and)\s+)?(?:put|move|center|centre|adjust|change|rearrange|redesign|set|switch|fix|update)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+
+    private static readonly Regex Orb = new(@"\borb\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+    private static readonly Regex Chat = new(@"\b(?:chat|conversation)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+    private static readonly Regex Center = new(@"\b(?:center|centre|middle)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+    private static readonly Regex Under = new(@"\b(?:under|underneath|below|beneath)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+    private static readonly Regex Beside = new(@"\b(?:beside|alongside|side[\s-]+by[\s-]+side|next\s+to|two[\s-]+columns)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+
+    public static string? Requested(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return null;
+        var text = message.Trim();
+        if (text.Length > 1000 || !Directive.IsMatch(text) ||
+            !Orb.IsMatch(text) || !Chat.IsMatch(text))
+            return null;
+        if (Center.IsMatch(text) && Under.IsMatch(text) && !Beside.IsMatch(text))
+            return Centered;
+        if (Beside.IsMatch(text) && !Under.IsMatch(text))
+            return Split;
+        return null;
+    }
+
+    public static string Apply(ArcherState state, string layout)
+    {
+        if (layout is not (Centered or Split))
+            return "I couldn't identify a supported layout. Nothing changed.";
+        var already = state.HomeLayout == layout;
+        state.HomeLayout = layout;
+        return layout == Centered
+            ? already
+                ? "The orb is already centered, with the chat underneath."
+                : "Done. I've centered the orb and moved the chat underneath it."
+            : already
+                ? "The orb and chat are already side by side."
+                : "Done. I've put the orb beside the chat.";
+    }
+}

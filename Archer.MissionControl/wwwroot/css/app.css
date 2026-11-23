@@ -562,17 +562,24 @@
 @media(max-width:650px){#developerView .dev-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}#developerView .dev-project-row>label,#developerView .dev-project-row>p{flex-basis:100%}#developerView .dev-assignment-card{padding:13px}}
 
 
-/* v1.16 — conversation-first landing page. Fit a larger living orb beside a
-   genuinely readable chat instead of making owners scroll past the orb. */
+/* v1.17 — center Archer's living orb with the full-width conversation
+   directly beneath. Keep ample chat history without a side-by-side split. */
 .archer-home-primary{
   display:grid;
-  grid-template-columns:minmax(305px,.76fr) minmax(485px,1.60fr);
+  grid-template-columns:minmax(0,1fr);
   align-items:start;
-  gap:26px;
-  max-width:1360px;
+  gap:22px;
+  width:100%;
+  max-width:1120px;
   margin:0 auto;
 }
-.archer-home-primary .archer-presence-column{min-width:0}
+.archer-home-primary .archer-presence-column{
+  min-width:0;
+  width:100%;
+  max-width:850px;
+  margin:0 auto;
+  text-align:center;
+}
 .archer-home-primary .archer-intro{padding:7px 0 0}
 .archer-home-primary .archer-intro>p{max-width:360px;margin:0 auto;line-height:1.5}
 .archer-home .presence-stage{height:425px;margin-top:1px;max-width:520px}
@@ -580,7 +587,7 @@
 .archer-home .presence-outer-ring{width:398px;height:398px}
 .archer-home .presence-pulse-ring{width:358px;height:358px}
 .archer-home .presence-caption{margin:-9px auto 22px}
-.archer-home .presence-summary{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:0}
+.archer-home .presence-summary{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:0 auto 0;max-width:780px}
 .archer-home .presence-metric{min-width:0;padding:12px 9px;display:flex;flex-direction:column;align-items:flex-start;gap:5px}
 .archer-home .presence-metric strong{font-size:24px;line-height:1.1}
 .archer-home .presence-metric small{display:none}
@@ -591,7 +598,7 @@
   box-shadow:0 14px 42px rgba(0,0,0,.12);
 }
 .archer-home-primary .archer-conversation .chat-messages{
-  min-height:390px;max-height:none;height:clamp(410px,54vh,680px);
+  min-height:420px;max-height:none;height:clamp(440px,56vh,720px);
   flex:1 1 auto;overflow-y:auto;
 }
 .archer-home-primary .archer-conversation .chat-message{max-width:92%}
@@ -627,4 +634,22 @@
   .archer-home-primary .conversation-title{padding:14px}
   .archer-home-primary .conversation-title p{font-size:11px}
   .archer-home-primary .voice-preferences{padding:12px;gap:11px}
+}
+
+
+/* A deliberate voice command may switch back to a split workspace. The
+   default remains the requested centered orb with the chat below it. */
+@media(min-width:1251px){
+  #archerView[data-layout="split"] .archer-home-primary{
+    grid-template-columns:minmax(305px,.76fr) minmax(485px,1.60fr);
+    max-width:1360px;
+    gap:26px;
+  }
+  #archerView[data-layout="split"] .archer-presence-column{
+    max-width:none;
+    margin:0;
+  }
+  #archerView[data-layout="split"] .archer-conversation{
+    align-self:start;
+  }
 }

@@ -435,6 +435,38 @@ Check(ConversationAssignments.Parse("Hey Archer, fix Personal app's confusing em
 Check(ConversationAssignments.Parse("Can you work on an app sometime?", [talkProject]) is null, "ambiguous work request does not authorize paid coding");
 Check(ConversationAssignments.Status(conversationState).Contains("queued"), "status uses actual persisted assignment data");
 
+var spokenLayoutRequest = "can you adjust your own landing page I don't like the way the Archer landing page is looking can you put the orb back Center and then the chat box underneath the orb";
+Check(ConversationHomeLayout.Requested(spokenLayoutRequest) == ConversationHomeLayout.Centered,
+    "natural owner request recognizes the centered orb with chat underneath");
+Check(ConversationHomeLayout.Requested("Can you put the orb in the center and the chat below it") ==
+    ConversationHomeLayout.Centered, "concise spoken center command is supported");
+Check(ConversationHomeLayout.Requested("Archer can you move the orb beside the chat") ==
+    ConversationHomeLayout.Split, "spoken request can restore the side-by-side arrangement");
+Check(ConversationHomeLayout.Requested("Why can't you edit your own code?") is null &&
+    ConversationHomeLayout.Requested("What would you change about the landing page?") is null &&
+    ConversationHomeLayout.Requested("Can you put the chat under that?") is null,
+    "capability, design and ambiguous instructions do not mutate layout");
+Check(!ConversationAssignments.LooksLikeAssignment(spokenLayoutRequest),
+    "bounded layout request does not queue paid, unworkable code development");
+var layoutState = new ArcherState();
+Check(layoutState.HomeLayout == ConversationHomeLayout.Centered,
+    "new state defaults to the owner's preferred centered home");
+layoutState.HomeLayout = ConversationHomeLayout.Split;
+var layoutResponse = ConversationHomeLayout.Apply(layoutState, ConversationHomeLayout.Centered);
+Check(layoutState.HomeLayout == ConversationHomeLayout.Centered &&
+    layoutResponse.Contains("centered") && layoutResponse.Contains("underneath"),
+    "spoken centered request immediately and truthfully changes persisted layout");
+Check(ConversationHomeLayout.Apply(layoutState, ConversationHomeLayout.Centered).Contains("already"),
+    "duplicate request acknowledges layout without a second mutation");
+Check(ConversationHomeLayout.Apply(layoutState, ConversationHomeLayout.Split).Contains("beside") &&
+    layoutState.HomeLayout == ConversationHomeLayout.Split,
+    "split layout remains an explicitly reversible preference");
+Check(ConversationHomeLayout.Apply(layoutState, "unsupported").Contains("Nothing changed") &&
+    layoutState.HomeLayout == ConversationHomeLayout.Split,
+    "unsupported values do not modify state");
+Check(ConversationAssignments.Parse("Archer work on Archer and improve a registered pilot inbox feature.", [selfProfile]) is { Project: "Archer" },
+    "explicit protected self-code assignments still use the guarded development route");
+
 var researchState = new ArcherState();
 var research = ConversationResearch.Queue(researchState, "Archer, research competing geographic data conversion services.", now);
 Check(research.Accepted && researchState.Missions.Count == 1 &&
