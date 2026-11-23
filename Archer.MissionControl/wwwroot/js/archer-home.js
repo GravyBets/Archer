@@ -71,16 +71,53 @@
   wakeToggle.disabled = !handsFreeToggle.checked;
   autoStandbyToggle.checked = getPreference('archer.voice.autoStandby') === 'yes' && wakeEnabled();
   autoStandbyToggle.disabled = !SpeechRecognitionCtor;
+  const validPause = value => Number.isFinite(value) &&
+    value >= 0.5 && value <= 30 && value * 2 === Math.round(value * 2);
   const savedPause = Number(getPreference('archer.voice.pauseSeconds'));
-  const pauseSeconds = Number.isInteger(savedPause) && savedPause >= 2 && savedPause <= 30
-    ? savedPause : 7;
-  pauseSlider.value = String(pauseSeconds);
-  pauseValue.textContent = pauseSeconds + ' sec';
-  pauseSlider.addEventListener('input', () => {
-    const value = Math.min(30, Math.max(2, Number(pauseSlider.value) || 7));
+  let pauseEdited = false;
+  let pauseSaveTimer = null;
+  const setPauseDisplay = value => {
+    pauseSlider.value = String(value);
     pauseValue.textContent = value + ' sec';
+  };
+  setPauseDisplay(validPause(savedPause) ? savedPause : 1.5);
+  // Windows tray voice and browser speech share one persisted local setting.
+  // The API never starts listening; native changes are picked up by its loop.
+  if (typeof window.fetch === 'function') {
+    window.fetch('/api/desktop-voice/preferences', {cache:'no-store'})
+      .then(response => response.ok ? response.json() : null)
+      .then(settings => {
+        if (!pauseEdited && settings && validPause(settings.pauseSeconds)) {
+          setPauseDisplay(settings.pauseSeconds);
+          setPreference('archer.voice.pauseSeconds', String(settings.pauseSeconds));
+        }
+      }).catch(() => { /* browser voice remains usable offline */ });
+  }
+  pauseSlider.addEventListener('input', () => {
+    pauseEdited = true;
+    const raw = Number(pauseSlider.value);
+    const value = Number.isFinite(raw)
+      ? Math.round(Math.min(30, Math.max(0.5, raw)) * 2) / 2
+      : 1.5;
+    setPauseDisplay(value);
     setPreference('archer.voice.pauseSeconds', String(value));
     if (voiceSessionActive && recognizedVoiceText()) armSilenceTimer();
+    if (typeof window.fetch === 'function') {
+      if (pauseSaveTimer !== null) window.clearTimeout(pauseSaveTimer);
+      pauseSaveTimer = window.setTimeout(async () => {
+        pauseSaveTimer = null;
+        try {
+          const response = await window.fetch('/api/desktop-voice/preferences', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({pauseSeconds:value})
+          });
+          if (!response.ok) throw Error('Voice preference was not saved');
+          pauseValue.title = 'Saved for browser and Windows voice';
+        } catch {
+          pauseValue.title = 'Browser setting saved. Windows voice preference could not be updated.';
+        }
+      }, 180);
+    }
   });
   handsFreeToggle.addEventListener('change', () => {
     setPreference('archer.voice.handsFree', handsFreeToggle.checked ? 'yes' : 'no');
@@ -224,14 +261,16 @@
     // or pretend the browser pause/rate sliders configure native SAPI.
     mic.hidden = nativeActive;
     endConversationButton.hidden = nativeActive;
-    for (const control of [handsFreeToggle, wakeToggle, autoStandbyToggle, pauseSlider]) {
+    // Keep the pause slider visible: unlike the browser-only microphone
+    // controls it now updates the native Windows listener as well.
+    for (const control of [handsFreeToggle, wakeToggle, autoStandbyToggle]) {
       const label = control.closest('label');
       if (label) label.hidden = nativeActive;
     }
     if (nativeActive && voiceSessionActive) endVoiceConversation(false);
     if (nativeActive) {
       note.textContent = 'Windows voice starts with Archer. Just say “Hey Archer”. ' +
-        'Right-click the Archer tray icon to pause or exit the microphone. ' +
+        'Adjust the pause above, or right-click the tray icon to pause the microphone. ' +
         'Native Windows recognition and voice playback may differ from browser voices.';
       renderDesktopVoice();
     } else if (status?.status === 'error') {
