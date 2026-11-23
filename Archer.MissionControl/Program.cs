@@ -963,8 +963,9 @@ app.MapPost("/api/chat", async Task<IResult> (HttpContext context, ChatRequest r
     try
     {
         var homeLayoutHandled = ConversationHomeLayout.IsLocallyHandled(message);
+        var operatorHandled = ConversationOperatorControls.IsRequest(message);
         if (request.DirectOwnerInput && LocalDevelopmentRequest(context) &&
-            (homeLayoutHandled || ConversationAssignments.LooksLikeAssignment(message) ||
+            (homeLayoutHandled || operatorHandled || ConversationAssignments.LooksLikeAssignment(message) ||
              ConversationAssignments.IsStatusRequest(message) ||
              ConversationResearch.LooksLikeResearch(message) || ConversationResearchResults.IsRequest(message)))
         {
@@ -972,6 +973,8 @@ app.MapPost("/api/chat", async Task<IResult> (HttpContext context, ChatRequest r
             {
                 var result = homeLayoutHandled
                     ? ConversationHomeLayout.Answer(state, message)
+                    : operatorHandled
+                    ? ConversationOperatorControls.Answer(state, message, ai.IsConfigured, DateTimeOffset.UtcNow)
                     : ConversationResearchResults.IsRequest(message)
                     ? ConversationResearchResults.Answer(state, message, request.VoiceMode)
                     : ConversationAssignments.IsStatusRequest(message)
@@ -1033,7 +1036,7 @@ app.MapPost("/api/companion/message", async Task<IResult> (HttpContext context, 
         // Phone input is authorized by a separately authenticated, enrolled
         // owner gateway. Only the same explicit assignment parser may write.
         var homeLayoutHandled = ConversationHomeLayout.IsLocallyHandled(message);
-        if (homeLayoutHandled || ConversationAssignments.LooksLikeAssignment(message) ||
+        if (homeLayoutHandled || operatorHandled || ConversationAssignments.LooksLikeAssignment(message) ||
             ConversationAssignments.IsStatusRequest(message) ||
             ConversationResearch.LooksLikeResearch(message) || ConversationResearchResults.IsRequest(message))
         {
@@ -1041,6 +1044,8 @@ app.MapPost("/api/companion/message", async Task<IResult> (HttpContext context, 
             {
                 var answer = homeLayoutHandled
                     ? ConversationHomeLayout.Answer(s, message)
+                    : operatorHandled
+                    ? ConversationOperatorControls.Answer(s, message, ai.IsConfigured, DateTimeOffset.UtcNow)
                     : ConversationResearchResults.IsRequest(message)
                     ? ConversationResearchResults.Answer(s, message, request.VoiceMode)
                     : ConversationAssignments.IsStatusRequest(message)
@@ -1169,17 +1174,7 @@ app.MapPost("/api/projects/{id:guid}/pause", async Task<IResult> (HttpContext co
     {
         var p = s.Projects.SingleOrDefault(p => p.Id == id);
         if (p is null) return false;
-        p.Paused = request.Paused;
-        if (p.Paused)
-        {
-            foreach (var b in s.DevelopmentBatches.Where(b => b.ProjectId == id)) b.Armed = false;
-            foreach (var o in p.Objectives.Where(o => o.PlanningState is "Delegated" or "Planning" or "Reassessment queued" || (o.Continuous && o.PlanningState == "Batch created")))
-            {
-                o.DelegatedUntilUtc = null;
-                o.PlanningState = o.PlanningAttempted ? "Blocked" : "Not delegated";
-                o.PlanningDetail = "Project paused by owner.";
-            }
-        }
+        ConversationOperatorControls.SetPaused(s, p, request.Paused);
         return true;
     }, ct);
     return saved ? Results.Ok(new { message = request.Paused ? "Project paused. In-flight operations may finish." : "Project available; batches remain disarmed." }) : Results.NotFound();
