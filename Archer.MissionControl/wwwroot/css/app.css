@@ -560,3 +560,71 @@
 #developerView #projectObjectives,#developerView #developmentHistory{display:grid;gap:10px}
 #developerView #projectObjectives .dev-assignment-card,#developerView #developmentHistory .dev-assignment-card{margin:0}
 @media(max-width:650px){#developerView .dev-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}#developerView .dev-project-row>label,#developerView .dev-project-row>p{flex-basis:100%}#developerView .dev-assignment-card{padding:13px}}
+
+
+/* v1.16 — conversation-first landing page. Fit a larger living orb beside a
+   genuinely readable chat instead of making owners scroll past the orb. */
+.archer-home-primary{
+  display:grid;
+  grid-template-columns:minmax(305px,.76fr) minmax(485px,1.60fr);
+  align-items:start;
+  gap:26px;
+  max-width:1360px;
+  margin:0 auto;
+}
+.archer-home-primary .archer-presence-column{min-width:0}
+.archer-home-primary .archer-intro{padding:7px 0 0}
+.archer-home-primary .archer-intro>p{max-width:360px;margin:0 auto;line-height:1.5}
+.archer-home .presence-stage{height:425px;margin-top:1px;max-width:520px}
+.archer-home .presence-orb{width:316px;height:316px}
+.archer-home .presence-outer-ring{width:398px;height:398px}
+.archer-home .presence-pulse-ring{width:358px;height:358px}
+.archer-home .presence-caption{margin:-9px auto 22px}
+.archer-home .presence-summary{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:0}
+.archer-home .presence-metric{min-width:0;padding:12px 9px;display:flex;flex-direction:column;align-items:flex-start;gap:5px}
+.archer-home .presence-metric strong{font-size:24px;line-height:1.1}
+.archer-home .presence-metric small{display:none}
+.archer-home .metric-caption{font-size:9px;line-height:1.5;letter-spacing:.8px;overflow-wrap:anywhere}
+.archer-home-primary .archer-conversation{
+  width:100%;max-width:none;margin:0;display:flex;flex-direction:column;
+  min-height:640px;
+  box-shadow:0 14px 42px rgba(0,0,0,.12);
+}
+.archer-home-primary .archer-conversation .chat-messages{
+  min-height:390px;max-height:none;height:clamp(410px,54vh,680px);
+  flex:1 1 auto;overflow-y:auto;
+}
+.archer-home-primary .archer-conversation .chat-message{max-width:92%}
+.archer-home-primary .conversation-title{padding:18px 20px 16px}
+.archer-home-primary .conversation-title h2{font-size:17px}
+.archer-home-primary .conversation-title p{font-size:12px}
+.archer-home-primary .voice-preferences{gap:11px 16px;padding:13px 17px}
+.archer-home-primary .voice-rate-control output{min-width:45px}
+.archer-home-primary .chat-composer{padding:14px 17px}
+.archer-home .archer-extra-tools{max-width:1360px;margin-top:23px}
+@media(max-width:1250px){
+  .archer-home-primary{grid-template-columns:minmax(0,1fr);max-width:950px;gap:18px}
+  .archer-home .presence-stage{height:385px}
+  .archer-home .presence-summary{max-width:780px;margin-bottom:0}
+  .archer-home-primary .archer-conversation .chat-messages{height:clamp(400px,52vh,640px)}
+}
+@media(max-width:650px){
+  .archer-home-primary{gap:15px}
+  .archer-home-primary .archer-intro{padding:4px 0 0}
+  .archer-home .presence-stage{height:302px;max-width:100%}
+  .archer-home .presence-orb{width:236px;height:236px}
+  .archer-home .presence-outer-ring{width:288px;height:288px}
+  .archer-home .presence-pulse-ring{width:262px;height:262px}
+  .archer-home .presence-caption{margin:-7px auto 14px}
+  .archer-home .presence-metric{padding:10px 7px}
+  .archer-home .presence-metric strong{font-size:20px}
+  .archer-home .metric-caption{font-size:8px}
+  .archer-home-primary .archer-conversation{min-height:0}
+  .archer-home-primary .archer-conversation .chat-messages{
+    height:clamp(330px,50vh,520px);min-height:330px;padding:14px;
+  }
+  .archer-home-primary .archer-conversation .chat-message{max-width:96%}
+  .archer-home-primary .conversation-title{padding:14px}
+  .archer-home-primary .conversation-title p{font-size:11px}
+  .archer-home-primary .voice-preferences{padding:12px;gap:11px}
+}
