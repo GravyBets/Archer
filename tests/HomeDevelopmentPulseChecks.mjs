@@ -7,7 +7,7 @@ import {runInNewContext} from 'node:vm';
 // microphone, repo credentials, paid model calls or fake authorizations.
 const source = readFileSync(fileURLToPath(
   new URL('../Archer.MissionControl/wwwroot/js/app.js',import.meta.url)), 'utf8');
-const start = source.indexOf('function latestDevelopmentPulse(');
+const start = source.indexOf('function trustedReviewUrl(');
 const end = source.indexOf('function render() {',start);
 assert.ok(start >= 0 && end > start, 'pure work-pulse functions are defined before render');
 
