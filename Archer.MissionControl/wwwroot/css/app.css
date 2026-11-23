@@ -693,3 +693,62 @@
   .archer-home .archer-work-copy{flex-basis:150px}
   .archer-home .archer-work-status{font-size:9px;max-width:150px}
 }
+
+
+/* Live progress: only verified task counts produce a numerical meter.
+   During planning the striped motion conveys activity, not invented percent. */
+.archer-home .archer-work-pulse[hidden],
+.archer-home .archer-work-progress[hidden],
+.archer-home .archer-work-setup[hidden],
+.archer-home .archer-work-review[hidden]{display:none!important}
+.archer-home .archer-work-pulse{flex-wrap:wrap}
+.archer-home .archer-work-progress{
+  flex:1 0 100%;min-width:0;display:flex;align-items:center;gap:12px;
+  padding:0 0 2px;
+}
+.archer-home .archer-work-track{
+  flex:1 1 auto;height:7px;min-width:55px;border-radius:100px;
+  background:#223c4c;overflow:hidden;position:relative;
+}
+.archer-home .archer-work-bar{
+  height:100%;width:0%;border-radius:100px;transition:width .35s ease;
+  background:linear-gradient(90deg,#36bfae,#82decb);
+}
+.archer-home .archer-work-progress[data-mode="indeterminate"] .archer-work-track::before{
+  content:"";position:absolute;inset:0;width:35%;
+  background:linear-gradient(90deg,transparent,#6ed9d0 55%,transparent);
+  animation:archer-progress-sweep 1.7s ease-in-out infinite;
+}
+@keyframes archer-progress-sweep{
+  from{transform:translateX(-105%)}
+  to{transform:translateX(330%)}
+}
+.archer-home .archer-work-count{
+  flex:0 0 auto;font-size:10px;color:#a3c3d2;
+  font-variant-numeric:tabular-nums;
+}
+.archer-home .archer-work-setup{
+  flex:1 0 100%;font-size:10px;line-height:1.5;color:#f0c18b;
+}
+.archer-home .archer-work-review{
+  display:inline-block;color:#8be1d2;font-size:11px;font-weight:700;
+  border-bottom:1px solid currentColor;text-decoration:none;
+}
+.archer-home .archer-work-review:hover{text-decoration:underline}
+.archer-home .archer-mission-pulse{
+  background:#101f2d;border-bottom:1px solid #233749;
+}
+.archer-home .archer-mission-pulse .archer-work-bar{
+  background:linear-gradient(90deg,#9c9de5,#acccf5);
+}
+@media(max-width:650px){
+  .archer-home .archer-work-progress{flex-wrap:wrap;gap:5px}
+  .archer-home .archer-work-track{flex-basis:100%}
+  .archer-home .archer-work-count{font-size:10px}
+}
+@media(prefers-reduced-motion:reduce){
+  .archer-home .archer-work-progress[data-mode="indeterminate"] .archer-work-track::before{
+    animation:none;width:35%;transform:translateX(75%);
+  }
+  .archer-home .archer-work-bar{transition:none}
+}
