@@ -299,9 +299,15 @@ public static class GeoShiftConversationSetup
             p.Name.Equals("GeoShift", StringComparison.OrdinalIgnoreCase) ||
             p.Repository.Equals(Repository, StringComparison.OrdinalIgnoreCase));
         if (already)
+        {
+            if (state.Projects.Any(p =>
+                (p.Name.Equals("GeoShift", StringComparison.OrdinalIgnoreCase) ||
+                 p.Repository.Equals(Repository, StringComparison.OrdinalIgnoreCase)) && !IsGeoShift(p)))
+                return new("GeoShift's registered name or repository conflicts with the verified project. I haven't changed or authorized anything.");
             return explicitRegistration
                 ? new("GeoShift is already registered. Coding still needs separately authorized project access.")
                 : null;
+        }
         if (state.Projects.Count >= 20)
             return new("The project registry is full; I haven't changed it.");
         state.Projects.Add(project);
