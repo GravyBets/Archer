@@ -115,6 +115,20 @@ ensure("RejectRedirects" in CLIENT and "completionHandler(nil)" in CLIENT, "toke
 ensure("ARCHER_PRIVATE_V1" in CLIENT and "gatewayProof" in CLIENT, "each request has hardware proof")
 ensure("URLSessionConfiguration.ephemeral" in CLIENT and "https://" in CLIENT, "HTTPS-only private client")
 ensure("client.receipt" in CONNECTED and "ArcherPendingReceipt" in CONNECTED, "reconnect checks never resend message")
+ensure("let verifiedTasks: Int?" in CLIENT and "let totalTasks: Int?" in CLIENT and
+       "let overnightSummary: String?" in CLIENT, "read-only work counts and overnight summary decode even with older gateways")
+ensure("recordedReviewURL" in CLIENT and 'parts.host == "github.com"' in CLIENT and
+       '"https"' in CLIENT, "review-only GitHub links require exact HTTPS origin")
+ensure("ProgressView(value: Double(done), total: Double(total))" in CONNECTED and
+       "item.recordedReviewURL" in CONNECTED, "iPhone work tab displays actual verified progress and review link")
+ensure('DisclosureGroup("Recorded work · last 12 hours")' in CONNECTED,
+       "iPhone can show recorded local overnight work with no push")
+ensure(".onChange(of: scenePhase)" in CONNECTED and "await reload()" in CONNECTED and
+       "ArcherPrivateClient.configuredHost != nil" in CONNECTED,
+       "iPhone refreshes read-only status on foreground only after owner/device setup")
+ensure("Timer.publish" not in CONNECTED and "BGTaskScheduler" not in CONNECTED,
+       "iPhone must not claim unauthorized background refresh or scheduled monitoring")
+
 ensure("REPLACE_WITH_APPROVED_PRIVATE_TS_HOST" in (APP / "Gateway.plist").read_text(), "private host is not committed")
 for text in (DEVICE, NOTIFICATION):
     for forbidden in ("http://", "https://", "URLSession", "APNs", "getToken", "sendMessage",

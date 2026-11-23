@@ -116,6 +116,11 @@ assert "directOwnerInput=$true" in NATIVE_VOICE, "Native wake-session must route
 SERVER = (ROOT.parent / "Program.cs").read_text(encoding="utf-8")
 CHAT = SERVER.split('app.MapPost("/api/chat"', 1)[1].split("// Dedicated local companion bridge.", 1)[0]
 assert CHAT.index("ConversationAssignments.LooksLikeAssignment") < CHAT.index("if (!ai.IsConfigured) return MissingApiKey();"), "Local commands must not require a chat API key"
+assert "ConversationOperatorControls.IsRequest(message)" in SERVER, "Owner project controls must use deterministic local routing"
+assert "ConversationOperatorControls.Answer(state, message, ai.IsConfigured" in SERVER, "Owner status and pause must use verified saved state"
+assert "ConversationOperatorControls.Answer(s, message, ai.IsConfigured" in SERVER, "Authenticated phone bridge must have same safe owner controls"
+assert "ConversationOperatorControls.SetPaused(s, p, request.Paused)" in SERVER, "Voice and Developer pause share one revocation policy"
+
 assert "!System.Net.IPAddress.IsLoopback(peer)" in SERVER, "Owner actions must only originate from a loopback peer"
 assert 'context.Request.Headers.ContainsKey("X-Forwarded-For")' in SERVER, "Forwarded requests must not bypass local owner scope"
 
