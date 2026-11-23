@@ -39,7 +39,7 @@ public static class ConversationOperatorControls
         var command = Command.Match(text);
         if (command.Success)
         {
-            var name = command.Groups["name"].Value.Trim();
+            var name = Regex.Replace(command.Groups["name"].Value.Trim(), @"^the\s+", "", RegexOptions.IgnoreCase);
             var qualified = command.Groups["prefix"].Success || command.Groups["suffix"].Success;
             var canonical = Canonical(name);
             // "stop listening", "stop talking", "pause microphone" and
