@@ -635,3 +635,21 @@
   .archer-home-primary .conversation-title p{font-size:11px}
   .archer-home-primary .voice-preferences{padding:12px;gap:11px}
 }
+
+
+/* A deliberate voice command may switch back to a split workspace. The
+   default remains the requested centered orb with the chat below it. */
+@media(min-width:1251px){
+  #archerView[data-layout="split"] .archer-home-primary{
+    grid-template-columns:minmax(305px,.76fr) minmax(485px,1.60fr);
+    max-width:1360px;
+    gap:26px;
+  }
+  #archerView[data-layout="split"] .archer-presence-column{
+    max-width:none;
+    margin:0;
+  }
+  #archerView[data-layout="split"] .archer-conversation{
+    align-self:start;
+  }
+}
