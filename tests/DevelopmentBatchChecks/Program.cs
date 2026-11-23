@@ -538,6 +538,61 @@ Check(overnight.Contains("last 12 hours") &&
     overnight.Contains("No messages or calls were sent"),
     "overnight briefing counts recorded bounded events without inventing revenue or messages");
 
+// The private iPhone overview is one authenticated read-only snapshot.
+// Show real task counts and only a numeric PR under the *same* repo after
+// every recorded coding task verifies. It cannot authorize acceptance.
+var phoneState = new ArcherState();
+var phoneProject = ProjectPolicy.Register(GeoShiftConversationSetup.Profile());
+phoneState.Projects.Add(phoneProject);
+var phoneObjective = new ProjectObjective { Description = "Review duplicate preservation",
+    PlanningState = "Batch created" };
+phoneProject.Objectives.Add(phoneObjective);
+var phoneBatch = new DevelopmentBatch
+{
+    ProjectId = phoneProject.Id, ObjectiveId = phoneObjective.Id,
+    Armed = false, WorkspacePullRequestNumber = 42,
+    Tasks = [new DevelopmentTask { Status = "Verified" }, new DevelopmentTask { Status = "Verified" }]
+};
+phoneState.DevelopmentBatches.Add(phoneBatch);
+var phoneSnapshot = System.Text.Json.JsonSerializer.SerializeToElement(
+    CompanionBridge.Overview(phoneState), new System.Text.Json.JsonSerializerOptions(
+        System.Text.Json.JsonSerializerDefaults.Web));
+var phoneRow = phoneSnapshot.GetProperty("assignments")[0];
+Check(phoneRow.GetProperty("project").GetString() == "GeoShift" &&
+    phoneRow.GetProperty("status").GetString() == "ready for review" &&
+    phoneRow.GetProperty("verifiedTasks").GetInt32() == 2 &&
+    phoneRow.GetProperty("totalTasks").GetInt32() == 2 &&
+    phoneRow.GetProperty("reviewUrl").GetString() == "https://github.com/GravyBets/GeoShift/pull/42",
+    "phone work overview reflects exact recorded task progress and a safe PR identity");
+Check(phoneSnapshot.GetProperty("overnightSummary").GetString()?.Contains("last 12 hours") == true,
+    "iPhone owner overview includes a factual, read-only overnight summary");
+phoneBatch.Tasks[1].Status = "Testing";
+phoneRow = System.Text.Json.JsonSerializer.SerializeToElement(
+    CompanionBridge.Overview(phoneState), new System.Text.Json.JsonSerializerOptions(
+        System.Text.Json.JsonSerializerDefaults.Web)).GetProperty("assignments")[0];
+Check(phoneRow.GetProperty("verifiedTasks").GetInt32() == 1 &&
+    phoneRow.GetProperty("totalTasks").GetInt32() == 2 &&
+    phoneRow.GetProperty("reviewUrl").ValueKind == System.Text.Json.JsonValueKind.Null,
+    "unverified coding never exposes a ready-for-review link");
+phoneBatch.Tasks[1].Status = "Verified";
+phoneBatch.Armed = true;
+Check(CompanionBridge.VerifiedReviewUrl(phoneProject, phoneObjective, [phoneBatch]) is null,
+    "armed coding cannot be falsely presented to the phone as complete");
+phoneBatch.Armed = false;
+phoneBatch.WorkspacePullRequestNumber = null;
+phoneBatch.Tasks[1].Proposal = new CodeProposal { PullRequestNumber = 17,
+    PullRequestUrl = "https://evil.example.test/not-a-real-pr" };
+Check(CompanionBridge.VerifiedReviewUrl(phoneProject, phoneObjective, [phoneBatch]) ==
+    "https://github.com/GravyBets/GeoShift/pull/17",
+    "owner phone constructs numeric PR path, never trusts model-supplied URL");
+phoneBatch.Tasks[1].Proposal.PullRequestNumber = null;
+Check(CompanionBridge.VerifiedReviewUrl(phoneProject, phoneObjective, [phoneBatch]) is null,
+    "missing recorded PR identity fails closed");
+var selfPhoneProject = ProjectPolicy.Register(SelfDevelopmentPolicy.Profile());
+Check(CompanionBridge.VerifiedReviewUrl(selfPhoneProject, phoneObjective, [phoneBatch]) is null,
+    "protected self-development does not bypass additional candidate-review gate on phone");
+
+
 
 // A real owner spoke "Geo Shift" to the landing-page microphone. GeoShift
 // exists in GitHub but had not been registered in Archer's local state.
