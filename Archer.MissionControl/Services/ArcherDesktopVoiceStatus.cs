@@ -88,3 +88,57 @@ internal static class ArcherDesktopVoiceStatus
         }
     }
 }
+
+
+/// <summary>
+/// Non-sensitive local listening preference shared by the browser UI and the
+/// separately launched Windows SAPI tray listener. Does not start or stop audio.
+/// </summary>
+internal static class ArcherDesktopVoicePreferences
+{
+    internal const double DefaultPauseSeconds = 1.5;
+    internal const string FileName = "desktop-voice-preferences.json";
+
+    internal static bool Valid(double seconds) =>
+        double.IsFinite(seconds) && seconds >= 0.5 && seconds <= 30 &&
+        seconds * 2 == Math.Round(seconds * 2);
+
+    internal static double Read(string? dataDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(dataDirectory)) return DefaultPauseSeconds;
+        try
+        {
+            var path = Path.Combine(dataDirectory, FileName);
+            if (!File.Exists(path) || new FileInfo(path).Length > 2048)
+                return DefaultPauseSeconds;
+            using var document = JsonDocument.Parse(File.ReadAllText(path));
+            if (document.RootElement.TryGetProperty("pauseSeconds", out var value) &&
+                value.TryGetDouble(out var seconds) && Valid(seconds))
+                return seconds;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or
+                                   JsonException or InvalidOperationException or ArgumentException)
+        {
+            // An invalid preference must never crash speech or widen permissions.
+        }
+        return DefaultPauseSeconds;
+    }
+
+    internal static void Write(string dataDirectory, double seconds)
+    {
+        if (string.IsNullOrWhiteSpace(dataDirectory) || !Valid(seconds))
+            throw new ArgumentException("Pause must be 0.5–30 seconds in 0.5-second steps.");
+        Directory.CreateDirectory(dataDirectory);
+        var path = Path.Combine(dataDirectory, FileName);
+        var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            File.WriteAllText(temp, JsonSerializer.Serialize(new { pauseSeconds = seconds }));
+            File.Move(temp, path, true);
+        }
+        finally
+        {
+            if (File.Exists(temp)) File.Delete(temp);
+        }
+    }
+}
