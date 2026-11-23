@@ -120,7 +120,6 @@ assert "ConversationOperatorControls.IsRequest(message)" in SERVER, "Owner proje
 assert "ConversationOperatorControls.Answer(state, message, ai.IsConfigured" in SERVER, "Owner status and pause must use verified saved state"
 assert "ConversationOperatorControls.Answer(s, message, ai.IsConfigured" in SERVER, "Authenticated phone bridge must have same safe owner controls"
 assert "ConversationOperatorControls.SetPaused(s, p, request.Paused)" in SERVER, "Voice and Developer pause share one revocation policy"
-assert "private gateway" not in SERVER.split('app.MapPost("/api/chat"',1)[1].split('// Dedicated local companion bridge',1)[0].lower() or True
 
 assert "!System.Net.IPAddress.IsLoopback(peer)" in SERVER, "Owner actions must only originate from a loopback peer"
 assert 'context.Request.Headers.ContainsKey("X-Forwarded-For")' in SERVER, "Forwarded requests must not bypass local owner scope"
