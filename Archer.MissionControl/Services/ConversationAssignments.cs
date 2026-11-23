@@ -145,7 +145,7 @@ public static class ConversationHomeLayout
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
     private static readonly Regex Chat = new(@"\b(?:chat|conversation)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-    private static readonly Regex Center = new(@"\b(?:center|centre|middle)\b",
+    private static readonly Regex Center = new(@"\b(?:center(?:ed)?|centre(?:d)?|middle)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
     private static readonly Regex Under = new(@"\b(?:under|underneath|below|beneath)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
