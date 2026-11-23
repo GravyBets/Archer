@@ -13,14 +13,20 @@ assert.ok(start >= 0 && end > start, 'pure work-pulse functions are defined befo
 
 const elements = new Map();
 const elt = id => {
-  if (!elements.has(id))elements.set(id,{textContent:'',dataset:{}});
+  if (!elements.has(id))elements.set(id,{
+    textContent:'',dataset:{},style:{},hidden:false,href:'',
+    attributes:{},
+    setAttribute(k,v){this.attributes[k]=String(v);},
+    removeAttribute(k){delete this.attributes[k];if(k==='href')this.href='';}
+  });
   return elements.get(id);
 };
-const sandbox = { $, Date, Array, String, Number };
+const sandbox = { $, Date, Array, String, Number, appState:{projectReadiness:[]} };
 function $(id){return elt(id);}
 runInNewContext(source.slice(start,end) +
-  '\nthis.pulseApi = { latestDevelopmentPulse, developmentNeedsRefresh, renderDevelopmentPulse };',sandbox);
-const {latestDevelopmentPulse:latest,developmentNeedsRefresh:needs,renderDevelopmentPulse:render} = sandbox.pulseApi;
+  '\nthis.pulseApi = { latestDevelopmentPulse, developmentNeedsRefresh, renderDevelopmentPulse, renderMissionProgress, activeMissionProgress, trustedReviewUrl, paintWorkProgress };',sandbox);
+const {latestDevelopmentPulse:latest,developmentNeedsRefresh:needs,renderDevelopmentPulse:render,
+  renderMissionProgress:renderMission, trustedReviewUrl:reviewUrl} = sandbox.pulseApi;
 
 const empty={projects:[],developmentBatches:[]};
 assert.equal(latest(empty),null);
@@ -87,3 +93,95 @@ assert.equal(latest(state).status,'Accepted');
 assert.equal(needs(state),false);
 
 console.log('PASS: Archer home shows real queued, writing, testing, blocked and review statuses without claiming unarmed code ran.');
+
+
+// A real completion count is not an elapsed-time estimate; unknown plans
+// must stay indeterminate rather than claim a made-up percentage.
+const planningState={projects:[{
+  id:'plan',name:'Archer',repository:'GravyBets/Archer',
+  objectives:[{id:'one',description:'Improve inbox',planningState:'Planning',
+    createdAtUtc:'2026-11-22T18:00:00Z'}]
+}],developmentBatches:[]};
+render(planningState);
+assert.equal(elt('homeDevelopmentProgress').hidden,false);
+assert.equal(elt('homeDevelopmentProgress').dataset.mode,'indeterminate');
+assert.equal(elt('homeDevelopmentProgress').attributes['aria-valuenow'],undefined);
+assert.equal(elt('homeDevelopmentCount').textContent,'Work in progress · tasks not yet known');
+assert.equal(elt('homeDevelopmentReview').hidden,true);
+
+const completeState={projects:[{
+  id:'real',name:'GeoShift',repository:'GravyBets/GeoShift',
+  objectives:[{id:'real-o',description:'Improve conversion errors',planningState:'Batch created',
+    createdAtUtc:'2026-11-22T21:00:00Z'}]
+}],developmentBatches:[{
+  projectId:'real',objectiveId:'real-o',armed:true,
+  tasks:[{status:'Verified'},{status:'Editing'},{status:'Queued'}]
+}]};
+render(completeState);
+assert.equal(elt('homeDevelopmentProgress').dataset.mode,'determinate');
+assert.equal(elt('homeDevelopmentProgress').attributes['aria-valuenow'],'1');
+assert.equal(elt('homeDevelopmentProgress').attributes['aria-valuemax'],'3');
+assert.equal(elt('homeDevelopmentBar').style.width,'33%');
+assert.equal(elt('homeDevelopmentCount').textContent,'1 of 3 tasks verified');
+assert.equal(elt('homeDevelopmentReview').hidden,true);
+
+// A ready draft is not merged or deployed; only show a URL that matches
+// the registered repository and the exact GitHub pull request path.
+const task=completeState.developmentBatches[0].tasks;
+task.forEach(t=>t.status='Verified');
+task[2].proposal={pullRequestUrl:'https://github.com/GravyBets/GeoShift/pull/120'};
+render(completeState);
+assert.equal(elt('homeDevelopmentBar').style.width,'100%');
+assert.equal(elt('homeDevelopmentStatus').textContent,'Draft ready for review');
+assert.equal(elt('homeDevelopmentReview').hidden,false);
+assert.equal(elt('homeDevelopmentReview').href,'https://github.com/GravyBets/GeoShift/pull/120');
+assert.equal(reviewUrl('GravyBets/GeoShift',{tasks:[{proposal:{
+  pullRequestUrl:'https://evil.example.net/GravyBets/GeoShift/pull/12'}}]}),null);
+assert.equal(reviewUrl('GravyBets/GeoShift',{tasks:[{proposal:{
+  pullRequestUrl:'https://github.com/GravyBets/Archer/pull/12'}}]}),null);
+assert.equal(reviewUrl('GravyBets/GeoShift',{workspacePullRequestNumber:21,tasks:[]}),
+  'https://github.com/GravyBets/GeoShift/pull/21');
+task[2].status='Blocked';
+render(completeState);
+assert.equal(elt('homeDevelopmentReview').hidden,true);
+assert.equal(elt('homeDevelopmentReview').attributes.href,undefined);
+
+// Setup checklist is read-only and never treats a saved objective as running.
+const saved={projects:[{
+  id:'g',name:'GeoShift',repository:'GravyBets/GeoShift',
+  objectives:[{id:'a',description:'Preserve skipped duplicates',
+    planningState:'Not delegated',createdAtUtc:'2026-11-22T22:00:00Z'}]
+}],developmentBatches:[]};
+sandbox.appState.projectReadiness=[{
+  repository:'GravyBets/GeoShift',enabled:false,
+  setup:{ready:false,missing:['Configure scoped GitHub read and write access',
+    'Add repository to GitHub write allowlist','Enable coding']}
+}];
+render(saved);
+assert.equal(elt('homeDevelopmentProgress').hidden,true);
+assert.equal(elt('homeDevelopmentSetup').hidden,false);
+assert.match(elt('homeDevelopmentSetupText').textContent,/Not running/);
+assert.match(elt('homeDevelopmentSetupText').textContent,/2 more checks|1 more checks/);
+assert.equal(elt('homeDevelopmentStatus').textContent,'Saved, not started');
+sandbox.appState.projectReadiness=[];
+render(saved);
+assert.equal(elt('homeDevelopmentSetup').hidden,true);
+
+// Mission progress uses completed steps rather than development verification.
+// Inactive/pending missions do not produce a fake running bar.
+renderMission([{title:'Someday',status:'Ready',tasks:[{status:'Pending'}]}]);
+assert.equal(elt('homeMissionPulse').hidden,true);
+renderMission([{title:'GeoShift customer research',status:'Running',autoRunEnabled:true,
+  updatedAtUtc:'2026-11-22T22:00:00Z',
+  tasks:[{status:'Completed'},{status:'Running'},{status:'Pending'}]}]);
+assert.equal(elt('homeMissionPulse').hidden,false);
+assert.equal(elt('homeMissionBar').style.width,'33%');
+assert.equal(elt('homeMissionCount').textContent,'1 of 3 mission steps complete');
+assert.equal(elt('homeMissionProgress').attributes['aria-valuenow'],'1');
+renderMission([{title:'Plan',status:'Running',tasks:[]}]);
+assert.equal(elt('homeMissionProgress').dataset.mode,'indeterminate');
+assert.equal(elt('homeMissionProgress').attributes['aria-valuenow'],undefined);
+renderMission([]);
+assert.equal(elt('homeMissionPulse').hidden,true);
+
+console.log('PASS: live work meters reflect verified development/mission steps, show setup blockers and never expose an untrusted review link.');
