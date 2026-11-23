@@ -13,7 +13,8 @@ public static class ConversationAssignments
     public sealed record Command(string Project, string Objective);
     public sealed record Result(string Answer, Guid? ObjectiveId = null, bool Accepted = false);
 
-    public static bool LooksLikeAssignment(string text) => Prefix.IsMatch(text.Trim());
+    public static bool LooksLikeAssignment(string text) =>
+        Prefix.IsMatch(text.Trim()) || GeoShiftConversationSetup.IsRegistrationRequest(text);
 
     public static Command? Parse(string text, IEnumerable<ManagedProject> projects)
     {
@@ -21,9 +22,11 @@ public static class ConversationAssignments
         if (!prefix.Success) return null;
         var remainder = text.Trim()[prefix.Length..];
         foreach (var name in projects.Select(p => p.Name).OrderByDescending(n => n.Length))
+        foreach (var spokenName in name.Equals("GeoShift", StringComparison.OrdinalIgnoreCase)
+                     ? new[] { name, "Geo Shift" } : new[] { name })
         {
-            if (!remainder.StartsWith(name, StringComparison.OrdinalIgnoreCase)) continue;
-            var tail = remainder[name.Length..];
+            if (!remainder.StartsWith(spokenName, StringComparison.OrdinalIgnoreCase)) continue;
+            var tail = remainder[spokenName.Length..];
             // A named project and a distinct requested result are mandatory.
             var delimiter = Regex.Match(tail, @"^(?:\s*[:;,–—]\s*|\s+(?:and|to)\s+)",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
@@ -42,6 +45,10 @@ public static class ConversationAssignments
     public static Result Assign(ArcherState state, string input, Func<ManagedProject, bool> canArm,
         DateTimeOffset now, bool resumeAfterRestart = false)
     {
+        // A direct owner request may register the known GeoShift repo and save
+        // one objective, but cannot silently authorize paid coding or writes.
+        var setup = GeoShiftConversationSetup.TryRegister(state, input);
+        if (setup is not null) return setup;
         var command = Parse(input, state.Projects);
         if (command is null)
             return new("Tell me which registered project and what result you want. For example, Work on Archer and improve the inbox.");
@@ -58,9 +65,23 @@ public static class ConversationAssignments
         var existing = project.Objectives.LastOrDefault(o => string.Equals(o.Description.Trim(),
             command.Objective, StringComparison.OrdinalIgnoreCase));
         if (existing is not null)
+        {
+            if (GeoShiftConversationSetup.IsGeoShift(project) && existing.AcceptedAtUtc is null &&
+                !existing.PlanningAttempted && existing.PlanningState == "Not delegated")
+            {
+                // A second explicit owner command after completing setup can
+                // activate the saved intent. No work starts before CanArm.
+                existing.PlanningState = "Delegated";
+                existing.DelegatedUntilUtc = now.AddHours(24);
+                existing.MaxPlanningCycles = 1;
+                existing.MaxCodingAttempts = Math.Min(6, remaining);
+                existing.PlanningDetail = "Owner reauthorized the saved GeoShift objective in conversation; draft only.";
+                return new("GeoShift is now queued for planning. I'll prepare a reviewable draft, not merge or deploy it.", existing.Id, true);
+            }
             return new("That assignment is already recorded for " + project.Name + ". Its status is " +
                 PlainStatus(existing, state.DevelopmentBatches.Where(b => b.ObjectiveId == existing.Id && b.ProjectId == project.Id)) +
                 ". I haven't duplicated it.", existing.Id);
+        }
         if (project.Objectives.Count >= 50 || state.DevelopmentBatches.Count >= 100)
             return new("The project history limit has been reached. No paid work started.");
         var objective = new ProjectObjective
@@ -227,5 +248,79 @@ public static class ConversationHomeLayout
             : already
                 ? "The orb and chat are already side by side."
                 : "Done. I've put the orb beside the chat.";
+    }
+}
+
+
+/// <summary>
+/// One narrow local conversational onboarding path for the owner's known
+/// GeoShift repository. This only saves registry metadata and an unarmed
+/// objective. It never creates credentials, arms code work, merges or deploys.
+/// The owner must separately configure scoped repository access and repeat the
+/// explicit assignment after the worker's normal authorization gates pass.
+/// </summary>
+public static class GeoShiftConversationSetup
+{
+    public const string Repository = "GravyBets/GeoShift";
+    public static bool IsGeoShift(ManagedProject project) =>
+        project.Name.Equals("GeoShift", StringComparison.OrdinalIgnoreCase) &&
+        project.Repository.Equals(Repository, StringComparison.OrdinalIgnoreCase);
+
+    private static readonly Regex Register = new(
+        @"^(?:(?:hey\s+)?archer[,!:]?\s+)?(?:(?:please|can\s+you|could\s+you)\s+)?(?:register|connect|add)\s+(?:the\s+)?geo\s*shift(?:\s+project)?[.!?]*$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+
+    public static bool IsRegistrationRequest(string? input) =>
+        !string.IsNullOrWhiteSpace(input) && input.Length <= 150 && Register.IsMatch(input.Trim());
+
+    // Grounded in the real GeoShift repository and its checked-in
+    // .github/workflows/archer-ci.yml: job "GeoShift build and tests".
+    // No new files, secrets, workflows, installer code or deployment rights.
+    public static RegisterProjectRequest Profile() =>
+        new("GeoShift", Repository, ".NET / Blazor",
+            ["GeoShift.Core", "GeoShift.Web/Components/Pages", "GeoShift.Web/wwwroot"],
+            "archer-ci.yml", "GeoShift build and tests",
+            ["Build Web", "Run core regression tests"],
+            Priority: 4, DailyAttemptLimit: 6,
+            AllowNewSourceFiles: false, CumulativeWorkspaces: true);
+
+    public static ConversationAssignments.Result? TryRegister(ArcherState state, string input)
+    {
+        var explicitRegistration = IsRegistrationRequest(input);
+        // Use the same canonical explicit-command parser as established
+        // assignments, including the speech variant "Geo Shift".
+        var project = ProjectPolicy.Register(Profile());
+        var command = explicitRegistration ? null : ConversationAssignments.Parse(input, [project]);
+        if (!explicitRegistration && (command is null ||
+            !command.Project.Equals("GeoShift", StringComparison.OrdinalIgnoreCase) ||
+            command.Objective.Length is < 15 or > 1000 || command.Objective.Any(char.IsControl)))
+            return null;
+        var already = state.Projects.Any(p =>
+            p.Name.Equals("GeoShift", StringComparison.OrdinalIgnoreCase) ||
+            p.Repository.Equals(Repository, StringComparison.OrdinalIgnoreCase));
+        if (already)
+        {
+            if (state.Projects.Any(p =>
+                (p.Name.Equals("GeoShift", StringComparison.OrdinalIgnoreCase) ||
+                 p.Repository.Equals(Repository, StringComparison.OrdinalIgnoreCase)) && !IsGeoShift(p)))
+                return new("GeoShift's registered name or repository conflicts with the verified project. I haven't changed or authorized anything.");
+            return explicitRegistration
+                ? new("GeoShift is already registered. Coding still needs separately authorized project access.")
+                : null;
+        }
+        if (state.Projects.Count >= 20)
+            return new("The project registry is full; I haven't changed it.");
+        state.Projects.Add(project);
+        if (command is not null)
+            project.Objectives.Add(new ProjectObjective
+            {
+                Description = command.Objective,
+                PlanningState = "Not delegated",
+                PlanningDetail = "Saved during owner-authorized GeoShift onboarding; not delegated or billed.",
+                CreatedAtUtc = DateTimeOffset.UtcNow
+            });
+        return new(command is null
+            ? "GeoShift is registered. No coding has started. Scoped GitHub read/write access and repository allowlists still need owner setup."
+            : "GeoShift is registered, and I've saved that coding request. No coding has started. Configure scoped GitHub access and repository allowlists, then repeat the request to authorize a reviewable draft.");
     }
 }
