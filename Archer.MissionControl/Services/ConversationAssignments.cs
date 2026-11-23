@@ -201,7 +201,16 @@ public static class ConversationHomeLayout
                 ? "The orb is beside the chat right now. That's the saved layout."
                 : "The orb is centered, and the chat is underneath it. That's the saved layout.";
         if (IsAcknowledgement(message))
-            return "You're welcome. Finally, the furniture's where it belongs.";
+        {
+            var recent = state.Conversation.LastOrDefault(e => e.Role == "assistant")?.Content ?? "";
+            var justChangedLayout = recent is "Done. I've centered the orb and moved the chat underneath it." or
+                "Done. I've put the orb beside the chat." or
+                "The orb is already centered, with the chat underneath." or
+                "The orb and chat are already side by side.";
+            return justChangedLayout
+                ? "You're welcome. Finally, the furniture's where it belongs."
+                : "You're welcome.";
+        }
         return "I didn't change the layout. Tell me where you'd like the orb and chat.";
     }
 
