@@ -27,7 +27,7 @@ function elt(id) {
   }
   return elements.get(id);
 }
-elt('voicePauseSlider').value='7';
+elt('voicePauseSlider').value='1.5';
 elt('voiceRateSlider').value='1.25';
 let now=0, idCounter=0;
 const queue=new Map();
@@ -124,6 +124,9 @@ check('handsfree begins with explicit opt-in and user click',()=>{
   assert.equal(elt('voiceReadToggle').checked,true);
 });
 check('initial phrase is not sent during a significant pause',()=>{
+  assert.equal(elt('voicePauseValue').textContent,'1.5 sec');
+  elt('voicePauseSlider').value='7';
+  elt('voicePauseSlider').dispatch('input');
   rec.push('I want to speak');
   advance(3500);
   assert.equal(requests.length,0);
@@ -209,6 +212,16 @@ check('wake phrase mode is opt-in and changing it does not silently start microp
   elt('voiceWakeToggle').dispatch('change');
   assert.equal(rec.active,false);
   assert.equal(store.get('archer.voice.wake'),'yes');
+});
+check('half-second values are accepted before selecting two seconds',()=>{
+  elt('voicePauseSlider').value='0.5';
+  elt('voicePauseSlider').dispatch('input');
+  assert.equal(elt('voicePauseValue').textContent,'0.5 sec');
+  assert.equal(store.get('archer.voice.pauseSeconds'),'0.5');
+  elt('voicePauseSlider').value='1.5';
+  elt('voicePauseSlider').dispatch('input');
+  assert.equal(elt('voicePauseValue').textContent,'1.5 sec');
+  assert.equal(store.get('archer.voice.pauseSeconds'),'1.5');
 });
 check('two-second wait can be selected without changing the 1.25x speaking pace',()=>{
   elt('voicePauseSlider').value='2';
