@@ -198,8 +198,8 @@ public static class ConversationHomeLayout
         if (requested is not null) return Apply(state, requested);
         if (IsStatusQuestion(message))
             return state.HomeLayout == Split
-                ? "Yes, the orb is beside the chat right now. I can put it back in the center if you'd like."
-                : "Yes, the orb is centered, and the chat is underneath it. That's the saved layout.";
+                ? "The orb is beside the chat right now. That's the saved layout."
+                : "The orb is centered, and the chat is underneath it. That's the saved layout.";
         if (IsAcknowledgement(message))
             return "You're welcome. Finally, the furniture's where it belongs.";
         return "I didn't change the layout. Tell me where you'd like the orb and chat.";
