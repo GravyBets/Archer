@@ -104,6 +104,10 @@ function renderUsage(usage, routing) {
 }
 function render() {
   const { missions, activity, conversation } = appState.data;
+  // Server-persisted presentation choice works for browser and Windows
+  // voice requests alike. No page reload or Developer interaction.
+  $('archerView').dataset.layout = appState.data.homeLayout === 'split'
+    ? 'split' : 'centered';
   $('statMissions').textContent = missions.length;
   $('statCompleted').textContent = missions.reduce((n, m) => n + m.tasks.filter(t => t.status === 'Completed').length, 0);
   $('statActive').textContent = missions.filter(m => ['Ready','Paused','Running'].includes(m.status)).length;
