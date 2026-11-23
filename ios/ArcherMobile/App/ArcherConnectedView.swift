@@ -4,6 +4,7 @@ import AVFoundation
 @MainActor
 struct ArcherConnectedView: View {
     @EnvironmentObject private var auth: ArcherAuthSession
+    @Environment(\.scenePhase) private var scenePhase
     @ObservedObject var device: ArcherDeviceIdentity
     @State private var client = ArcherPrivateClient()
     @State private var data: ArcherOverview?
@@ -61,6 +62,18 @@ struct ArcherConnectedView: View {
                     }
                     Toggle("Read replies aloud",isOn:$readAloud)
                 } else if selected == "Work" {
+                    if let summary = data.overnightSummary, !summary.isEmpty {
+                        DisclosureGroup("Recorded work · last 12 hours") {
+                            Text(summary)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                            Text("This is a local work summary, not evidence of a deployment, revenue or a sent notification.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .accessibilityIdentifier("overnightWorkSummary")
+                    }
                     if data.assignments.isEmpty && data.research.isEmpty { Text("No recorded assignments.") }
                     ForEach(data.research) { item in
                         VStack(alignment:.leading,spacing:5) {
@@ -77,6 +90,25 @@ struct ArcherConnectedView: View {
                         VStack(alignment:.leading,spacing:5) {
                             Text(item.project + " · " + item.status).font(.caption.bold()).foregroundStyle(.cyan)
                             Text(item.title)
+                            if let total = item.totalTasks, total > 0,
+                               let verified = item.verifiedTasks {
+                                let done = min(max(0, verified), total)
+                                ProgressView(value: Double(done), total: Double(total))
+                                    .tint(.cyan)
+                                    .accessibilityLabel("Verified coding tasks")
+                                    .accessibilityValue("\(done) of \(total)")
+                                Text("\(done) of \(total) code tasks verified")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else if item.status == "planning" {
+                                ProgressView("Planning tasks")
+                                    .font(.caption)
+                                    .tint(.cyan)
+                            }
+                            if let link = item.recordedReviewURL {
+                                Link("Review recorded draft on GitHub", destination: link)
+                                    .font(.subheadline.weight(.semibold))
+                            }
                         }.padding(.vertical,6)
                     }
                 } else {
@@ -92,6 +124,21 @@ struct ArcherConnectedView: View {
             }
         }
         .onDisappear { speech.stopSpeaking(at:.immediate) }
+        // Read-only status refresh when the owner opens or returns to the
+        // app. No background polling, wake word, push registration or replay
+        // of a previously sent command.
+        .task {
+            if auth.signedIn && device.prepared &&
+               ArcherPrivateClient.configuredHost != nil && data == nil {
+                await reload()
+            }
+        }
+        .onChange(of: scenePhase) { _, next in
+            if next == .active && auth.signedIn && device.prepared &&
+               ArcherPrivateClient.configuredHost != nil {
+                Task { await reload() }
+            }
+        }
     }
 
     private func reload() async {
