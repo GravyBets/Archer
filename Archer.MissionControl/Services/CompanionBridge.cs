@@ -28,17 +28,47 @@ public static class CompanionBridge
     public static bool ValidKey(string? text) => text is { Length: 64 } && Regex.IsMatch(text, "^[a-fA-F0-9]{64}$");
     public static string Digest(MessageRequest request) => Convert.ToHexString(SHA256.HashData(
         Encoding.UTF8.GetBytes((request.VoiceMode ? "voice\n" : "text\n") + request.Message)));
+    // Only a registered project, previously recorded numeric PR identity and
+    // verified, disarmed task set may yield a read-only review link. Never
+    // accept a URL from a model, phone client or untrusted repository text.
+    public static string? VerifiedReviewUrl(ManagedProject p, ProjectObjective o, IEnumerable<DevelopmentBatch> related)
+    {
+        if (!ProjectPolicy.ValidRepository(p.Repository) || SelfDevelopmentPolicy.IsSelf(p.Repository))
+            return null;
+        if (o.Continuous && o.PlanningState is "Planning" or "Reassessment queued" or "Batch created")
+            return null;
+        var batch = related.LastOrDefault();
+        if (batch is null || batch.Armed || batch.Tasks.Count == 0 ||
+            batch.Tasks.Any(t => t.Status != "Verified"))
+            return null;
+        var number = batch.WorkspacePullRequestNumber ??
+            batch.Tasks.LastOrDefault()?.Proposal?.PullRequestNumber;
+        if (number is not > 0)
+            return null;
+        // This is a recorded review location, not a fresh CI attestation.
+        return "https://github.com/" + p.Repository + "/pull/" + number;
+    }
+
     public static object Overview(ArcherState s) => new
     {
         conversation = s.Conversation.TakeLast(50).Select(c => new { c.Id, c.Role, c.Content, c.CreatedAtUtc }).ToArray(),
-        assignments = s.Projects.SelectMany(p => p.Objectives.TakeLast(10).Select(o => new
+        assignments = s.Projects.SelectMany(p => p.Objectives.TakeLast(10).Select(o =>
         {
-            o.Id, project = p.Name, title = o.Description,
-            status = ConversationAssignments.PlainStatus(o, s.DevelopmentBatches.Where(b => b.ProjectId == p.Id && b.ObjectiveId == o.Id))
+            var related = s.DevelopmentBatches.Where(b => b.ProjectId == p.Id && b.ObjectiveId == o.Id).ToArray();
+            var latest = related.LastOrDefault();
+            var status = ConversationAssignments.PlainStatus(o, related);
+            return new
+            {
+                o.Id, project = p.Name, title = o.Description, status,
+                verifiedTasks = latest?.Tasks.Count(t => t.Status == "Verified") ?? 0,
+                totalTasks = latest?.Tasks.Count ?? 0,
+                reviewUrl = status == "ready for review" ? VerifiedReviewUrl(p, o, related) : null
+            };
         })).TakeLast(40).ToArray(),
         research = s.Missions.Where(m => m.Summary == "Owner-authorized conversational research").Take(20).Select(m => new { m.Id, m.Title, m.Status,
             findings = m.Artifacts.LastOrDefault()?.Content is { } content ? content[..Math.Min(content.Length, 6000)] : null }).ToArray(),
-        alerts = s.Notifications.Take(20).Select(n => new { n.Id, n.Title, n.Summary, n.Priority, n.ReadAtUtc }).ToArray()
+        alerts = s.Notifications.Take(20).Select(n => new { n.Id, n.Title, n.Summary, n.Priority, n.ReadAtUtc }).ToArray(),
+        overnightSummary = ConversationOperatorControls.OvernightReport(s, DateTimeOffset.UtcNow)
     };
 
     // Durably reserve the exact owner request before any external call. A
