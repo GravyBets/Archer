@@ -122,6 +122,38 @@ app.MapGet("/api/desktop-voice/status", () =>
     return Results.Ok(ArcherDesktopVoiceStatus.Read(directory));
 });
 
+// Reading this preference never opens the microphone. Only owner-local JSON
+// requests may change the Windows tray listener's silence threshold.
+app.MapGet("/api/desktop-voice/preferences", () =>
+{
+    var directory = Environment.GetEnvironmentVariable("ARCHER_DATA_DIR");
+    if (string.IsNullOrWhiteSpace(directory))
+        directory = Path.Combine(app.Environment.ContentRootPath, "Data");
+    return Results.Ok(new { pauseSeconds = ArcherDesktopVoicePreferences.Read(directory) });
+});
+app.MapPost("/api/desktop-voice/preferences", (HttpContext context, DesktopVoicePauseRequest request) =>
+{
+    if (!LocalDevelopmentRequest(context)) return Results.StatusCode(403);
+    if (!ArcherDesktopVoicePreferences.Valid(request.PauseSeconds))
+        return Results.BadRequest(new { error = "Choose 0.5–30 seconds in half-second steps." });
+    var directory = Environment.GetEnvironmentVariable("ARCHER_DATA_DIR");
+    if (string.IsNullOrWhiteSpace(directory))
+        directory = Path.Combine(app.Environment.ContentRootPath, "Data");
+    try
+    {
+        ArcherDesktopVoicePreferences.Write(directory, request.PauseSeconds);
+        return Results.Ok(new { pauseSeconds = request.PauseSeconds });
+    }
+    catch (IOException)
+    {
+        return Results.Problem("Could not save the local voice preference.", statusCode: 500);
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return Results.Problem("Could not access the local voice preference.", statusCode: 500);
+    }
+});
+
 // Only Archer's local, API-reported usage. This is not an OpenAI billing endpoint.
 app.MapGet("/api/usage", async (ApiUsageLedger ledger, CancellationToken ct) =>
     Results.Ok(await ledger.SummaryAsync(ct)));
@@ -1352,3 +1384,5 @@ static bool LocalDevelopmentRequest(HttpContext context)
     var origin = context.Request.Headers.Origin.ToString();
     return origin.Length == 0 || origin == "http://127.0.0.1:5087" || origin == "http://localhost:5087";
 }
+
+record DesktopVoicePauseRequest(double PauseSeconds);
