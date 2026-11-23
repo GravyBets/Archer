@@ -54,6 +54,10 @@ required = {
     "archerPresence", "orbButton", "orbParticleField", "presenceStatus", "presenceActiveMissions",
     "presenceTasksToday", "presenceAttentionCount", "chatMessages", "chatForm",
     "homeDevelopmentPulse", "homeDevelopmentLabel", "homeDevelopmentDetail", "homeDevelopmentStatus",
+    "homeDevelopmentProgress", "homeDevelopmentBar", "homeDevelopmentCount",
+    "homeDevelopmentSetup", "homeDevelopmentSetupText", "homeDevelopmentReview",
+    "homeMissionPulse", "homeMissionLabel", "homeMissionStatus", "homeMissionProgress",
+    "homeMissionBar", "homeMissionCount",
     "chatText", "voiceInputButton", "voiceReadToggle", "voiceReplayButton", "voiceTestButton", "voiceCopyDiagnostics", "voiceDiagnosticStatus",
     "realtimeVoiceStart", "realtimeVoiceEnd", "realtimeVoiceStatus",
     "voiceStopButton", "voiceSupportNote", "voiceChoiceSelect", "voiceRateSlider", "voiceRateValue",
@@ -258,6 +262,13 @@ assert 'class="archer-home-primary"' in HTML
 assert 'class="archer-presence-column"' in HTML
 assert HTML.index('id="homeDevelopmentPulse"') < HTML.index('id="chatMessages"'), "Coding pulse belongs directly above conversation history"
 assert 'renderDevelopmentPulse(appState.data)' in JS, "Home must render persisted coding progress"
+assert "renderMissionProgress(missions)" in JS, "Active research missions have actual progress"
+assert "paintWorkProgress(" in JS, "Progress comes from task counts"
+assert "trustedReviewUrl(" in JS and "github\\.com" in JS, "Review links are limited to trusted PR locations"
+assert 'id="homeDevelopmentProgress"' in HTML and 'id="homeMissionProgress"' in HTML
+assert 'id="homeDevelopmentReview"' in HTML and 'rel="noopener noreferrer"' in HTML
+assert "setup = ProjectSetupReadiness.Evaluate(p, ai.IsConfigured)" in SERVER, "Readiness comes from server facts"
+
 assert "developmentNeedsRefresh(appState.data)" in JS, "Active coding assignments should auto-refresh from read-only state"
 assert "api('/api/state').then(data => { appState.data = data; render(); })" in JS, "Live coding progress must not invoke an AI model or mutate work"
 
