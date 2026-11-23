@@ -435,6 +435,32 @@ Check(ConversationAssignments.Parse("Hey Archer, fix Personal app's confusing em
 Check(ConversationAssignments.Parse("Can you work on an app sometime?", [talkProject]) is null, "ambiguous work request does not authorize paid coding");
 Check(ConversationAssignments.Status(conversationState).Contains("queued"), "status uses actual persisted assignment data");
 
+var spokenSelfEdit = "can you adjust your own landing page I don't like the way the Archer landing page is looking can you put the orb back Center and then the chat box underneath the orb";
+Check(ConversationAssignments.LooksLikeAssignment(spokenSelfEdit),
+    "natural owner voice request to modify Archer's own landing page is recognized");
+Check(ConversationAssignments.Parse(spokenSelfEdit, [talkProject]) is null,
+    "self-code request cannot be routed to unrelated registered project");
+Check(ConversationAssignments.Parse(spokenSelfEdit, [selfProfile]) is { Project: "Archer" } parsedSelf &&
+    parsedSelf.Objective.Contains("orb back Center") && parsedSelf.Objective.Contains("chat box underneath"),
+    "voice self-edit retains both requested layout details");
+var directSelfState = new ArcherState();
+directSelfState.Projects.Add(ProjectPolicy.Register(SelfDevelopmentPolicy.Profile()));
+Check(!ConversationAssignments.Assign(directSelfState, spokenSelfEdit, _ => false, now).Accepted &&
+    directSelfState.Projects[0].Objectives.Count == 0,
+    "voice self-edit cannot bypass protected self-development authorization");
+var firstSelfEdit = ConversationAssignments.Assign(directSelfState, spokenSelfEdit, _ => true, now);
+Check(firstSelfEdit.Accepted && directSelfState.Projects[0].Objectives.Single().PlanningState == "Delegated",
+    "authorized voice edit queues a bounded reviewable Archer development objective");
+Check(!ConversationAssignments.Assign(directSelfState, spokenSelfEdit, _ => true, now).Accepted &&
+    directSelfState.Projects[0].Objectives.Count == 1,
+    "replayed speech cannot start duplicate self-edit");
+Check(ConversationAssignments.LooksLikeAssignment("Archer can you put the orb back in the center above the chat"),
+    "short spoken orb placement request can be delegated");
+Check(!ConversationAssignments.LooksLikeAssignment("Why can't you edit your own code?") &&
+    !ConversationAssignments.LooksLikeAssignment("What would you change about your landing page?"),
+    "capability and design questions remain conversation, not paid assignments");
+
+
 var researchState = new ArcherState();
 var research = ConversationResearch.Queue(researchState, "Archer, research competing geographic data conversion services.", now);
 Check(research.Accepted && researchState.Missions.Count == 1 &&
