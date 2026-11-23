@@ -448,6 +448,97 @@ Check(ConversationAssignments.Parse("Hey Archer, fix Personal app's confusing em
 Check(ConversationAssignments.Parse("Can you work on an app sometime?", [talkProject]) is null, "ambiguous work request does not authorize paid coding");
 Check(ConversationAssignments.Status(conversationState).Contains("queued"), "status uses actual persisted assignment data");
 
+// Direct owner project controls are deterministic and share the exact same
+// revocation policy with the local admin pause endpoint. The phone and desktop
+// use this parser only inside their authenticated owner routes.
+var controlState = new ArcherState();
+var controlProject = ProjectPolicy.Register(GeoShiftConversationSetup.Profile());
+controlState.Projects.Add(controlProject);
+var pausedObjective = new ProjectObjective
+{
+    Description = "Preserve explicitly skipped duplicates during review",
+    PlanningState = "Delegated", DelegatedUntilUtc = now.AddHours(24)
+};
+controlProject.Objectives.Add(pausedObjective);
+var runningBatch = new DevelopmentBatch
+{
+    ProjectId = controlProject.Id, ObjectiveId = pausedObjective.Id,
+    Armed = true, ExpiresAtUtc = now.AddHours(24),
+    Tasks = [new DevelopmentTask { Status = "Queued" }]
+};
+controlState.DevelopmentBatches.Add(runningBatch);
+Check(ConversationOperatorControls.IsRequest("Archer, stop working on Geo Shift") &&
+    ConversationOperatorControls.IsRequest("pause the GeoShift project") &&
+    !ConversationOperatorControls.IsRequest("stop listening") &&
+    !ConversationOperatorControls.IsRequest("stop talking") &&
+    !ConversationOperatorControls.IsRequest("stop Archer") &&
+    !ConversationOperatorControls.IsRequest("can you pause my microphone"),
+    "only explicitly named projects can be stopped through owner conversation");
+var stoppedReply = ConversationOperatorControls.Answer(controlState, "Hey Archer, stop working on GeoShift",
+    aiConfigured: false, now);
+Check(stoppedReply.Contains("Paused GeoShift") && controlProject.Paused &&
+    !runningBatch.Armed && pausedObjective.DelegatedUntilUtc is null &&
+    pausedObjective.PlanningState == "Not delegated",
+    "voice stop revokes queued work and deadlines without deleting project history");
+Check(ConversationOperatorControls.Answer(controlState, "stop working on GeoShift",
+    aiConfigured: false, now).Contains("already paused") && !runningBatch.Armed,
+    "speech replay of stop is safe and idempotent");
+var resumedReply = ConversationOperatorControls.Answer(controlState, "resume GeoShift project",
+    aiConfigured: true, now);
+Check(resumedReply.Contains("explicit assignment") && !controlProject.Paused &&
+    !runningBatch.Armed && pausedObjective.PlanningState == "Not delegated",
+    "resuming a paused project does not reauthorize paid work or resume old batches");
+Check(ConversationOperatorControls.Answer(controlState, "resume GeoShift project",
+    aiConfigured: true, now).Contains("already unpaused"),
+    "repeated resume cannot restart previously stopped coding");
+Check(ConversationOperatorControls.IsRequest("why isn't Geo Shift working?") &&
+    ConversationOperatorControls.IsRequest("What is blocking work on GeoShift?") &&
+    ConversationOperatorControls.IsRequest("is GeoShift ready to code?"),
+    "natural voice questions about coding readiness are read-only local commands");
+var readinessAnswer = ConversationOperatorControls.Answer(controlState,
+    "why isn't Geo Shift working?", aiConfigured: false, now);
+Check(readinessAnswer.Contains("not ready") && readinessAnswer.Contains("Configure the AI API key") &&
+    readinessAnswer.Contains("No new work was authorized"),
+    "owner can hear actual missing setup without opening Developer or starting paid work");
+Check(!ConversationOperatorControls.IsRequest("why isn't the microphone working") &&
+    !ConversationOperatorControls.IsRequest("is the voice ready") &&
+    !ConversationOperatorControls.IsRequest("why can't you work on a random codebase"),
+    "unrelated capability questions cannot trigger project control routes");
+Check(ConversationOperatorControls.Answer(new ArcherState(), "is GeoShift ready to code?",
+    aiConfigured: true, now).Contains("isn't registered"),
+    "unregistered projects get an accurate no-work status");
+Check(ConversationOperatorControls.Answer(controlState, "pause work on unrelated-project",
+    aiConfigured: true, now).Contains("couldn't identify") &&
+    !controlProject.Paused,
+    "unrecognized project controls cannot affect a registered project");
+
+Check(ConversationOperatorControls.IsRequest("what happened while I slept") &&
+    ConversationOperatorControls.IsRequest("give me an overnight report") &&
+    ConversationOperatorControls.IsRequest("morning briefing") &&
+    !ConversationOperatorControls.IsRequest("good morning") &&
+    !ConversationOperatorControls.IsRequest("what time is it"),
+    "explicit overnight report remains distinct from ordinary conversation");
+controlState.Missions.Add(new Mission
+{
+    Tasks =
+    [
+        new MissionTask { Status = "Completed", CompletedAtUtc = now.AddMinutes(-30) },
+        new MissionTask { Status = "Completed", CompletedAtUtc = now.AddHours(-13) },
+        new MissionTask { Status = "Pending" }
+    ]
+});
+runningBatch.Tasks[0].Status = "Verified";
+runningBatch.Tasks[0].SubmittedAtUtc = now.AddMinutes(-25);
+var overnight = ConversationOperatorControls.Answer(controlState, "what happened while I slept",
+    aiConfigured: false, now);
+Check(overnight.Contains("last 12 hours") &&
+    overnight.Contains("1 completed mission steps") &&
+    overnight.Contains("1 currently verified coding steps") &&
+    overnight.Contains("not proof of deployment or sales") &&
+    overnight.Contains("No messages or calls were sent"),
+    "overnight briefing counts recorded bounded events without inventing revenue or messages");
+
+
 // A real owner spoke "Geo Shift" to the landing-page microphone. GeoShift
 // exists in GitHub but had not been registered in Archer's local state.
 var geoshiftRequest = "work on Geo Shift and improve the duplicate review workflow so skipped records are preserved correctly";
