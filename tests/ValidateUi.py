@@ -259,6 +259,12 @@ assert 'class="archer-presence-column"' in HTML
 assert "grid-template-columns:minmax(0,1fr);" in CSS.split("/* v1.17", 1)[1].split(".archer-home-primary .archer-presence-column", 1)[0]
 assert HTML.index('class="archer-presence-column"') < HTML.index('class="panel archer-conversation"')
 assert "max-width:1120px;" in CSS.split("/* v1.17", 1)[1]
+assert "dataset.layout = appState.data.homeLayout" in JS
+assert '#archerView[data-layout="split"] .archer-home-primary' in CSS
+assert 'ConversationHomeLayout.Requested(message)' in (ROOT.parent / "Program.cs").read_text(encoding="utf-8")
+assert 'ConversationHomeLayout.Apply(state, requestedHomeLayout)' in (ROOT.parent / "Program.cs").read_text(encoding="utf-8")
+assert 'public string HomeLayout { get; set; } = "centered";' in (ROOT.parent / "Domain" / "Models.cs").read_text(encoding="utf-8")
+
 
 assert 'id="voicePauseValue"' in HTML
 assert 'id="voiceEndConversation"' in HTML
